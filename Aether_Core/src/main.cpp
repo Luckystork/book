@@ -1,13 +1,15 @@
 // ============================================================================
 //  ZeroPoint — Premium Windows Utility
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
-//             browser, enhanced AI popup, custom accent color + transparency
+//             browser, enhanced AI popup, full menu overlay, custom accent
+//             color + transparency, inline API key dialog
 // ============================================================================
 //
 //  BUILD REQUIREMENTS:
 //    - Microsoft.Web.WebView2 NuGet package (WebView2Loader.dll + headers)
 //    - Windows 10 1809+ with Edge WebView2 Runtime installed
 //    - Link: winhttp, dwmapi, comctl32, gdi32, msimg32, WebView2Loader
+//    - Include path must contain the Aether_Core/include directory
 //
 // ============================================================================
 
@@ -21,7 +23,6 @@
 #include <dwmapi.h>
 #include <commctrl.h>
 #include <string>
-#include <iostream>
 #include <vector>
 #include <fstream>
 #include <sstream>
@@ -79,8 +80,10 @@ static void LoadThemeSettings() {
     if (!f.is_open()) return;
     std::string line;
     while (std::getline(f, line)) {
+        // Format: accent=#RRGGBB  (7 chars for "accent=", then '#', then 6 hex)
         if (line.rfind("accent=", 0) == 0 && line.size() >= 14) {
             unsigned int r = 0, g = 0, b = 0;
+            // +8 skips "accent=#", then parse 6 hex digits
             if (sscanf(line.c_str() + 8, "%02x%02x%02x", &r, &g, &b) == 3) {
                 g_AccentColor = RGB(r, g, b);
             }
@@ -221,75 +224,175 @@ static void DrawInnerGlow(HDC hdc, const RECT& rc) {
 }
 
 // ============================================================================
-//  CallAI — OpenRouter chat completion (unchanged core logic)
+//  JSON Escape Helper — prevents malformed payloads from DOM text
 // ============================================================================
 
+static std::string EscapeJsonString(const std::string& s) {
+    std::string out;
+    out.reserve(s.size() + 32);
+    for (char c : s) {
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:
+                if (static_cast<unsigned char>(c) < 0x20) {
+                    char hex[8];
+                    snprintf(hex, sizeof(hex), "\\u%04x", (unsigned)c);
+                    out += hex;
+                } else {
+                    out += c;
+                }
+        }
+    }
+    return out;
+}
+
+// Helper: extract "content":"..." from OpenRouter JSON response
+static std::string ParseAIContent(const std::string& json) {
+    // Look for "content":" in the choices array
+    size_t pos = json.find("\"content\":\"");
+    if (pos == std::string::npos) {
+        // Try alternate format: "content": "
+        pos = json.find("\"content\": \"");
+        if (pos != std::string::npos) pos += 12;
+        else return json.substr(0, 500);  // fallback: raw response
+    } else {
+        pos += 11;  // skip past "content":"
+    }
+    // Find the closing quote (handle escaped quotes)
+    std::string result;
+    for (size_t i = pos; i < json.size(); i++) {
+        if (json[i] == '\\' && i + 1 < json.size()) {
+            char next = json[i + 1];
+            if (next == '"')       { result += '"'; i++; }
+            else if (next == 'n')  { result += '\n'; i++; }
+            else if (next == 'r')  { result += '\r'; i++; }
+            else if (next == 't')  { result += '\t'; i++; }
+            else if (next == '\\') { result += '\\'; i++; }
+            else { result += json[i]; }
+        } else if (json[i] == '"') {
+            break;  // end of content string
+        } else {
+            result += json[i];
+        }
+    }
+    return result;
+}
+
+// ============================================================================
+//  CallAI — OpenRouter chat completion
+// ============================================================================
+//  Uses GetActiveModelID() for the correct API model identifier.
+//  Escapes the question text to prevent JSON injection.
+//  Parses the response to extract the actual answer content.
+
 std::string CallAI(const std::string& question) {
-    std::string key   = GetOpenRouterKey();
-    std::string model = GetActiveModel();
+    std::string key     = GetOpenRouterKey();
+    std::string modelID = GetActiveModelID();   // e.g. "anthropic/claude-opus-4"
+    std::string display = GetActiveModel();     // e.g. "Claude 4.6 Opus"
 
-    if (key.empty()) return "[ERROR] No OpenRouter API key set";
+    if (key.empty()) return "[ERROR] No OpenRouter API key configured.";
 
-    HINTERNET hSession = WinHttpOpen(L"ZeroPoint/1.0",
+    HINTERNET hSession = WinHttpOpen(L"ZeroPoint/2.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
-    if (!hSession) return "[ERROR] WinHttp failed";
+    if (!hSession) return "[ERROR] WinHttp session failed";
 
-    std::wstring hostW = L"openrouter.ai";
-    std::wstring pathW = L"/api/v1/chat/completions";
-
-    HINTERNET hConnect = WinHttpConnect(hSession, hostW.c_str(),
+    HINTERNET hConnect = WinHttpConnect(hSession, L"openrouter.ai",
         INTERNET_DEFAULT_HTTPS_PORT, 0);
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", pathW.c_str(),
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST",
+        L"/api/v1/chat/completions",
         NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
         WINHTTP_FLAG_SECURE);
 
+    // Build JSON payload with properly escaped question text
+    std::string escaped = EscapeJsonString(question);
     std::string jsonPayload =
-        R"({"model":")" + model +
-        R"(","messages":[{"role":"user","content":")" + question +
-        R"("}],"max_tokens":800})";
+        R"({"model":")" + modelID +
+        R"(","messages":[{"role":"user","content":")" + escaped +
+        R"("}],"max_tokens":1200})";
 
-    std::string headers =
-        "Content-Type: application/json\r\nAuthorization: Bearer " + key + "\r\n";
+    // Wide string headers for WinHttpSendRequest correctness
+    std::wstring wKey(key.begin(), key.end());
+    std::wstring headers = L"Content-Type: application/json\r\nAuthorization: Bearer " + wKey + L"\r\n";
 
-    WinHttpSendRequest(hRequest, headers.c_str(), (DWORD)headers.length(),
-                       (LPVOID)jsonPayload.c_str(), (DWORD)jsonPayload.length(),
-                       (DWORD)jsonPayload.length(), 0);
+    BOOL ok = WinHttpSendRequest(hRequest,
+        headers.c_str(), (DWORD)headers.length(),
+        (LPVOID)jsonPayload.c_str(), (DWORD)jsonPayload.length(),
+        (DWORD)jsonPayload.length(), 0);
+
+    if (!ok) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return "[ERROR] HTTP request failed (check network)";
+    }
+
     WinHttpReceiveResponse(hRequest, NULL);
 
-    char buffer[16384] = {0};
+    // Read the full response (may come in chunks)
+    std::string resp;
+    char buffer[8192];
     DWORD bytesRead = 0;
-    WinHttpReadData(hRequest, buffer, sizeof(buffer) - 1, &bytesRead);
+    while (WinHttpReadData(hRequest, buffer, sizeof(buffer) - 1, &bytesRead) && bytesRead > 0) {
+        buffer[bytesRead] = '\0';
+        resp += buffer;
+        bytesRead = 0;
+    }
 
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
 
-    std::string resp(buffer);
-    return "[Using " + model + "]\n" + resp.substr(0, 400);
+    // Parse the AI's answer from the JSON response
+    std::string content = ParseAIContent(resp);
+    return content;
 }
 
 // ============================================================================
-//  WebView2 Invisible Browser
+//  WebView2 Invisible Browser — with URL address bar
 // ============================================================================
 // Real WebView2-based browser window that is:
 //   - Hidden from screen recording via WDA_EXCLUDEFROMCAPTURE (Win10 2004+)
 //   - Layered + transparent for stealth
 //   - Full browsing capability (Google, YouTube, ChatGPT, etc.)
-//   - Toggle on/off with Ctrl+Alt+B
+//   - Embedded URL bar with Go button for navigation
+//   - Toggle on/off with Ctrl+Alt+B, dismiss with Escape
 //
 // Requires: WebView2 Runtime + WebView2Loader.dll alongside the .exe
 
-static HWND                         g_BrowserHwnd    = NULL;
-static ComPtr<ICoreWebView2>        g_WebView        = nullptr;
-static ComPtr<ICoreWebView2Controller> g_WebController = nullptr;
-static bool                         g_BrowserVisible = false;
+static HWND                            g_BrowserHwnd    = NULL;
+static HWND                            g_UrlEdit        = NULL;   // URL bar
+static ComPtr<ICoreWebView2>           g_WebView        = nullptr;
+static ComPtr<ICoreWebView2Controller> g_WebController  = nullptr;
+static bool                            g_BrowserVisible = false;
+
+#define ID_URL_EDIT     3001
+#define ID_URL_GO       3002
+#define BROWSER_BAR_H   36   // height of the URL bar area in pixels
 
 // Forward declarations
 static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 static void             InitWebView2(HWND hwnd);
 
+// Navigate to whatever is in the URL edit box
+static void BrowserNavigate() {
+    if (!g_UrlEdit || !g_WebView) return;
+    char url[2048] = {};
+    GetWindowTextA(g_UrlEdit, url, sizeof(url) - 1);
+    std::string sUrl(url);
+    // Auto-prefix https:// if user didn't type a protocol
+    if (sUrl.find("://") == std::string::npos) {
+        sUrl = "https://" + sUrl;
+    }
+    std::wstring wUrl(sUrl.begin(), sUrl.end());
+    g_WebView->Navigate(wUrl.c_str());
+}
+
 static void CreateBrowserWindow() {
-    if (g_BrowserHwnd && IsWindow(g_BrowserHwnd)) return; // already created
+    if (g_BrowserHwnd && IsWindow(g_BrowserHwnd)) return;
 
     const char* cls = "ZPInvisibleBrowser";
     static bool registered = false;
@@ -299,7 +402,7 @@ static void CreateBrowserWindow() {
         wc.hInstance      = GetModuleHandle(NULL);
         wc.lpszClassName  = cls;
         wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
-        wc.hbrBackground  = (HBRUSH)GetStockObject(WHITE_BRUSH);
+        wc.hbrBackground  = CreateSolidBrush(g_BgColor);  // icy bg instead of plain white
         RegisterClassA(&wc);
         registered = true;
     }
@@ -311,35 +414,43 @@ static void CreateBrowserWindow() {
     g_BrowserHwnd = CreateWindowExA(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         cls, "ZeroPoint Browser",
-        WS_POPUP,
+        WS_POPUP | WS_CLIPCHILDREN,
         (sx - w) / 2, (sy - h) / 2, w, h,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
-    // Make the window translucent with the user's saved alpha
     SetLayeredWindowAttributes(g_BrowserHwnd, 0, g_WindowAlpha, LWA_ALPHA);
 
-    // Hide from screen recording / capture (Windows 10 2004+)
-    // WDA_EXCLUDEFROMCAPTURE = 0x00000011
-    typedef BOOL(WINAPI* PFN_SetWindowDisplayAffinity)(HWND, DWORD);
-    PFN_SetWindowDisplayAffinity pSetAffinity =
-        (PFN_SetWindowDisplayAffinity)GetProcAddress(
-            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
-    if (pSetAffinity) {
-        pSetAffinity(g_BrowserHwnd, 0x00000011); // WDA_EXCLUDEFROMCAPTURE
-    }
+    // Hide from screen recording (WDA_EXCLUDEFROMCAPTURE = 0x11)
+    typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
+    PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
+        GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+    if (pSWDA) pSWDA(g_BrowserHwnd, 0x00000011);
 
-    // Initialize WebView2 inside this window
+    // ---- URL bar: [Edit control] [Go button] ----
+    g_UrlEdit = CreateWindowExA(
+        WS_EX_CLIENTEDGE, "EDIT", "https://www.google.com",
+        WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
+        8, 4, w - 80, BROWSER_BAR_H - 8,
+        g_BrowserHwnd, (HMENU)ID_URL_EDIT, GetModuleHandle(NULL), NULL);
+
+    CreateWindowExA(0, "BUTTON", "Go",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        w - 68, 4, 56, BROWSER_BAR_H - 8,
+        g_BrowserHwnd, (HMENU)ID_URL_GO, GetModuleHandle(NULL), NULL);
+
+    // Set a clean font on the URL bar
+    HFONT urlFont = CreateAppFont(13, FW_NORMAL);
+    SendMessage(g_UrlEdit, WM_SETFONT, (WPARAM)urlFont, TRUE);
+
     InitWebView2(g_BrowserHwnd);
 }
 
 static void InitWebView2(HWND hwnd) {
-    // Create WebView2 environment asynchronously, then create the controller
     HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
         nullptr, nullptr, nullptr,
         Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
             [hwnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
                 if (FAILED(result) || !env) return result;
-
                 env->CreateCoreWebView2Controller(hwnd,
                     Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
                         [hwnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
@@ -348,20 +459,40 @@ static void InitWebView2(HWND hwnd) {
                             g_WebController = controller;
                             controller->get_CoreWebView2(&g_WebView);
 
-                            // Fit WebView to the host window
+                            // Offset bounds below the URL bar
                             RECT bounds;
                             GetClientRect(hwnd, &bounds);
+                            bounds.top = BROWSER_BAR_H;
                             g_WebController->put_Bounds(bounds);
 
-                            // Navigate to a default page
                             g_WebView->Navigate(L"https://www.google.com");
 
-                            // Make WebView background transparent for frosted effect
+                            // Transparent background for frosted effect
                             ComPtr<ICoreWebView2Controller2> ctrl2;
                             if (SUCCEEDED(controller->QueryInterface(IID_PPV_ARGS(&ctrl2)))) {
-                                COREWEBVIEW2_COLOR bgColor = { 0, 255, 255, 255 }; // transparent white
-                                ctrl2->put_DefaultBackgroundColor(bgColor);
+                                COREWEBVIEW2_COLOR bg = { 0, 255, 255, 255 };
+                                ctrl2->put_DefaultBackgroundColor(bg);
                             }
+
+                            // Update URL bar when navigation completes
+                            EventRegistrationToken token;
+                            g_WebView->add_NavigationCompleted(
+                                Callback<ICoreWebView2NavigationCompletedEventHandler>(
+                                    [](ICoreWebView2* sender, ICoreWebView2NavigationCompletedEventArgs*) -> HRESULT {
+                                        if (g_UrlEdit && sender) {
+                                            LPWSTR uri = nullptr;
+                                            sender->get_Source(&uri);
+                                            if (uri) {
+                                                // Convert wide to narrow for SetWindowTextA
+                                                int len = WideCharToMultiByte(CP_UTF8, 0, uri, -1, NULL, 0, NULL, NULL);
+                                                std::string narrow(len, 0);
+                                                WideCharToMultiByte(CP_UTF8, 0, uri, -1, &narrow[0], len, NULL, NULL);
+                                                SetWindowTextA(g_UrlEdit, narrow.c_str());
+                                                CoTaskMemFree(uri);
+                                            }
+                                        }
+                                        return S_OK;
+                                    }).Get(), &token);
 
                             return S_OK;
                         }).Get());
@@ -384,28 +515,57 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         if (g_WebController) {
             RECT bounds;
             GetClientRect(hwnd, &bounds);
+            bounds.top = BROWSER_BAR_H;  // keep URL bar visible at top
             g_WebController->put_Bounds(bounds);
+        }
+        // Resize the URL edit to match new width
+        if (g_UrlEdit) {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            MoveWindow(g_UrlEdit, 8, 4, rc.right - 80, BROWSER_BAR_H - 8, TRUE);
         }
         return 0;
     }
+
+    case WM_COMMAND:
+        // "Go" button clicked or Enter pressed in URL edit
+        if (LOWORD(wp) == ID_URL_GO ||
+            (LOWORD(wp) == ID_URL_EDIT && HIWORD(wp) == EN_KILLFOCUS)) {
+            BrowserNavigate();
+        }
+        return 0;
+
+    case WM_KEYDOWN:
+        // Escape key dismisses the browser
+        if (wp == VK_ESCAPE) {
+            ShowWindow(hwnd, SW_HIDE);
+            g_BrowserVisible = false;
+            return 0;
+        }
+        // Enter key navigates
+        if (wp == VK_RETURN) {
+            BrowserNavigate();
+            return 0;
+        }
+        break;
+
     case WM_DESTROY:
-        g_WebController = nullptr;
-        g_WebView       = nullptr;
-        g_BrowserHwnd   = NULL;
+        g_WebController  = nullptr;
+        g_WebView        = nullptr;
+        g_BrowserHwnd    = NULL;
+        g_UrlEdit        = NULL;
         g_BrowserVisible = false;
         return 0;
     }
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
-// Toggle browser visibility — called from Ctrl+Alt+B hotkey
+// Toggle browser visibility — Ctrl+Alt+B hotkey
 void OpenInvisibleBrowser() {
     if (g_BrowserVisible && g_BrowserHwnd && IsWindow(g_BrowserHwnd)) {
-        // Hide the browser
         ShowWindow(g_BrowserHwnd, SW_HIDE);
         g_BrowserVisible = false;
     } else {
-        // Create if needed, then show
         CreateBrowserWindow();
         if (g_BrowserHwnd) {
             ShowWindow(g_BrowserHwnd, SW_SHOW);
@@ -721,13 +881,13 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         DeleteObject(swatchBrush);
         DeleteObject(swatchPen);
 
-        // ---- Footer ----
+        // ---- Footer (version + opacity) ----
         HFONT footerFont = CreateAppFont(10, FW_NORMAL);
         SelectObject(memDC, footerFont);
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
-        char footerBuf[64];
-        snprintf(footerBuf, sizeof(footerBuf), "opacity %d/255", g_WindowAlpha);
+        char footerBuf[96];
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v2.0  |  opacity %d/255", g_WindowAlpha);
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
@@ -1019,8 +1179,239 @@ static void ShowAIPopup(const std::string& text) {
 }
 
 // ============================================================================
+//  API Key Input Dialog — inline prompt (no manual config.ini editing)
+// ============================================================================
+
+static HWND g_hKeyEdit = NULL;
+static bool g_KeyDialogOK = false;
+
+static LRESULT CALLBACK KeyDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_CREATE: {
+        CreateWindowA("STATIC", "Enter your OpenRouter API key:",
+            WS_CHILD | WS_VISIBLE | SS_LEFT,
+            20, 16, 340, 20, hwnd, NULL, NULL, NULL);
+
+        g_hKeyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
+            WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_PASSWORD,
+            20, 42, 340, 24, hwnd, (HMENU)4001, NULL, NULL);
+
+        HFONT f = CreateAppFont(13, FW_NORMAL);
+        SendMessage(g_hKeyEdit, WM_SETFONT, (WPARAM)f, TRUE);
+
+        CreateWindowA("BUTTON", "Save",
+            WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+            120, 80, 80, 28, hwnd, (HMENU)IDOK, NULL, NULL);
+
+        CreateWindowA("BUTTON", "Cancel",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            210, 80, 80, 28, hwnd, (HMENU)IDCANCEL, NULL, NULL);
+
+        return 0;
+    }
+    case WM_COMMAND:
+        if (LOWORD(wp) == IDOK) {
+            char buf[512] = {};
+            GetWindowTextA(g_hKeyEdit, buf, sizeof(buf) - 1);
+            std::string key(buf);
+            if (!key.empty()) {
+                SetOpenRouterKey(key);
+                g_KeyDialogOK = true;
+            }
+            DestroyWindow(hwnd);
+        } else if (LOWORD(wp) == IDCANCEL) {
+            g_KeyDialogOK = false;
+            DestroyWindow(hwnd);
+        }
+        return 0;
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+static bool ShowKeyInputDialog() {
+    const char* cls = "ZPKeyDialog";
+    WNDCLASSA wc = {};
+    wc.lpfnWndProc   = KeyDialogProc;
+    wc.hInstance      = GetModuleHandle(NULL);
+    wc.lpszClassName  = cls;
+    wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
+    RegisterClassA(&wc);
+
+    int sw = GetSystemMetrics(SM_CXSCREEN);
+    int sh = GetSystemMetrics(SM_CYSCREEN);
+
+    HWND hwnd = CreateWindowExA(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        cls, "ZeroPoint — API Key",
+        WS_POPUP | WS_VISIBLE | WS_BORDER,
+        (sw - 400) / 2, (sh - 130) / 2, 400, 130,
+        NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
+    UnregisterClassA(cls, GetModuleHandle(NULL));
+    return g_KeyDialogOK;
+}
+
+// ============================================================================
+//  Full Menu Overlay — frosted panel with last AI answer + controls
+// ============================================================================
+//  Triggered by Ctrl+Alt+H. Shows a centered frosted panel with the
+//  last AI answer, model info, and quick-action buttons.
+
+static std::string g_LastAnswer = "(no AI query yet)";
+static HWND        g_MenuHwnd   = NULL;
+
+static LRESULT CALLBACK FullMenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_CREATE: {
+        EnableBlurBehind(hwnd);
+        return 0;
+    }
+
+    case WM_ERASEBKGND:
+        return 1;
+
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int w = rc.right, h = rc.bottom;
+
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
+        HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
+
+        // Frosted background
+        HBRUSH bg = CreateSolidBrush(g_BgColor);
+        FillRect(memDC, &rc, bg);
+        DeleteObject(bg);
+
+        FillFrosted(memDC, rc, g_BgPanel, 210);
+        DrawInnerGlow(memDC, rc);
+
+        // Accent border
+        HPEN pen = CreatePen(PS_SOLID, 2, g_AccentColor);
+        SelectObject(memDC, pen);
+        SelectObject(memDC, GetStockObject(NULL_BRUSH));
+        RoundRect(memDC, 0, 0, w, h, 16, 16);
+        DeleteObject(pen);
+
+        SetBkMode(memDC, TRANSPARENT);
+
+        // Title
+        HFONT titleFont = CreateAppFont(22, FW_LIGHT);
+        SelectObject(memDC, titleFont);
+        SetTextColor(memDC, g_AccentColor);
+        RECT titleRc = { 20, 12, w - 20, 42 };
+        DrawTextA(memDC, "ZeroPoint Menu", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(titleFont);
+
+        DrawAccentLine(memDC, 20, 46, w - 40);
+
+        // Model info
+        HFONT infoFont = CreateAppFont(12, FW_SEMIBOLD);
+        SelectObject(memDC, infoFont);
+        SetTextColor(memDC, g_TextSecondary);
+        std::string modelLine = "Model: " + GetActiveModel();
+        RECT modelRc = { 20, 54, w - 20, 72 };
+        DrawTextA(memDC, modelLine.c_str(), -1, &modelRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(infoFont);
+
+        // Last answer
+        HFONT textFont = CreateAppFont(13, FW_NORMAL);
+        SelectObject(memDC, textFont);
+        SetTextColor(memDC, g_TextPrimary);
+        RECT textRc = { 20, 80, w - 20, h - 30 };
+        DrawTextA(memDC, g_LastAnswer.c_str(), -1, &textRc, DT_LEFT | DT_WORDBREAK);
+        DeleteObject(textFont);
+
+        // Dismiss hint
+        HFONT hintFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, hintFont);
+        SetTextColor(memDC, g_ShadowColor);
+        RECT hintRc = { 20, h - 24, w - 20, h - 6 };
+        DrawTextA(memDC, "Ctrl+Alt+H or click to dismiss", -1, &hintRc,
+                  DT_CENTER | DT_SINGLELINE);
+        DeleteObject(hintFont);
+
+        BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, oldBmp);
+        DeleteObject(memBmp);
+        DeleteDC(memDC);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+
+    case WM_LBUTTONUP:
+        ShowWindow(hwnd, SW_HIDE);
+        return 0;
+
+    case WM_DESTROY:
+        g_MenuHwnd = NULL;
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+// Toggle full menu overlay
+static void ToggleFullMenu() {
+    if (g_MenuHwnd && IsWindow(g_MenuHwnd) && IsWindowVisible(g_MenuHwnd)) {
+        ShowWindow(g_MenuHwnd, SW_HIDE);
+        return;
+    }
+
+    if (!g_MenuHwnd || !IsWindow(g_MenuHwnd)) {
+        const char* cls = "ZPFullMenu";
+        static bool registered = false;
+        if (!registered) {
+            WNDCLASSA wc = {};
+            wc.lpfnWndProc   = FullMenuProc;
+            wc.hInstance      = GetModuleHandle(NULL);
+            wc.lpszClassName  = cls;
+            wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+            RegisterClassA(&wc);
+            registered = true;
+        }
+
+        int w = 500, h = 400;
+        int sx = GetSystemMetrics(SM_CXSCREEN);
+        int sy = GetSystemMetrics(SM_CYSCREEN);
+
+        g_MenuHwnd = CreateWindowExA(
+            WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+            cls, NULL, WS_POPUP,
+            (sx - w) / 2, (sy - h) / 2, w, h,
+            NULL, NULL, GetModuleHandle(NULL), NULL);
+
+        SetLayeredWindowAttributes(g_MenuHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+
+        // Hide from screen recording
+        typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
+        PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
+            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+        if (pSWDA) pSWDA(g_MenuHwnd, 0x00000011);
+    }
+
+    InvalidateRect(g_MenuHwnd, NULL, TRUE);
+    ShowWindow(g_MenuHwnd, SW_SHOW);
+    SetForegroundWindow(g_MenuHwnd);
+}
+
+// ============================================================================
 //  Entry Point
 // ============================================================================
+
+static const char* ZEROPOINT_VERSION = "v2.0.0";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Initialize common controls (combo box + trackbar)
@@ -1035,20 +1426,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     LoadThemeSettings();
 
     // ------------------------------------------------------------------
-    //  First-launch: prompt for OpenRouter API key
+    //  First-launch: inline API key input dialog
     // ------------------------------------------------------------------
     if (GetOpenRouterKey().empty()) {
-        int result = MessageBoxA(NULL,
-            "ZeroPoint\n\n"
-            "No OpenRouter API key detected.\n\n"
-            "Please set your API key in:\n"
-            "C:\\ProgramData\\ZeroPoint\\config.ini\n\n"
-            "Then relaunch ZeroPoint.",
-            "ZeroPoint - First Launch",
-            MB_OKCANCEL | MB_ICONINFORMATION);
-        if (result == IDCANCEL) {
+        if (!ShowKeyInputDialog()) {
             CoUninitialize();
-            return 0;
+            return 0;   // user cancelled
         }
     }
 
@@ -1066,18 +1449,22 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     //  Inject
     // ------------------------------------------------------------------
     if (!PerformHollowing()) {
-        MessageBoxA(NULL, "Injection failed.", "ZeroPoint", MB_OK | MB_ICONERROR);
+        MessageBoxA(NULL,
+            "Process injection failed.\n\n"
+            "Check that ZeroPointPayload.exe exists in:\n"
+            "C:\\ProgramData\\ZeroPoint\\",
+            "ZeroPoint", MB_OK | MB_ICONERROR);
         CoUninitialize();
         return 1;
     }
 
     // ------------------------------------------------------------------
-    //  Background hotkey loop (unchanged core logic)
+    //  Background hotkey loop
     // ------------------------------------------------------------------
     bool keyZ = false, keyH = false, keyB = false, keyX = false;
 
     while (true) {
-        // Process pending messages (needed for WebView2 async callbacks)
+        // Process pending messages (WebView2 async callbacks need this)
         MSG msg;
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
@@ -1094,17 +1481,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 keyZ = true;
                 std::string question = ExtractBluebookDOM();
                 std::string answer   = CallAI(question);
+                g_LastAnswer = answer;  // store for full menu display
                 ShowAIPopup(answer);
             }
         } else {
             keyZ = false;
         }
 
-        // Ctrl+Alt+H — Full menu (reserved for future)
+        // Ctrl+Alt+H — Full frosted menu overlay (toggle)
         if (ctrl && alt && (GetAsyncKeyState(0x48) & 0x8000)) {
             if (!keyH) {
                 keyH = true;
-                // ToggleFullMenu();
+                ToggleFullMenu();
             }
         } else {
             keyH = false;
@@ -1124,12 +1512,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         if (ctrl && shift && (GetAsyncKeyState(0x58) & 0x8000)) {
             if (!keyX) {
                 keyX = true;
-                // Destroy browser window if open
-                if (g_BrowserHwnd && IsWindow(g_BrowserHwnd)) {
+                // Destroy all overlay windows
+                if (g_BrowserHwnd && IsWindow(g_BrowserHwnd))
                     DestroyWindow(g_BrowserHwnd);
-                }
+                if (g_MenuHwnd && IsWindow(g_MenuHwnd))
+                    DestroyWindow(g_MenuHwnd);
                 PanicKillAndWipe();
-                break;
+                break;    // PanicKillAndWipe terminates, but just in case
             }
         } else {
             keyX = false;
@@ -1141,3 +1530,4 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     CoUninitialize();
     return 0;
 }
+
