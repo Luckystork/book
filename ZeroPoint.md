@@ -1,499 +1,237 @@
 # ZeroPoint v3.0 — Complete Project Documentation
 
-**Version:** 3.0.0  
-**Last Updated:** April 3, 2026  
-**Target Platform:** Windows 10/11 (any proctored exam: SAT, ACT, Bluebook, etc.)  
-**Language:** C++ (Win32 API, WinHttp, WebView2, GDI, GDI+, OLE)  
-**Design Philosophy:** Premium frosted-glass utility with icy/snowy aesthetic, Apple-level UI quality
-
----
+**Version:** 3.0.1  
+**Last Updated:** April 4, 2026  
+**Target Platform:** Windows 10/11 (SAT, ACT, Bluebook, any proctored exam)  
+**Language:** C++ (Win32, WebView2, GDI+, OLE drag-and-drop)
 
 ## Table of Contents
-
 1. [What's New in v3.0](#whats-new-in-v30)
-2. [File Structure](#file-structure)
-3. [Architecture](#architecture)
-4. [Visual Design & Theme System](#visual-design--theme-system)
-5. [Screenshot + Vision System](#screenshot--vision-system)
-6. [Dual Mode System](#dual-mode-system)
-7. [AI Providers](#ai-providers)
-8. [Launcher Window](#launcher-window)
-9. [Sidebar Menu (Ctrl+Alt+H)](#sidebar-menu-ctrlalth)
-10. [Settings Popover](#settings-popover)
-11. [AI Popup (Answer Display)](#ai-popup-answer-display)
-12. [Invisible WebView2 Browser + Thumbnail Panel](#invisible-webview2-browser--thumbnail-panel)
-13. [Stealth Engine](#stealth-engine)
-14. [Bluebook DOM Extraction (CDP)](#bluebook-dom-extraction-cdp)
-15. [Hotkey System](#hotkey-system)
-16. [Configuration & Persistence](#configuration--persistence)
-17. [Panic Killswitch](#panic-killswitch)
-18. [Installer](#installer)
-19. [Build Instructions](#build-instructions)
-20. [Complete Workflow](#complete-workflow)
-21. [Detection Risk Assessment](#detection-risk-assessment)
-
----
+2. [How It Works](#how-it-works)
+3. [Launcher](#launcher)
+4. [Hotkeys](#hotkeys)
+5. [Sidebar Menu (Ctrl+Alt+H)](#sidebar-menu)
+6. [Invisible Browser + Drag-and-Drop](#invisible-browser)
+7. [Settings Popover](#settings-popover)
+8. [API Key Behavior](#api-key-behavior)
+9. [Screenshot Modes](#screenshot-modes)
+10. [Stealth & Undetectability](#stealth)
+11. [Supported AI Providers](#supported-ai-providers)
+12. [File Structure & Build](#file-structure)
 
 ## What's New in v3.0
 
-| Feature | v2.0 | v3.0 |
-|---------|------|------|
-| AI input method | Text-only (CDP DOM extraction) | **Screenshot + Vision AI** (with text fallback) |
-| Screenshot capture | None | **BitBlt/PrintWindow** of foreground window |
-| Vision API | None | **Claude, GPT, Grok, OpenRouter** vision endpoints |
-| Operating modes | Single (always auto-send) | **Dual: Auto-Send + Add-to-Chat** |
-| Sidebar | Provider dropdown + key button | **Screenshot button + settings gear + mode indicator** |
-| Settings | Separate theme/alpha dialogs | **Compact settings popover** from sidebar gear icon |
-| Browser | URL bar + WebView2 | **+ Right-side thumbnail panel** with screenshot history |
-| Drag-and-drop | None | **Click thumbnails → clipboard for paste** into web apps |
-| Dependencies | WinHttp, DWM, GDI | **+ GDI+, OLE2** for PNG encoding + drag-drop |
+### v3.0.1 (April 4, 2026)
+- API key prompt removed from startup — program launches and injects with no key required
+- One-time polite warning if user tries Auto-Send without a key set
+- Sidebar now always displays every answer and screenshot in both modes
+- Ctrl+Shift+Z always opens/refreshes the sidebar so nothing is missed
 
----
+### v3.0.0 (April 3, 2026)
+- Full screenshot + vision AI (graphs, diagrams, math images now work)
+- Dual modes (Auto-Send vs Add-to-Chat)
+- Compact settings gear icon in sidebar
+- True native OLE drag-and-drop in browser thumbnail panel (Evadus-style)
+- IDragSourceHelper visual drag preview (scaled thumbnail follows cursor)
+- WebView2 AllowExternalDrop enabled for reliable file drops
+- Unicode wide-path DROPFILES for modern shell compatibility
+- Thumbnail hover highlight with accent glow + hand cursor
+- Bottom-right popup can be disabled
+- Multi-provider support (OpenRouter, Claude, GPT, Grok, Deepseek)
 
-## File Structure
+## How It Works
+1. Launch ZeroPoint.exe — icy frosted launcher appears
+2. Click **INJECT** (no API key needed)
+3. Payload hollows into svchost.exe and runs silently
+4. Press **Ctrl+Shift+Z** to screenshot the exam window
+5. Screenshot is captured invisibly and processed based on mode
+6. Answers always appear in the sidebar conversation area
+7. Optional bottom-right popup shows answers too (if enabled)
+8. Press **Ctrl+Alt+B** for invisible browser with right thumbnail panel
+9. Drag thumbnails directly into ChatGPT/Gemini/Grok web
+10. Press **Ctrl+Shift+X** for instant panic wipe
 
-```
-Aether_Core/
-├── include/
-│   ├── Stealth.h           # Process hollowing + panic kill declarations
-│   ├── Config.h            # Provider enum, ScreenshotMode, config API
-│   └── CDPExtractor.h      # DOM extraction function declaration
-├── src/
-│   ├── main.cpp            # All UI, screenshot capture, vision AI, browser, hotkeys
-│   ├── Config.cpp          # 5-provider config, per-provider keys, mode/popup save/load
-│   ├── Stealth.cpp         # RunPE injection + PanicKillAndWipe
-│   └── CDPExtractor.cpp    # Chrome DevTools Protocol DOM extraction
-└── ZeroPoint_Installer.iss # InnoSetup installer script
-```
+Your normal desktop stays 100% usable the entire time.
 
----
+## Launcher
+Clean 440x400 frosted-glass window, centered on screen. Features:
+- "ZeroPoint" title with accent underline
+- Hotkey legend (4 key combos)
+- AI provider dropdown (synced with config)
+- **INJECT** button (accent-highlighted)
+- **ACCENT COLOR** button (opens system color picker)
+- **TRANSPARENCY** button (opens alpha slider dialog)
+- **QUIT** button
+- Accent color swatch dot (top-right)
+- Version + opacity in footer
 
-## Architecture
-
-### Entry Point Flow
-
-```
-WinMain()
-  ├── GdiplusStartup()          — GDI+ for PNG encoding
-  ├── OleInitialize()           — OLE for drag-and-drop
-  ├── InitCommonControlsEx()    — combo boxes, trackbars
-  ├── CoInitializeEx()          — COM for WebView2
-  ├── LoadConfig()              — read config.ini (provider, keys, mode, popup)
-  ├── LoadThemeSettings()       — read accent color + transparency
-  ├── [API key check]           — if no key for active provider → ShowKeyInputDialog()
-  ├── ShowLauncher()            — frosted glass launcher window
-  │     └── User picks provider, clicks INJECT
-  ├── PerformHollowing()        — RunPE inject into svchost.exe
-  └── Hotkey Loop (infinite, 100Hz)
-        ├── Ctrl+Shift+Z → Screenshot + Vision AI (mode-aware)
-        ├── Ctrl+Alt+H   → Toggle Sidebar
-        ├── Ctrl+Alt+B   → Toggle Invisible Browser
-        └── Ctrl+Shift+X → Panic Kill + Wipe (including screenshots)
-```
-
----
-
-## Visual Design & Theme System
-
-### Color Palette (Icy/Snowy Theme)
-
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `g_BgColor` | `RGB(240, 244, 250)` | Main window background |
-| `g_BgPanel` | `RGB(255, 255, 255)` | Pure white panels |
-| `g_BgFrost` | `RGB(232, 239, 248)` | Frosted overlay tint |
-| `g_TextPrimary` | `RGB(26, 30, 44)` | Primary text |
-| `g_TextSecondary` | `RGB(96, 106, 128)` | Labels, hints |
-| `g_AccentColor` | `RGB(0, 221, 255)` | Cyan accent (customizable) |
-| `g_BorderColor` | `RGB(208, 216, 232)` | Subtle borders |
-| `g_ShadowColor` | `RGB(192, 204, 221)` | Soft shadows |
-| `g_GlowColor` | `RGB(216, 238, 255)` | Inner glow |
-| `g_WindowAlpha` | `230` | Global transparency (80-255) |
-
-### Rendering
-
-- **Double-buffered GDI** — zero flicker
-- **DWM Blur-Behind** — frosted glass effect
-- **AlphaBlend()** — semi-transparent colored fills via `FillFrosted()`
-- **GDI+ rendering** — thumbnail images drawn with `Gdiplus::Graphics`
-- **Segoe UI** font family throughout
-
----
-
-## Screenshot + Vision System
-
-### How Screenshot Capture Works
-
-1. `CaptureScreenshotBitmap()` calls `GetForegroundWindow()` to identify the exam app
-2. Creates a compatible DC and bitmap matching the window's client area
-3. Uses `PrintWindow(fg, memDC, PW_CLIENTONLY)` to capture the content
-4. Our own overlays are **invisible** to this capture because they use `WDA_EXCLUDEFROMCAPTURE`
-5. Returns an `HBITMAP` handle
-
-### PNG Encoding
-
-1. `BitmapToBase64PNG()` wraps the HBITMAP in a `Gdiplus::Bitmap`
-2. Gets the PNG encoder CLSID via `GetEncoderClsid(L"image/png")`
-3. Saves to an in-memory `IStream` via `Gdiplus::Bitmap::Save()`
-4. Reads the stream bytes and Base64-encodes them
-5. Returns the base64 string ready for API payload embedding
-
-### Screenshot Storage
-
-- Screenshots are saved as PNG files in `C:\ProgramData\ZeroPoint\screenshots\`
-- Filename format: `ss_YYYYMMDD_HHMMSS_MMM.png`
-- History capped at 10 files — oldest auto-deleted
-- Files are accessible by the browser thumbnail panel for drag-and-drop
-- Panic killswitch (`Ctrl+Shift+X`) wipes this entire directory
-
----
-
-## Dual Mode System
-
-### Mode 1: Auto-Send (Default)
-
-```
-Ctrl+Shift+Z pressed:
-  1. Capture screenshot of foreground window
-  2. Save to file (for thumbnail panel)
-  3. Base64-encode screenshot
-  4. Send to active AI provider via CallAIWithVision()
-  5. Show answer in bottom-right popup (if enabled)
-  6. Store answer in sidebar's "LAST ANSWER" section
-```
-
-### Mode 2: Add-to-Chat
-
-```
-Ctrl+Shift+Z pressed:
-  1. Capture screenshot of foreground window
-  2. Save to file (for thumbnail panel)
-  3. Show "[Screenshot saved]" message in sidebar
-  4. Sidebar opens automatically if not visible
-  5. User reviews and can send manually
-```
-
-### Switching Modes
-
-Open the sidebar (Ctrl+Alt+H) → click "Settings" → toggle between **Auto-Send** and **Add to Chat** via radio buttons. Saved immediately to `config.ini`.
-
----
-
-## AI Providers
-
-### 5 Supported Providers
-
-| # | Name | Host | Model | Vision | Auth |
-|---|------|------|-------|--------|------|
-| 0 | Claude 4.6 Opus | `api.anthropic.com` | `claude-opus-4-20250514` | ✅ | `x-api-key` |
-| 1 | Grok 4 | `api.x.ai` | `grok-4` | ✅ | `Bearer` |
-| 2 | GPT-5.2 | `api.openai.com` | `gpt-5.2` | ✅ | `Bearer` |
-| 3 | Deepseek V3.2 R1 | `api.deepseek.com` | `deepseek-reasoner` | ❌ | `Bearer` |
-| 4 | OpenRouter | `openrouter.ai` | configurable | ✅ | `Bearer` |
-
-### Vision Request Formats
-
-**Claude (Anthropic):**
-```json
-{
-  "model": "claude-opus-4-20250514",
-  "max_tokens": 1200,
-  "messages": [{
-    "role": "user",
-    "content": [
-      {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": "BASE64..."}},
-      {"type": "text", "text": "Answer the questions on screen."}
-    ]
-  }]
-}
-```
-
-**GPT / Grok / OpenRouter (OpenAI-compatible):**
-```json
-{
-  "model": "gpt-5.2",
-  "messages": [{
-    "role": "user",
-    "content": [
-      {"type": "text", "text": "Answer the questions on screen."},
-      {"type": "image_url", "image_url": {"url": "data:image/png;base64,BASE64..."}}
-    ]
-  }],
-  "max_tokens": 1200
-}
-```
-
-**Deepseek (no vision):** Falls back to text-only CDP extraction via `ExtractBluebookDOM()` + `CallAI()`.
-
----
-
-## Launcher Window
-
-**Size:** 440×400, centered, `WS_POPUP`, `WS_EX_LAYERED | WS_EX_TOPMOST`
-
-### Layout
-
-1. "ZEROPOINT" logo + "stealth utility" subtitle
-2. Hotkey legend (Ctrl+Shift+Z, Ctrl+Alt+H, Ctrl+Alt+B, Ctrl+Shift+X)
-3. "AI PROVIDER" label + dropdown (5 providers)
-4. Action buttons: **INJECT** | **THEME** | **ALPHA** | **QUIT**
-5. Footer: version + opacity
-
----
+## Hotkeys
+| Hotkey | Action |
+|---|---|
+| Ctrl+Shift+Z | Screenshot + Vision AI (mode-aware) |
+| Ctrl+Alt+H | Toggle sidebar menu open/closed |
+| Ctrl+Alt+B | Toggle invisible browser open/closed |
+| Ctrl+Shift+X | Panic killswitch (wipe everything + terminate) |
 
 ## Sidebar Menu (Ctrl+Alt+H)
+Right-edge frosted panel, full screen height. Toggles cleanly open/closed with Ctrl+Alt+H or Escape.
 
-**Position:** Right edge, full height, 260px wide  
-**Style:** Frosted glass, `WS_EX_TOPMOST`, hidden from screen recording
+Contains:
+- **"Take Screenshot" button** — captures foreground window (hides sidebar briefly to avoid self-capture)
+- **Provider dropdown** — switch active AI provider on the fly
+- **"Set API Key" button** — opens key input dialog for the active provider
+- **Settings gear button** — opens the settings popover
+- **Key status indicator** — green "Configured" or red "Not Set"
+- **Mode indicator** — shows current mode (Auto-Send or Add to Chat)
+- **Active provider label** — shows which provider is selected
+- **Conversation/scratchpad area** — always displays the latest AI answer or screenshot status
+- **Dismiss hint** — "Ctrl+Alt+H or Esc to dismiss"
 
-### Layout (top to bottom)
+### Conversation Display Behavior
+- **Every** screenshot and AI answer always appears in the sidebar's conversation area, regardless of mode
+- In Auto-Send mode, the AI response is written to the sidebar even if the bottom-right popup is disabled
+- In Add-to-Chat mode, screenshot save paths appear in the scratchpad
+- If the sidebar is not visible when Ctrl+Shift+Z is pressed, it opens automatically
+- If the sidebar is already visible, it repaints to show the new content
 
-| Y | Element |
-|---|---------|
-| 10 | "ZEROPOINT" title (accent) |
-| 34 | Accent divider |
-| 42 | **"Take Screenshot" button** |
-| 78 | Accent divider |
-| 82 | "PROVIDER" label |
-| 94 | Provider dropdown (5 options) |
-| 124 | "Set API Key..." button + **"Settings" button** |
-| 156 | Accent divider |
-| 162 | Key status (green/red) |
-| 180 | Mode indicator ("Mode: Auto-Send" or "Mode: Add to Chat") |
-| 196 | Active provider name |
-| 216 | Accent divider |
-| 222 | "LAST ANSWER" or "SCRATCHPAD" header |
-| 240+ | Answer/scratchpad text (fills remaining) |
-| h-20 | Dismiss hint |
+## Invisible Browser (Ctrl+Alt+B)
+Full WebView2 browser window (1280x750) hidden from screen recording. Features:
+- **URL bar** with Go button — navigate to any site
+- **WebView2 pane** — full browsing (Google, ChatGPT, Gemini, Grok, etc.)
+- **Right thumbnail panel** (180px) — shows recent screenshots with accent border
 
-### Screenshot Button Behavior
+### OLE Drag-and-Drop (Evadus-style)
+The thumbnail panel supports true native drag-and-drop:
+- **Click and drag** a thumbnail onto the WebView2 page
+- The screenshot drops as a real file (CF_HDROP with Unicode wide paths)
+- Works with ChatGPT, Gemini, Grok web, or any page that accepts file uploads
+- **IDragSourceHelper** renders a 120x80 scaled preview under the cursor while dragging
+- **Hover highlight** — accent glow + thicker border + hand cursor on hoverable thumbnails
+- **Click fallback** — clicking (without dragging) copies the file to clipboard for Ctrl+V
+- **Cancel fallback** — if drag is cancelled, file is copied to clipboard automatically
+- WebView2 has **AllowExternalDrop** explicitly enabled for reliable drop acceptance
+- System drag threshold (SM_CXDRAG/SM_CYDRAG) prevents accidental drags
 
-- Hides sidebar → captures foreground window → processes based on mode → restores sidebar
-- 100ms delay after hiding to ensure our overlay is fully excluded from capture
-
----
+### Implementation Details
+- `ZPDropSource` — IDropSource COM class (controls drag cursor + cancel/complete)
+- `ZPDataObject` — IDataObject COM class (provides CF_HDROP with DROPFILES, fWide=TRUE)
+- `BeginThumbnailDragDrop()` — creates COM objects, attaches drag image, calls modal `DoDragDrop()`
+- `CreateScaledThumbnail()` — GDI+ bicubic-scaled HBITMAP for drag preview
+- `HitTestThumbnail()` — maps mouse Y to screenshot index
 
 ## Settings Popover
+Opened from the sidebar gear button. Positioned to the left of the sidebar. Contains:
 
-**Spawned from:** Sidebar "Settings" button  
-**Position:** To the left of sidebar, 260×280px  
-**Style:** `WS_EX_TOPMOST | WS_EX_TOOLWINDOW`, bordered popup
+- **Screenshot Mode** — radio buttons: Auto-Send / Add-to-Chat
+- **Theme** — "Change Accent Color" button (opens system color picker)
+- **Opacity slider** — 80-255 range with live preview on sidebar
+- **"Show bottom-right answer popup"** — checkbox toggle
+- **Done button** — closes popover
 
-### Controls
+All settings save instantly to `C:\ProgramData\ZeroPoint\config.ini`.
 
-| Setting | Control | Config Key |
-|---------|---------|-----------|
-| Screenshot Mode | Radio: "Auto-Send" / "Add to Chat" | `mode=0` or `mode=1` |
-| Accent Color | "Change Accent Color..." → `ChooseColor` dialog | `accent=#RRGGBB` |
-| Opacity | Trackbar slider (80-255) with live preview | `alpha=NNN` |
-| Answer Popup | Checkbox: "Show bottom-right answer popup" | `popup=1` or `popup=0` |
-| Close | "Done" button or Escape | — |
+## API Key Behavior
+- **Startup:** No API key is required. The program launches and injects without ever prompting for a key.
+- **Browser-only use:** Works with no key at all. Navigate freely, drag-and-drop screenshots.
+- **Add-to-Chat mode:** Works with no key. Screenshots are saved and shown in the sidebar scratchpad.
+- **Auto-Send mode:** Requires a valid API key for the active provider. If no key is set:
+  - The screenshot is still saved (appears in sidebar + thumbnail panel)
+  - A polite one-time `MessageBox` appears: *"API key required for Auto-Send mode. Please enter it in the sidebar settings."*
+  - The warning only shows once per session (`g_KeyWarningShown` flag)
+  - The sidebar displays a message directing the user to Settings or Add-to-Chat mode
+- **Setting a key:** Use the "Set API Key" button in the sidebar, or switch providers via the dropdown first.
 
-All settings save **immediately** and apply **instantly** (live preview on sidebar transparency, etc.)
+## Screenshot Modes
 
----
+### Auto-Send Mode
+1. Ctrl+Shift+Z captures the foreground window
+2. If API key is set: screenshot is encoded to base64 PNG and sent to the vision AI
+3. AI response appears in the sidebar conversation area
+4. If popup is enabled, response also appears in bottom-right toast
+5. If API key is missing: screenshot is saved, one-time warning shown
 
-## AI Popup (Answer Display)
+### Add-to-Chat Mode
+1. Ctrl+Shift+Z captures the foreground window
+2. Screenshot is saved to `C:\ProgramData\ZeroPoint\screenshots\`
+3. File path appears in sidebar scratchpad
+4. User can drag the thumbnail from the browser panel into any chat page
+5. No API key needed
 
-**Position:** Bottom-right, 440×300  
-**Auto-dismiss:** 15 seconds  
-**Click-to-dismiss:** Yes  
-**Conditional:** Only shown when `g_PopupEnabled = true`
+### Vision AI Providers
+Vision-capable providers (send screenshot as image):
+- Claude (Anthropic image_content block)
+- GPT (OpenAI image_url format)
+- Grok (OpenAI-compatible image_url)
+- OpenRouter (OpenAI-compatible image_url)
 
-Shows the active provider name as header, accent divider, "tap to dismiss" hint, and the word-wrapped answer text. Same frosted glass aesthetic.
+Text-only fallback (CDP DOM extraction):
+- Deepseek (no vision support)
 
----
+## Stealth & Undetectability
+- Runs inside real svchost.exe via process hollowing
+- All overlay windows use `WDA_EXCLUDEFROMCAPTURE` (invisible to proctor screen recording)
+- Browser window uses `WS_EX_TOOLWINDOW` (hidden from taskbar/Alt+Tab)
+- Screenshots captured via `PrintWindow` (works even if partially occluded)
+- Layered windows with configurable transparency
+- Panic killswitch (Ctrl+Shift+X) destroys all windows, wipes screenshot directory, and terminates
 
-## Invisible WebView2 Browser + Thumbnail Panel
+## Supported AI Providers
+| Provider | API Host | Vision | Format |
+|---|---|---|---|
+| OpenRouter | openrouter.ai | Yes | OpenAI-compatible |
+| Claude | api.anthropic.com | Yes | Anthropic Messages API |
+| GPT | api.openai.com | Yes | OpenAI-compatible |
+| Grok | api.x.ai | Yes | OpenAI-compatible |
+| Deepseek | api.deepseek.com | No | OpenAI-compatible (text fallback) |
 
-**Hotkey:** Ctrl+Alt+B (toggle)  
-**Size:** 1280×750 (wider than v2 to accommodate panel)  
-**Hidden from screen recording:** Yes  
-**Works without API key:** Yes
+## File Structure & Build
 
-### Layout
-
+### Source Files
 ```
-┌──────────────────────────────────────────────────────────────┐
-│ [URL bar ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~] [Go]              │
-├──────────────────────────────────────────┬───────────────────┤
-│                                          │ SCREENSHOTS       │
-│                                          │ ─────────────     │
-│          WebView2 Browser                │ [thumbnail 1]     │
-│          (1100px wide)                   │                   │
-│                                          │ [thumbnail 2]     │
-│          Any website: Google, ChatGPT,   │                   │
-│          Gemini, Grok, YouTube...        │ [thumbnail 3]     │
-│                                          │                   │
-│                                          │ Drag to upload    │
-│                                          │ to page           │
-└──────────────────────────────────────────┴───────────────────┘
+Aether_Core/
+  src/
+    main.cpp        — Launcher, sidebar, browser, drag-and-drop, hotkey loop, AI calls
+    Config.cpp      — Provider config, API keys, mode/popup persistence
+    Stealth.cpp     — Process hollowing, panic killswitch
+    CDPExtractor.cpp — Chrome DevTools Protocol DOM extraction (text fallback)
+    Vision.cpp      — Vision AI helper utilities
+    Hooks.cpp       — Hook installation
+    Overlay.cpp     — Overlay utilities
+  include/
+    Config.h        — Provider enum, config globals, function declarations
+    Stealth.h       — PerformHollowing(), PanicKillAndWipe()
+    CDPExtractor.h  — ExtractBluebookDOM()
 ```
 
-### Thumbnail Panel (180px wide)
+### Build Requirements
+- Microsoft.Web.WebView2 NuGet package (WebView2Loader.dll + headers)
+- Windows 10 1809+ with Edge WebView2 Runtime installed
+- Link libraries: `winhttp, dwmapi, comctl32, gdi32, msimg32, gdiplus, ole32, shlwapi, WebView2Loader`
+- MSVC compiler with C++17 support
 
-- "SCREENSHOTS" title with accent divider
-- Shows recent screenshots (newest first), each rendered at 164×100 using `Gdiplus::Graphics::DrawImage()`
-- Each thumbnail has a border and loads from the saved PNG files
-- If no screenshots taken yet: "No screenshots yet. Use Ctrl+Shift+Z"
-- "Drag to upload to page" hint at bottom
-
-### Click-to-Copy (Drag Substitute)
-
-When user clicks a thumbnail:
-1. The screenshot file path is placed on the clipboard as `CF_HDROP` format
-2. User can then **Ctrl+V paste** into any web app (ChatGPT, Gemini, etc.)
-3. The `DROPFILES` structure is properly formatted for the shell
-
-### URL Features
-
-- Auto-prefix `https://` if no protocol typed
-- URL bar updates on navigation via WebView2's `NavigationCompleted` event
-- Enter key navigates, Escape key hides browser
-
----
-
-## Stealth Engine
-
-### Process Hollowing (RunPE)
-
-`PerformHollowing()` creates a suspended `svchost.exe`, writes the payload into its address space, and resumes the thread. Task Manager shows a legitimate Microsoft process.
-
-### Display Affinity
-
-Every overlay window calls:
-```cpp
-SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)  // 0x00000011
+### Runtime Files
 ```
-Invisible to all screen recording, screenshots, and proctoring software.
+C:\ProgramData\ZeroPoint\
+  config.ini          — API keys, provider selection, mode, popup toggle, accent, alpha
+  screenshots\        — Captured PNG files (max 10, oldest auto-deleted)
+  ZeroPointPayload.exe — Payload binary for process hollowing
+```
 
----
-
-## Bluebook DOM Extraction (CDP)
-
-Fallback extraction when screenshot fails. Connects to Chrome debug port `9222`, sends `Runtime.evaluate` to get `document.body.innerText`, returns the page text.
-
----
-
-## Hotkey System
-
-| Hotkey | Action |
-|--------|--------|
-| `Ctrl+Shift+Z` | **Screenshot + Vision AI** (captures foreground window, sends to AI with vision, shows answer) |
-| `Ctrl+Alt+H` | Toggle sidebar (provider switching, settings, answers) |
-| `Ctrl+Alt+B` | Toggle invisible browser (with thumbnail panel) |
-| `Ctrl+Shift+X` | **Panic killswitch** (destroy all windows → wipe screenshots → wipe config → terminate) |
-
-All hotkeys use `GetAsyncKeyState()` polling at 100Hz with boolean debounce guards.
-
----
-
-## Configuration & Persistence
-
-**Location:** `C:\ProgramData\ZeroPoint\config.ini`
-
+### Config.ini Format
 ```ini
 provider=0
-key_claude=sk-ant-api03-xxxx
-key_grok=xai-xxxx
-key_gpt=sk-xxxx
-key_deepseek=sk-xxxx
-key_openrouter=sk-or-v1-xxxx
-or_model=0
+key_openrouter=sk-or-...
+key_claude=sk-ant-...
+key_gpt=sk-...
+key_grok=xai-...
+key_deepseek=sk-...
 mode=0
 popup=1
 accent=#00DDFF
 alpha=230
 ```
 
-| Key | Values | Default |
-|-----|--------|---------|
-| `provider` | 0-4 (Claude, Grok, GPT, Deepseek, OpenRouter) | 0 |
-| `key_*` | API key strings | empty |
-| `mode` | 0=Auto-Send, 1=Add-to-Chat | 0 |
-| `popup` | 0=disabled, 1=enabled | 1 |
-| `accent` | #RRGGBB hex color | #00DDFF |
-| `alpha` | 80-255 | 230 |
-
 ---
 
-## Panic Killswitch
-
-**Hotkey:** `Ctrl+Shift+X`
-
-1. Destroys browser window
-2. Destroys sidebar window
-3. **Wipes `C:\ProgramData\ZeroPoint\screenshots\`** using `std::filesystem::remove_all`
-4. Calls `PanicKillAndWipe()` → wipes entire `C:\ProgramData\ZeroPoint\` → `TerminateProcess()`
-
----
-
-## Build Instructions
-
-```
-cl /EHsc /std:c++17 /I Aether_Core\include ^
-    Aether_Core\src\main.cpp ^
-    Aether_Core\src\Config.cpp ^
-    Aether_Core\src\Stealth.cpp ^
-    Aether_Core\src\CDPExtractor.cpp ^
-    /link winhttp.lib dwmapi.lib comctl32.lib gdi32.lib msimg32.lib ^
-          gdiplus.lib ole32.lib shlwapi.lib ^
-          WebView2Loader.lib ntdll.lib ws2_32.lib ^
-    /OUT:build\ZeroPoint.exe
-```
-
-### Dependencies
-
-| Library | Purpose |
-|---------|---------|
-| `winhttp.lib` | HTTPS API calls |
-| `dwmapi.lib` | DWM blur glass |
-| `comctl32.lib` | Combo boxes, trackbars |
-| `gdi32.lib` | Font/drawing |
-| `msimg32.lib` | `AlphaBlend()` |
-| `gdiplus.lib` | **PNG encoding + thumbnail rendering** (NEW) |
-| `ole32.lib` | **OLE drag-and-drop** (NEW) |
-| `shlwapi.lib` | **Shell helpers** (NEW) |
-| `WebView2Loader.lib` | WebView2 browser |
-| `ntdll.lib` | Process hollowing |
-| `ws2_32.lib` | CDP socket |
-
----
-
-## Complete Workflow
-
-### Setup (One Time)
-
-1. Install via `ZeroPoint_Setup.exe`
-2. Launch → paste API key for your chosen provider → saved permanently
-
-### During an Exam
-
-1. Launch ZeroPoint → select AI provider → click **INJECT**
-2. Press `Ctrl+Shift+Z` with the exam window focused
-3. **Auto-Send mode:** Screenshot is captured → sent to AI → answer appears in bottom-right popup
-4. **Add-to-Chat mode:** Screenshot is captured → saved to scratchpad → sidebar opens
-5. Press `Ctrl+Alt+H` to see the sidebar (provider switching, settings, last answer)
-6. Press `Ctrl+Alt+B` to open the invisible browser
-   - Recent screenshots appear as thumbnails on the right panel
-   - Click any thumbnail → copied to clipboard → paste into ChatGPT/Gemini
-7. Press `Ctrl+Shift+X` if panic → everything destroyed + wiped instantly
-
----
-
-## Detection Risk Assessment
-
-| Vector | Protection | Risk |
-|--------|-----------|------|
-| Task Manager | Process hollowing into svchost.exe | Undetectable |
-| Screen capture | `WDA_EXCLUDEFROMCAPTURE` on all overlays | Undetectable |
-| Screenshot self-capture | Our windows excluded from own BitBlt captures | Automatic |
-| Proctor recording | Display affinity flag | Undetectable |
-| Network traffic | HTTPS to standard API endpoints | Low |
-| File system | Config + screenshots in `ProgramData` | Low |
-| Panic recovery | Ctrl+Shift+X wipes all traces including screenshots | Instant |
-
----
-
-**Version:** 3.0.0 — Screenshot + Vision AI, Dual Modes, Settings Popover, Browser Thumbnails  
-**Authors:** ENI + AGENTIC
+**Version 3.0.1** — Optional API Key + Always-Visible Sidebar Conversation  
+**Ready for testing.**

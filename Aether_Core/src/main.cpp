@@ -2182,6 +2182,7 @@ bool ShowKeyInputDialog() {
 #define ID_SIDEBAR_GEAR   5004
 
 static std::string g_LastAnswer = "(no AI query yet)";
+static bool        g_KeyWarningShown = false;   // one-time "no API key" warning flag
 static HWND        g_MenuHwnd   = NULL;
 static HWND        g_SidebarCombo = NULL;
 static HWND        g_SidebarKeyBtn = NULL;
@@ -2204,11 +2205,27 @@ static void SidebarTakeScreenshot(HWND hwnd) {
         std::string ssPath = SaveScreenshotToFile(hBitmap);
 
         if (g_ScreenshotMode == MODE_AUTO_SEND) {
-            std::string b64 = BitmapToBase64PNG(hBitmap);
-            std::string answer = CallAIWithVision(b64, "");
-            g_LastAnswer = answer;
-            if (g_PopupEnabled) ShowAIPopup(answer);
+            // ---- API key guard: polite one-time warning if no key set ----
+            if (GetProviderKey(GetActiveProvider()).empty()) {
+                g_LastAnswer = "[Screenshot saved: " + ssPath + "]\n"
+                               "No API key set — cannot auto-send.\n"
+                               "Set your key in Settings, or switch to Add-to-Chat mode.";
+                if (!g_KeyWarningShown) {
+                    g_KeyWarningShown = true;
+                    MessageBoxA(hwnd,
+                        "API key required for Auto-Send mode.\n\n"
+                        "Please enter it in the sidebar settings (gear icon),\n"
+                        "or switch to Add-to-Chat mode to use without a key.",
+                        "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+                }
+            } else {
+                std::string b64 = BitmapToBase64PNG(hBitmap);
+                std::string answer = CallAIWithVision(b64, "");
+                g_LastAnswer = answer;
+                if (g_PopupEnabled) ShowAIPopup(answer);
+            }
         } else {
+            // Add-to-Chat mode — no key needed, just save screenshot
             g_LastAnswer = "[Screenshot saved]\n" + ssPath +
                            "\nReady to send. Press Ctrl+Shift+Z to capture more.";
         }
@@ -2217,7 +2234,7 @@ static void SidebarTakeScreenshot(HWND hwnd) {
         g_LastAnswer = "[ERROR] Could not capture foreground window.";
     }
 
-    // Restore sidebar
+    // Restore sidebar — always repaint to show updated conversation/scratchpad
     InvalidateRect(hwnd, NULL, TRUE);
     ShowWindow(hwnd, SW_SHOW);
     SetForegroundWindow(hwnd);
@@ -2709,16 +2726,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     LoadThemeSettings();
 
     // ------------------------------------------------------------------
-    //  First-launch: prompt for API key if the active provider has none
+    //  API key is OPTIONAL at startup — no prompt.
+    //  The user can set a key later via the sidebar settings.
+    //  Only Auto-Send mode requires a key; browser and Add-to-Chat work without one.
     // ------------------------------------------------------------------
-    if (GetProviderKey(GetActiveProvider()).empty()) {
-        if (!ShowKeyInputDialog()) {
-            Gdiplus::GdiplusShutdown(g_GdiplusToken);
-            OleUninitialize();
-            CoUninitialize();
-            return 0;   // user cancelled
-        }
-    }
 
     // ------------------------------------------------------------------
     //  Show premium icy launcher
@@ -2782,40 +2793,61 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                     std::string ssPath = SaveScreenshotToFile(hBitmap);
 
                     if (g_ScreenshotMode == MODE_AUTO_SEND) {
-                        // Mode 1: Auto-Send — encode and call vision AI
-                        std::string b64 = BitmapToBase64PNG(hBitmap);
-                        std::string answer = CallAIWithVision(b64, "");
-                        g_LastAnswer = answer;
+                        // Mode 1: Auto-Send — check for API key first
+                        if (GetProviderKey(GetActiveProvider()).empty()) {
+                            // ---- No API key: polite one-time warning ----
+                            g_LastAnswer = "[Screenshot saved: " + ssPath + "]\n"
+                                           "No API key set — cannot auto-send.\n"
+                                           "Set your key in Settings, or switch to Add-to-Chat mode.";
+                            if (!g_KeyWarningShown) {
+                                g_KeyWarningShown = true;
+                                MessageBoxA(NULL,
+                                    "API key required for Auto-Send mode.\n\n"
+                                    "Please enter it in the sidebar settings (gear icon),\n"
+                                    "or switch to Add-to-Chat mode to use without a key.",
+                                    "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+                            }
+                        } else {
+                            // Key available — encode and call vision AI
+                            std::string b64 = BitmapToBase64PNG(hBitmap);
+                            std::string answer = CallAIWithVision(b64, "");
+                            g_LastAnswer = answer;
 
-                        // Show popup if enabled
-                        if (g_PopupEnabled) {
-                            ShowAIPopup(answer);
-                        }
-
-                        // Refresh sidebar if visible
-                        if (g_MenuHwnd && IsWindow(g_MenuHwnd) && IsWindowVisible(g_MenuHwnd)) {
-                            InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                            // Show popup if enabled
+                            if (g_PopupEnabled) {
+                                ShowAIPopup(answer);
+                            }
                         }
                     } else {
-                        // Mode 2: Add-to-Chat — screenshot goes to scratchpad
+                        // Mode 2: Add-to-Chat — no key needed, screenshot goes to scratchpad
                         g_LastAnswer = "[Screenshot saved: " + ssPath + "]\n"
                                        "Open sidebar (Ctrl+Alt+H) to review and send.";
+                    }
 
-                        // Show sidebar if not visible
-                        if (!g_MenuHwnd || !IsWindow(g_MenuHwnd) || !IsWindowVisible(g_MenuHwnd)) {
-                            ToggleFullMenu();
-                        } else {
-                            InvalidateRect(g_MenuHwnd, NULL, TRUE);
-                        }
+                    // ---- Always refresh the sidebar so every answer/screenshot appears ----
+                    // If sidebar is visible, repaint it. If not, open it.
+                    if (g_MenuHwnd && IsWindow(g_MenuHwnd) && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                    } else {
+                        ToggleFullMenu();
                     }
 
                     DeleteObject(hBitmap);
                 } else {
                     // Screenshot failed — fall back to text-only CDP extraction
-                    std::string question = ExtractBluebookDOM();
-                    std::string answer = CallAI(question);
-                    g_LastAnswer = answer;
-                    if (g_PopupEnabled) ShowAIPopup(answer);
+                    if (GetProviderKey(GetActiveProvider()).empty()) {
+                        g_LastAnswer = "[ERROR] Screenshot failed and no API key set.";
+                    } else {
+                        std::string question = ExtractBluebookDOM();
+                        std::string answer = CallAI(question);
+                        g_LastAnswer = answer;
+                        if (g_PopupEnabled) ShowAIPopup(answer);
+                    }
+
+                    // Always refresh sidebar for the error/answer too
+                    if (g_MenuHwnd && IsWindow(g_MenuHwnd) && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                    }
                 }
             }
         } else {
