@@ -94,4 +94,7 @@ HWND GetVEChatSidebarWindow();
 // outX/outY/outW/outH receive the selected region in screen coords.
 HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH);
 
+// Real Auto-Typer - Human-like text injection into exam window
+void PerformAutoType(const std::string& text);
+
 #endif // ZEROPOINT_VIRTUALENV_H

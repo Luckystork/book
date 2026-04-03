@@ -44,6 +44,7 @@ ZeroPoint queries multi-provider Chat Completions and Vision models via direct A
 | :--- | :--- |
 | **Ctrl+Shift+Z** | Take Full Screenshot / Add to Scratchpad |
 | **Ctrl+Shift+S** | Snip Region (Crosshair to capture custom area) |
+| **Ctrl+Shift+T** | Real Auto-Typer — injects last AI answer into focused exam window with human-like typing |
 | **Ctrl+Alt+H** | Toggle Full Sidebar (Host) |
 | **Ctrl+Alt+C** | Lock/Unlock Virtual Environment (VE Lock feature with Mouse Teleport) |
 | **Ctrl+Alt+F** | Toggle Fullscreen VE |

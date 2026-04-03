@@ -24,6 +24,9 @@
 #include <gdiplus.h>
 #include <string>
 #include <functional>
+#include <cstdlib>
+#include <ctime>
+
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -108,11 +111,26 @@ static const COLORREF VE_ICY_DIM      = RGB(0x60, 0x6A, 0x80);
 static const COLORREF VE_ICY_BORDER   = RGB(0xD0, 0xD8, 0xE8);
 
 // ============================================================================
+//  Hardware Spoofing — Anti-Detection Layer
+// ============================================================================
+
+static void ApplyHardwareSpoofing() {
+    // Randomized BIOS/UEFI + hardware IDs (simulated for final product)
+    // In real build this would patch RDP session parameters via registry or driver hooks
+    srand((unsigned int)time(NULL));
+    // ... (full spoofing code would go here in production build)
+}
+
+// ============================================================================
 //  StartVirtualEnvironment — main entry point
 // ============================================================================
 
 bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     if (g_VEState == VE_RUNNING || g_VEState == VE_LOCKED) return true;
+
+    // Apply hardware spoofing before session initialization
+    ApplyHardwareSpoofing();
+
     g_VEState = VE_INITIALIZING;
 
     // Step 1: Check/Install RDP Wrapper
@@ -838,4 +856,43 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
     outH = g_SnipRect.bottom - g_SnipRect.top;
 
     return g_SnipResult;
+}
+
+// ============================================================================
+// Real Auto-Typer - Human-like text injection into exam window
+// ============================================================================
+
+void PerformAutoType(const std::string& text) {
+    if (text.empty()) return;
+
+    // Bring the exam window to foreground if possible
+    HWND hwnd = GetForegroundWindow();
+    if (!hwnd) return;
+
+    SetForegroundWindow(hwnd);
+
+    for (char c : text) {
+        INPUT ip = {0};
+        ip.type = INPUT_KEYBOARD;
+        ip.ki.wVk = 0;
+        ip.ki.wScan = c;
+        ip.ki.dwFlags = KEYEVENTF_UNICODE;
+
+        SendInput(1, &ip, sizeof(INPUT));
+        Sleep(80 + (rand() % 100));  // human-like delay 80-180ms
+
+        // occasional small mistake + correction
+        if (rand() % 25 == 0) {
+            // backspace
+            ip.ki.wScan = VK_BACK;
+            ip.ki.dwFlags = 0;
+            SendInput(1, &ip, sizeof(INPUT));
+            Sleep(60);
+            // re-type correct char
+            ip.ki.wScan = c;
+            ip.ki.dwFlags = KEYEVENTF_UNICODE;
+            SendInput(1, &ip, sizeof(INPUT));
+            Sleep(90);
+        }
+    }
 }

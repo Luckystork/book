@@ -56,6 +56,10 @@ using namespace Microsoft::WRL;
 // GDI+ token — initialized in WinMain, shutdown on exit
 static ULONG_PTR g_GdiplusToken = 0;
 
+// Hotkey toggle states
+static bool keyZ = false, keyH = false, keyB = false, keyX = false, keyR = false;
+static bool keyC = false, keyF = false, keyS = false, keyT = false;
+
 // ============================================================================
 //  Theme Configuration
 // ============================================================================
@@ -2735,7 +2739,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ------------------------------------------------------------------
     //  Background hotkey loop
     // ------------------------------------------------------------------
-    bool keyZ = false, keyH = false, keyB = false, keyX = false, keyR = false, keyC = false, keyF = false;
 
     while (true) {
         // Process pending messages (WebView2 async callbacks need this)
@@ -2884,6 +2887,18 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             }
         } else {
             keyS = false;
+        }
+
+        // Ctrl+Shift+T — Real Auto-Typer
+        if (ctrl && shift && (GetAsyncKeyState(0x54) & 0x8000)) {
+            if (!keyT) {
+                keyT = true;
+                if (!g_LastAnswer.empty()) {
+                    PerformAutoType(g_LastAnswer);
+                }
+            }
+        } else {
+            keyT = false;
         }
 
         // Ctrl+Alt+H — Sidebar (toggle)
