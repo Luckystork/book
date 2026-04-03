@@ -1,14 +1,15 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility
+//  ZeroPoint — Premium Windows Utility  (v3.0)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
-//             browser, enhanced AI popup, full menu overlay, custom accent
-//             color + transparency, inline API key dialog
+//             browser, screenshot + vision AI, sidebar with settings,
+//             browser thumbnail panel, multi-provider, custom themes
 // ============================================================================
 //
 //  BUILD REQUIREMENTS:
 //    - Microsoft.Web.WebView2 NuGet package (WebView2Loader.dll + headers)
 //    - Windows 10 1809+ with Edge WebView2 Runtime installed
-//    - Link: winhttp, dwmapi, comctl32, gdi32, msimg32, WebView2Loader
+//    - Link: winhttp, dwmapi, comctl32, gdi32, msimg32, WebView2Loader,
+//            gdiplus, ole32, shlwapi
 //    - Include path must contain the Aether_Core/include directory
 //
 // ============================================================================
@@ -22,12 +23,16 @@
 #include <winhttp.h>
 #include <dwmapi.h>
 #include <commctrl.h>
+#include <gdiplus.h>
+#include <ole2.h>
+#include <shlobj.h>
 #include <string>
 #include <vector>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
 #include <functional>
+#include <filesystem>
 #include <wrl.h>         // Microsoft::WRL::ComPtr for WebView2 COM pointers
 #include <wil/com.h>     // wil helpers (optional, from WebView2 SDK samples)
 
@@ -40,9 +45,15 @@
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "msimg32.lib")
+#pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "ole32.lib")
+#pragma comment(lib, "shlwapi.lib")
 #pragma comment(lib, "WebView2Loader.lib")
 
 using namespace Microsoft::WRL;
+
+// GDI+ token — initialized in WinMain, shutdown on exit
+static ULONG_PTR g_GdiplusToken = 0;
 
 // ============================================================================
 //  Theme Configuration
@@ -440,8 +451,240 @@ std::string CallAI(const std::string& question) {
 }
 
 // ============================================================================
-//  WebView2 Invisible Browser — with URL address bar
+//  Screenshot Capture — invisible BitBlt of the foreground window
 // ============================================================================
+//  Captures the foreground window using PrintWindow/BitBlt.
+//  Our own overlays use WDA_EXCLUDEFROMCAPTURE so they are automatically
+//  invisible to this capture — only the exam app is captured.
+
+static const std::string SCREENSHOT_DIR = "C:\\ProgramData\\ZeroPoint\\screenshots\\";
+static std::vector<std::string> g_ScreenshotHistory;   // file paths of saved PNGs
+static const int MAX_SCREENSHOTS = 10;
+
+// Capture the foreground window to an HBITMAP
+static HBITMAP CaptureScreenshotBitmap(int& outW, int& outH) {
+    HWND fg = GetForegroundWindow();
+    if (!fg) return NULL;
+
+    RECT rc;
+    GetClientRect(fg, &rc);
+    outW = rc.right - rc.left;
+    outH = rc.bottom - rc.top;
+    if (outW <= 0 || outH <= 0) return NULL;
+
+    HDC screenDC = GetDC(fg);
+    HDC memDC = CreateCompatibleDC(screenDC);
+    HBITMAP bmp = CreateCompatibleBitmap(screenDC, outW, outH);
+    SelectObject(memDC, bmp);
+
+    // PrintWindow captures even if partially occluded
+    PrintWindow(fg, memDC, PW_CLIENTONLY);
+
+    DeleteDC(memDC);
+    ReleaseDC(fg, screenDC);
+    return bmp;
+}
+
+// GDI+ helper: find the encoder CLSID for a given MIME type (e.g. "image/png")
+static int GetEncoderClsid(const WCHAR* format, CLSID* pClsid) {
+    UINT num = 0, size = 0;
+    Gdiplus::GetImageEncodersSize(&num, &size);
+    if (size == 0) return -1;
+
+    Gdiplus::ImageCodecInfo* pImageCodecInfo =
+        (Gdiplus::ImageCodecInfo*)malloc(size);
+    if (!pImageCodecInfo) return -1;
+
+    Gdiplus::GetImageEncoders(num, size, pImageCodecInfo);
+    for (UINT j = 0; j < num; ++j) {
+        if (wcscmp(pImageCodecInfo[j].MimeType, format) == 0) {
+            *pClsid = pImageCodecInfo[j].Clsid;
+            free(pImageCodecInfo);
+            return j;
+        }
+    }
+    free(pImageCodecInfo);
+    return -1;
+}
+
+// Base64 encoding table
+static const char B64[] =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+static std::string Base64Encode(const BYTE* data, size_t len) {
+    std::string out;
+    out.reserve(((len + 2) / 3) * 4);
+    for (size_t i = 0; i < len; i += 3) {
+        unsigned int n = ((unsigned int)data[i]) << 16;
+        if (i + 1 < len) n |= ((unsigned int)data[i + 1]) << 8;
+        if (i + 2 < len) n |= data[i + 2];
+        out += B64[(n >> 18) & 0x3F];
+        out += B64[(n >> 12) & 0x3F];
+        out += (i + 1 < len) ? B64[(n >> 6) & 0x3F] : '=';
+        out += (i + 2 < len) ? B64[n & 0x3F] : '=';
+    }
+    return out;
+}
+
+// Convert HBITMAP → base64-encoded PNG string using GDI+
+static std::string BitmapToBase64PNG(HBITMAP hBitmap) {
+    if (!hBitmap) return "";
+
+    Gdiplus::Bitmap bmp(hBitmap, NULL);
+    CLSID clsidPng;
+    if (GetEncoderClsid(L"image/png", &clsidPng) < 0) return "";
+
+    // Save to memory stream
+    IStream* pStream = NULL;
+    CreateStreamOnHGlobal(NULL, TRUE, &pStream);
+    bmp.Save(pStream, &clsidPng, NULL);
+
+    // Get stream size
+    STATSTG stat;
+    pStream->Stat(&stat, STATFLAG_DEFAULT);
+    ULONG cbSize = (ULONG)stat.cbSize.QuadPart;
+
+    // Read bytes
+    LARGE_INTEGER liZero = {};
+    pStream->Seek(liZero, STREAM_SEEK_SET, NULL);
+    std::vector<BYTE> buf(cbSize);
+    ULONG bytesRead = 0;
+    pStream->Read(buf.data(), cbSize, &bytesRead);
+    pStream->Release();
+
+    return Base64Encode(buf.data(), bytesRead);
+}
+
+// Save HBITMAP to a PNG file in the screenshots directory, return the file path
+static std::string SaveScreenshotToFile(HBITMAP hBitmap) {
+    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+    CreateDirectoryA(SCREENSHOT_DIR.c_str(), NULL);
+
+    // Generate unique filename with timestamp
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    char fname[256];
+    snprintf(fname, sizeof(fname), "ss_%04d%02d%02d_%02d%02d%02d_%03d.png",
+             st.wYear, st.wMonth, st.wDay,
+             st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
+
+    std::string path = SCREENSHOT_DIR + fname;
+
+    Gdiplus::Bitmap bmp(hBitmap, NULL);
+    CLSID clsidPng;
+    if (GetEncoderClsid(L"image/png", &clsidPng) < 0) return "";
+
+    std::wstring wPath(path.begin(), path.end());
+    bmp.Save(wPath.c_str(), &clsidPng, NULL);
+
+    // Add to history, cap at MAX_SCREENSHOTS
+    g_ScreenshotHistory.push_back(path);
+    while ((int)g_ScreenshotHistory.size() > MAX_SCREENSHOTS) {
+        DeleteFileA(g_ScreenshotHistory.front().c_str());
+        g_ScreenshotHistory.erase(g_ScreenshotHistory.begin());
+    }
+
+    return path;
+}
+
+// ============================================================================
+//  CallAIWithVision — send screenshot + prompt to vision-capable APIs
+// ============================================================================
+//  Providers:
+//    - Claude:   Anthropic image_content block
+//    - GPT/Grok/OpenRouter: OpenAI image_url format
+//    - Deepseek: Falls back to text-only CDP extraction
+//
+//  Default prompt asks AI to answer any visible exam questions.
+
+static const char* VISION_PROMPT =
+    "Look at this screenshot of an exam question carefully. "
+    "Answer the question(s) visible on screen. Be concise and direct. "
+    "Give only the answer(s).";
+
+std::string CallAIWithVision(const std::string& base64png,
+                              const std::string& extraPrompt) {
+    Provider prov     = GetActiveProvider();
+    std::string key   = GetProviderKey(prov);
+    std::string model = GetActiveModelID();
+
+    if (key.empty()) {
+        return "[ERROR] No API key set for " + GetActiveProviderName() +
+               ". Open settings to add your key.";
+    }
+
+    // Deepseek doesn't support vision — fall back to text-only
+    if (!ActiveProviderHasVision()) {
+        std::string question = ExtractBluebookDOM();
+        return CallAI(question);
+    }
+
+    std::string prompt = extraPrompt.empty() ? std::string(VISION_PROMPT) : extraPrompt;
+    std::string escaped = EscapeJsonString(prompt);
+    std::wstring wKey(key.begin(), key.end());
+    std::string resp;
+
+    switch (prov) {
+    // -----------------------------------------------------------------
+    //  OpenAI-compatible vision: GPT, Grok, OpenRouter
+    //  content is an array of [{type: text}, {type: image_url}]
+    // -----------------------------------------------------------------
+    case PROV_GPT:
+    case PROV_GROK:
+    case PROV_OPENROUTER: {
+        std::wstring host, path;
+        if (prov == PROV_OPENROUTER) {
+            host = L"openrouter.ai";
+            path = L"/api/v1/chat/completions";
+        } else if (prov == PROV_GPT) {
+            host = L"api.openai.com";
+            path = L"/v1/chat/completions";
+        } else {
+            host = L"api.x.ai";
+            path = L"/v1/chat/completions";
+        }
+
+        std::string body =
+            R"({"model":")" + model +
+            R"(","messages":[{"role":"user","content":[)" +
+            R"({"type":"text","text":")" + escaped + R"("},)" +
+            R"({"type":"image_url","image_url":{"url":"data:image/png;base64,)" +
+            base64png + R"("}})" +
+            R"(]}],"max_tokens":1200})";
+
+        std::wstring headers =
+            L"Content-Type: application/json\r\nAuthorization: Bearer " + wKey + L"\r\n";
+
+        resp = HttpsPost(host, path, headers, body);
+        return ParseAIContent(resp);
+    }
+
+    // -----------------------------------------------------------------
+    //  Claude vision: Anthropic content array with image block
+    // -----------------------------------------------------------------
+    case PROV_CLAUDE: {
+        std::string body =
+            R"({"model":")" + model +
+            R"(","max_tokens":1200,"messages":[{"role":"user","content":[)" +
+            R"({"type":"image","source":{"type":"base64","media_type":"image/png","data":")" +
+            base64png + R"("}},)" +
+            R"({"type":"text","text":")" + escaped + R"("})" +
+            R"(]}]})";
+
+        std::wstring headers =
+            L"Content-Type: application/json\r\n"
+            L"x-api-key: " + wKey + L"\r\n"
+            L"anthropic-version: 2023-06-01\r\n";
+
+        resp = HttpsPost(L"api.anthropic.com", L"/v1/messages", headers, body);
+        return ParseAnthropicContent(resp);
+    }
+
+    default:
+        return "[ERROR] Vision not supported for this provider.";
+    }
+}
+
 // Real WebView2-based browser window that is:
 //   - Hidden from screen recording via WDA_EXCLUDEFROMCAPTURE (Win10 2004+)
 //   - Layered + transparent for stealth
@@ -459,7 +702,8 @@ static bool                            g_BrowserVisible = false;
 
 #define ID_URL_EDIT     3001
 #define ID_URL_GO       3002
-#define BROWSER_BAR_H   36   // height of the URL bar area in pixels
+#define BROWSER_BAR_H   36   // height of the URL bar area
+#define BROWSER_PANEL_W 180  // width of right screenshot panel
 
 // Forward declarations
 static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
@@ -495,7 +739,7 @@ static void CreateBrowserWindow() {
         registered = true;
     }
 
-    int w = 1100, h = 750;
+    int w = 1280, h = 750;  // wider to accommodate thumbnail panel
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
 
@@ -514,19 +758,19 @@ static void CreateBrowserWindow() {
         GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
     if (pSWDA) pSWDA(g_BrowserHwnd, 0x00000011);
 
-    // ---- URL bar: [Edit control] [Go button] ----
+    // URL bar spans the webview area (not the thumbnail panel)
+    int urlW = w - BROWSER_PANEL_W;  // URL bar width excludes panel
     g_UrlEdit = CreateWindowExA(
         WS_EX_CLIENTEDGE, "EDIT", "https://www.google.com",
         WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL,
-        8, 4, w - 80, BROWSER_BAR_H - 8,
+        8, 4, urlW - 80, BROWSER_BAR_H - 8,
         g_BrowserHwnd, (HMENU)ID_URL_EDIT, GetModuleHandle(NULL), NULL);
 
     CreateWindowExA(0, "BUTTON", "Go",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-        w - 68, 4, 56, BROWSER_BAR_H - 8,
+        urlW - 68, 4, 56, BROWSER_BAR_H - 8,
         g_BrowserHwnd, (HMENU)ID_URL_GO, GetModuleHandle(NULL), NULL);
 
-    // Set a clean font on the URL bar
     HFONT urlFont = CreateAppFont(13, FW_NORMAL);
     SendMessage(g_UrlEdit, WM_SETFONT, (WPARAM)urlFont, TRUE);
 
@@ -551,6 +795,7 @@ static void InitWebView2(HWND hwnd) {
                             RECT bounds;
                             GetClientRect(hwnd, &bounds);
                             bounds.top = BROWSER_BAR_H;
+                            bounds.right -= BROWSER_PANEL_W;  // leave room for thumbnail panel
                             g_WebController->put_Bounds(bounds);
 
                             g_WebView->Navigate(L"https://www.google.com");
@@ -597,40 +842,187 @@ static void InitWebView2(HWND hwnd) {
     }
 }
 
+// Draw the screenshot thumbnail panel on the right side of the browser
+static void PaintBrowserThumbnailPanel(HDC hdc, int panelX, int panelW, int panelH) {
+    // Panel background
+    RECT panelRc = { panelX, 0, panelX + panelW, panelH };
+    FillFrosted(hdc, panelRc, g_BgFrost, 220);
+
+    // Left border accent
+    HPEN pen = CreatePen(PS_SOLID, 2, g_AccentColor);
+    HPEN oldPen = (HPEN)SelectObject(hdc, pen);
+    MoveToEx(hdc, panelX, 0, NULL);
+    LineTo(hdc, panelX, panelH);
+    SelectObject(hdc, oldPen);
+    DeleteObject(pen);
+
+    SetBkMode(hdc, TRANSPARENT);
+
+    // Title
+    HFONT titleFont = CreateAppFont(12, FW_SEMIBOLD);
+    SelectObject(hdc, titleFont);
+    SetTextColor(hdc, g_AccentColor);
+    RECT titleRc = { panelX + 8, 8, panelX + panelW - 4, 24 };
+    DrawTextA(hdc, "SCREENSHOTS", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
+    DeleteObject(titleFont);
+
+    DrawAccentLine(hdc, panelX + 8, 28, panelW - 16);
+
+    // Thumbnails from g_ScreenshotHistory
+    int thumbW = panelW - 16;  // 164px
+    int thumbH = 100;
+    int y = 36;
+
+    HFONT smallFont = CreateAppFont(9, FW_NORMAL);
+    SelectObject(hdc, smallFont);
+
+    if (g_ScreenshotHistory.empty()) {
+        SetTextColor(hdc, g_ShadowColor);
+        RECT emptyRc = { panelX + 8, y, panelX + panelW - 4, y + 40 };
+        DrawTextA(hdc, "No screenshots yet.\nUse Ctrl+Shift+Z", -1, &emptyRc,
+                  DT_LEFT | DT_WORDBREAK);
+    } else {
+        for (int i = (int)g_ScreenshotHistory.size() - 1; i >= 0 && y + thumbH < panelH - 30; i--) {
+            // Load thumbnail from file using GDI+
+            std::wstring wPath(g_ScreenshotHistory[i].begin(), g_ScreenshotHistory[i].end());
+            Gdiplus::Bitmap bmp(wPath.c_str());
+            if (bmp.GetLastStatus() == Gdiplus::Ok) {
+                Gdiplus::Graphics gfx(hdc);
+                gfx.DrawImage(&bmp, panelX + 8, y, thumbW, thumbH);
+            }
+
+            // Border around thumbnail
+            HPEN thumbPen = CreatePen(PS_SOLID, 1, g_BorderColor);
+            HPEN oldTP = (HPEN)SelectObject(hdc, thumbPen);
+            HBRUSH nullBr = (HBRUSH)GetStockObject(NULL_BRUSH);
+            HGDIOBJ oldBr = SelectObject(hdc, nullBr);
+            Rectangle(hdc, panelX + 8, y, panelX + 8 + thumbW, y + thumbH);
+            SelectObject(hdc, oldBr);
+            SelectObject(hdc, oldTP);
+            DeleteObject(thumbPen);
+
+            y += thumbH + 6;
+        }
+    }
+
+    // Hint at bottom
+    SetTextColor(hdc, g_ShadowColor);
+    RECT hintRc = { panelX + 4, panelH - 24, panelX + panelW - 4, panelH - 4 };
+    DrawTextA(hdc, "Drag to upload to page", -1, &hintRc,
+              DT_CENTER | DT_SINGLELINE);
+    DeleteObject(smallFont);
+}
+
+// OLE drag-and-drop: initiate a file drop for a screenshot thumbnail
+static void InitiateDragDrop(const std::string& filePath) {
+    // Build DROPFILES structure for CF_HDROP
+    size_t fileLen = filePath.size() + 1;  // include null terminator
+    size_t totalSize = sizeof(DROPFILES) + fileLen + 1;  // double null at end
+
+    HGLOBAL hGlobal = GlobalAlloc(GHND, totalSize);
+    if (!hGlobal) return;
+
+    DROPFILES* df = (DROPFILES*)GlobalLock(hGlobal);
+    df->pFiles = sizeof(DROPFILES);
+    df->fWide = FALSE;
+    char* dst = (char*)df + sizeof(DROPFILES);
+    memcpy(dst, filePath.c_str(), fileLen);
+    dst[fileLen] = 0;  // double null terminator
+    GlobalUnlock(hGlobal);
+
+    // Create IDataObject with CF_HDROP format
+    FORMATETC fmt = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
+    STGMEDIUM stg = { TYMED_HGLOBAL, { 0 }, NULL };
+    stg.hGlobal = hGlobal;
+
+    // Use SHCreateDataObject for simplicity
+    IDataObject* pDataObj = NULL;
+    // Minimal IDataObject implementation via shell
+    // For production: implement IDataObject + IDropSource properly
+    // Simplified: use ReleaseStgMedium after drag completes
+
+    // Note: Full OLE drag-drop requires IDataObject + IDropSource implementation.
+    // As a pragmatic approach, we copy the file path to clipboard as CF_HDROP
+    // so the user can paste it, and show the file in the drag cursor.
+    if (OpenClipboard(g_BrowserHwnd)) {
+        EmptyClipboard();
+        SetClipboardData(CF_HDROP, hGlobal);
+        CloseClipboard();
+    } else {
+        GlobalFree(hGlobal);
+    }
+}
+
 static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_SIZE: {
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+
         if (g_WebController) {
-            RECT bounds;
-            GetClientRect(hwnd, &bounds);
-            bounds.top = BROWSER_BAR_H;  // keep URL bar visible at top
+            RECT bounds = rc;
+            bounds.top = BROWSER_BAR_H;
+            bounds.right -= BROWSER_PANEL_W;  // WebView2 excludes panel
             g_WebController->put_Bounds(bounds);
         }
-        // Resize the URL edit to match new width
+        // Resize URL edit
         if (g_UrlEdit) {
-            RECT rc;
-            GetClientRect(hwnd, &rc);
-            MoveWindow(g_UrlEdit, 8, 4, rc.right - 80, BROWSER_BAR_H - 8, TRUE);
+            int urlW = rc.right - BROWSER_PANEL_W;
+            MoveWindow(g_UrlEdit, 8, 4, urlW - 80, BROWSER_BAR_H - 8, TRUE);
         }
         return 0;
     }
 
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+
+        // Paint the right-side thumbnail panel
+        int panelX = rc.right - BROWSER_PANEL_W;
+        PaintBrowserThumbnailPanel(hdc, panelX, BROWSER_PANEL_W, rc.bottom);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+
     case WM_COMMAND:
-        // "Go" button clicked or Enter pressed in URL edit
         if (LOWORD(wp) == ID_URL_GO ||
             (LOWORD(wp) == ID_URL_EDIT && HIWORD(wp) == EN_KILLFOCUS)) {
             BrowserNavigate();
         }
         return 0;
 
+    case WM_LBUTTONDOWN: {
+        // Check if click is in the thumbnail panel area
+        int mx = LOWORD(lp), my = HIWORD(lp);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int panelX = rc.right - BROWSER_PANEL_W;
+
+        if (mx >= panelX + 8 && mx <= panelX + BROWSER_PANEL_W - 8 && my >= 36) {
+            // Determine which thumbnail was clicked
+            int thumbH = 100;
+            int y = 36;
+            for (int i = (int)g_ScreenshotHistory.size() - 1; i >= 0; i--) {
+                if (my >= y && my < y + thumbH) {
+                    // Copy to clipboard as CF_HDROP so user can paste into web apps
+                    InitiateDragDrop(g_ScreenshotHistory[i]);
+                    return 0;
+                }
+                y += thumbH + 6;
+            }
+        }
+        break;
+    }
+
     case WM_KEYDOWN:
-        // Escape key dismisses the browser
         if (wp == VK_ESCAPE) {
             ShowWindow(hwnd, SW_HIDE);
             g_BrowserVisible = false;
             return 0;
         }
-        // Enter key navigates
         if (wp == VK_RETURN) {
             BrowserNavigate();
             return 0;
@@ -1352,31 +1744,81 @@ bool ShowKeyInputDialog() {
 }
 
 // ============================================================================
-//  Sidebar Menu — right-edge panel for live provider switching
+//  Sidebar Menu — right-edge panel with screenshot, provider, settings
 // ============================================================================
-//  Triggered by Ctrl+Alt+H. Frosted sidebar on the right edge with a
-//  dropdown to switch providers, key config, active provider + last answer.
+//  Triggered by Ctrl+Alt+H. Frosted sidebar on the right edge with:
+//    - "Take Screenshot" button
+//    - Provider dropdown + key config
+//    - Mode indicator (Auto-Send / Add-to-Chat)
+//    - Last answer / scratchpad
+//    - Settings gear → settings popover
 
 #define ID_SIDEBAR_COMBO  5001
 #define ID_SIDEBAR_KEYBTN 5002
+#define ID_SIDEBAR_SSBTN  5003
+#define ID_SIDEBAR_GEAR   5004
 
 static std::string g_LastAnswer = "(no AI query yet)";
 static HWND        g_MenuHwnd   = NULL;
 static HWND        g_SidebarCombo = NULL;
 static HWND        g_SidebarKeyBtn = NULL;
+static HWND        g_SidebarSSBtn = NULL;
+static HWND        g_SidebarGearBtn = NULL;
+
+// Forward declarations for settings popover
+static void ShowSettingsPopover(HWND owner);
+
+// Handle "Take Screenshot" button press from sidebar
+static void SidebarTakeScreenshot(HWND hwnd) {
+    // Hide sidebar briefly to avoid capturing ourselves
+    ShowWindow(hwnd, SW_HIDE);
+    Sleep(100);  // Let the window fully hide
+
+    int ssW = 0, ssH = 0;
+    HBITMAP hBitmap = CaptureScreenshotBitmap(ssW, ssH);
+
+    if (hBitmap) {
+        std::string ssPath = SaveScreenshotToFile(hBitmap);
+
+        if (g_ScreenshotMode == MODE_AUTO_SEND) {
+            std::string b64 = BitmapToBase64PNG(hBitmap);
+            std::string answer = CallAIWithVision(b64, "");
+            g_LastAnswer = answer;
+            if (g_PopupEnabled) ShowAIPopup(answer);
+        } else {
+            g_LastAnswer = "[Screenshot saved]\n" + ssPath +
+                           "\nReady to send. Press Ctrl+Shift+Z to capture more.";
+        }
+        DeleteObject(hBitmap);
+    } else {
+        g_LastAnswer = "[ERROR] Could not capture foreground window.";
+    }
+
+    // Restore sidebar
+    InvalidateRect(hwnd, NULL, TRUE);
+    ShowWindow(hwnd, SW_SHOW);
+    SetForegroundWindow(hwnd);
+}
 
 static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
         EnableBlurBehind(hwnd);
 
-        // ---- Provider dropdown (native combobox) ----
+        HFONT btnFont = CreateAppFont(12, FW_SEMIBOLD);
+        HFONT smallFont = CreateAppFont(11, FW_NORMAL);
+
+        // ---- "Take Screenshot" button ----
+        g_SidebarSSBtn = CreateWindowA("BUTTON", "Take Screenshot",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            12, 42, 216, 32, hwnd, (HMENU)ID_SIDEBAR_SSBTN, NULL, NULL);
+        SendMessage(g_SidebarSSBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
+
+        // ---- Provider dropdown ----
         g_SidebarCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
-            12, 44, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
-
-        HFONT comboFont = CreateAppFont(13, FW_SEMIBOLD);
-        SendMessage(g_SidebarCombo, WM_SETFONT, (WPARAM)comboFont, TRUE);
+            12, 94, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
+        SendMessage(g_SidebarCombo, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         for (int i = 0; i < PROV_COUNT; i++) {
             SendMessageA(g_SidebarCombo, CB_ADDSTRING, 0,
@@ -1387,10 +1829,14 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // ---- "Set API Key" button ----
         g_SidebarKeyBtn = CreateWindowA("BUTTON", "Set API Key...",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, 78, 216, 28, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
+            12, 124, 170, 26, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
+        SendMessage(g_SidebarKeyBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
-        HFONT btnFont = CreateAppFont(11, FW_NORMAL);
-        SendMessage(g_SidebarKeyBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
+        // ---- Settings gear button ----
+        g_SidebarGearBtn = CreateWindowA("BUTTON", "Settings",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            188, 124, 54, 26, hwnd, (HMENU)ID_SIDEBAR_GEAR, NULL, NULL);
+        SendMessage(g_SidebarGearBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
         return 0;
     }
@@ -1402,15 +1848,23 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             if (sel >= 0) SetActiveProvider(sel);
             InvalidateRect(hwnd, NULL, TRUE);
         }
-        // "Set API Key" button clicked
+        // "Set API Key" button
         if (LOWORD(wp) == ID_SIDEBAR_KEYBTN) {
             ShowWindow(hwnd, SW_HIDE);
             extern bool ShowKeyInputDialog();
             ShowKeyInputDialog();
-            // Refresh combo selection (provider may have been set via dialog)
             SendMessageA(g_SidebarCombo, CB_SETCURSEL, (int)g_ActiveProvider, 0);
             InvalidateRect(hwnd, NULL, TRUE);
             ShowWindow(hwnd, SW_SHOW);
+        }
+        // "Take Screenshot" button
+        if (LOWORD(wp) == ID_SIDEBAR_SSBTN) {
+            SidebarTakeScreenshot(hwnd);
+        }
+        // Settings gear
+        if (LOWORD(wp) == ID_SIDEBAR_GEAR) {
+            ShowSettingsPopover(hwnd);
+            InvalidateRect(hwnd, NULL, TRUE);
         }
         return 0;
     }
@@ -1451,54 +1905,78 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         HFONT titleFont = CreateAppFont(16, FW_LIGHT);
         SelectObject(memDC, titleFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT titleRc = { 14, 10, w - 10, 34 };
-        DrawTextA(memDC, "AI PROVIDER", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
+        RECT titleRc = { 14, 10, w - 10, 32 };
+        DrawTextA(memDC, "ZEROPOINT", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(titleFont);
 
-        DrawAccentLine(memDC, 14, 36, w - 28);
+        DrawAccentLine(memDC, 14, 34, w - 28);
 
-        // (Combo box at y=44 and key button at y=78 are native controls,
-        //  drawn by Windows on top of our GDI paint — no need to paint them)
+        // (Screenshot button at y=42 is a native control)
 
-        // ---- Divider below controls ----
-        DrawAccentLine(memDC, 14, 114, w - 28);
+        // ---- Divider ----
+        DrawAccentLine(memDC, 14, 78, w - 28);
 
-        // ---- Key status indicator ----
+        // ---- "PROVIDER" label ----
+        HFONT labelFont = CreateAppFont(10, FW_SEMIBOLD);
+        SelectObject(memDC, labelFont);
+        SetTextColor(memDC, g_AccentColor);
+        RECT provLabel = { 14, 82, w - 10, 94 };
+        DrawTextA(memDC, "PROVIDER", -1, &provLabel, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(labelFont);
+
+        // (Combo at y=94, key btn at y=124, gear at y=124 are native controls)
+
+        // ---- Divider ----
+        DrawAccentLine(memDC, 14, 156, w - 28);
+
+        // ---- Key status ----
         HFONT statusFont = CreateAppFont(10, FW_SEMIBOLD);
         SelectObject(memDC, statusFont);
         bool hasKey = !GetProviderKey(GetActiveProvider()).empty();
         SetTextColor(memDC, hasKey ? RGB(0x22, 0xDD, 0x66) : RGB(0xFF, 0x44, 0x44));
         std::string keyStatus = hasKey ? "API Key: Configured" : "API Key: Not Set";
-        RECT keyRc = { 14, 120, w - 10, 134 };
+        RECT keyRc = { 14, 162, w - 10, 176 };
         DrawTextA(memDC, keyStatus.c_str(), -1, &keyRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(statusFont);
 
-        // ---- Active provider label ----
+        // ---- Mode indicator ----
+        HFONT modeFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, modeFont);
+        SetTextColor(memDC, g_TextSecondary);
+        std::string modeLine = std::string("Mode: ") +
+            (g_ScreenshotMode == MODE_AUTO_SEND ? "Auto-Send" : "Add to Chat");
+        RECT modeRc = { 14, 180, w - 10, 194 };
+        DrawTextA(memDC, modeLine.c_str(), -1, &modeRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(modeFont);
+
+        // ---- Active provider ----
         HFONT activeFont = CreateAppFont(10, FW_NORMAL);
         SelectObject(memDC, activeFont);
         SetTextColor(memDC, g_TextSecondary);
         std::string activeLine = "Active: " + GetActiveProviderName();
-        RECT activeLblRc = { 14, 140, w - 10, 154 };
+        RECT activeLblRc = { 14, 196, w - 10, 210 };
         DrawTextA(memDC, activeLine.c_str(), -1, &activeLblRc,
                   DT_LEFT | DT_SINGLELINE);
         DeleteObject(activeFont);
 
         // ---- Divider ----
-        DrawAccentLine(memDC, 14, 160, w - 28);
+        DrawAccentLine(memDC, 14, 216, w - 28);
 
-        // ---- "Last Answer" header ----
-        HFONT answerHdrFont = CreateAppFont(10, FW_SEMIBOLD);
-        SelectObject(memDC, answerHdrFont);
+        // ---- Answer/Scratchpad header ----
+        HFONT hdrFont = CreateAppFont(10, FW_SEMIBOLD);
+        SelectObject(memDC, hdrFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT hdrRc = { 14, 166, w - 10, 180 };
-        DrawTextA(memDC, "LAST ANSWER", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
-        DeleteObject(answerHdrFont);
+        const char* hdrText = (g_ScreenshotMode == MODE_ADD_TO_CHAT) ?
+                              "SCRATCHPAD" : "LAST ANSWER";
+        RECT hdrRc = { 14, 222, w - 10, 236 };
+        DrawTextA(memDC, hdrText, -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(hdrFont);
 
-        // ---- Last answer text ----
+        // ---- Answer text ----
         HFONT textFont = CreateAppFont(11, FW_NORMAL);
         SelectObject(memDC, textFont);
         SetTextColor(memDC, g_TextPrimary);
-        RECT textRc = { 14, 184, w - 10, h - 24 };
+        RECT textRc = { 14, 240, w - 10, h - 24 };
         DrawTextA(memDC, g_LastAnswer.c_str(), -1, &textRc,
                   DT_LEFT | DT_WORDBREAK);
         DeleteObject(textFont);
@@ -1532,9 +2010,204 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         g_MenuHwnd = NULL;
         g_SidebarCombo = NULL;
         g_SidebarKeyBtn = NULL;
+        g_SidebarSSBtn = NULL;
+        g_SidebarGearBtn = NULL;
         return 0;
     }
     return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+// ============================================================================
+//  Settings Popover — compact modal spawned from sidebar gear icon
+// ============================================================================
+//  Contains: mode toggle, accent color, transparency, popup toggle
+
+#define ID_SET_MODE_AUTO 6001
+#define ID_SET_MODE_CHAT 6002
+#define ID_SET_COLOR     6003
+#define ID_SET_ALPHA     6004
+#define ID_SET_POPUP     6005
+#define ID_SET_DONE      6006
+
+static HWND g_SettingsHwnd = NULL;
+
+static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    static HWND hAlphaSlider = NULL;
+    static HWND hAlphaLabel = NULL;
+
+    switch (msg) {
+    case WM_CREATE: {
+        HFONT font = CreateAppFont(12, FW_NORMAL);
+        HFONT boldFont = CreateAppFont(11, FW_SEMIBOLD);
+        int y = 10;
+
+        // ---- Mode section ----
+        HWND lbl1 = CreateWindowA("STATIC", "SCREENSHOT MODE",
+            WS_CHILD | WS_VISIBLE, 12, y, 200, 16, hwnd, NULL, NULL, NULL);
+        SendMessage(lbl1, WM_SETFONT, (WPARAM)boldFont, TRUE);
+        y += 22;
+
+        HWND rb1 = CreateWindowA("BUTTON", "Auto-Send",
+            WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
+            12, y, 120, 20, hwnd, (HMENU)ID_SET_MODE_AUTO, NULL, NULL);
+        SendMessage(rb1, WM_SETFONT, (WPARAM)font, TRUE);
+        if (g_ScreenshotMode == MODE_AUTO_SEND) SendMessage(rb1, BM_SETCHECK, BST_CHECKED, 0);
+
+        HWND rb2 = CreateWindowA("BUTTON", "Add to Chat",
+            WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
+            140, y, 120, 20, hwnd, (HMENU)ID_SET_MODE_CHAT, NULL, NULL);
+        SendMessage(rb2, WM_SETFONT, (WPARAM)font, TRUE);
+        if (g_ScreenshotMode == MODE_ADD_TO_CHAT) SendMessage(rb2, BM_SETCHECK, BST_CHECKED, 0);
+        y += 30;
+
+        // ---- Accent color ----
+        HWND lbl2 = CreateWindowA("STATIC", "THEME",
+            WS_CHILD | WS_VISIBLE, 12, y, 200, 16, hwnd, NULL, NULL, NULL);
+        SendMessage(lbl2, WM_SETFONT, (WPARAM)boldFont, TRUE);
+        y += 22;
+
+        HWND colorBtn = CreateWindowA("BUTTON", "Change Accent Color...",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            12, y, 220, 26, hwnd, (HMENU)ID_SET_COLOR, NULL, NULL);
+        SendMessage(colorBtn, WM_SETFONT, (WPARAM)font, TRUE);
+        y += 34;
+
+        // ---- Transparency slider ----
+        HWND lbl3 = CreateWindowA("STATIC", "Opacity:",
+            WS_CHILD | WS_VISIBLE, 12, y, 50, 16, hwnd, NULL, NULL, NULL);
+        SendMessage(lbl3, WM_SETFONT, (WPARAM)font, TRUE);
+
+        char abuf[32];
+        snprintf(abuf, sizeof(abuf), "%d / 255", g_WindowAlpha);
+        hAlphaLabel = CreateWindowA("STATIC", abuf,
+            WS_CHILD | WS_VISIBLE | SS_RIGHT, 180, y, 60, 16, hwnd, NULL, NULL, NULL);
+        SendMessage(hAlphaLabel, WM_SETFONT, (WPARAM)font, TRUE);
+        y += 20;
+
+        hAlphaSlider = CreateWindowA(TRACKBAR_CLASSA, NULL,
+            WS_CHILD | WS_VISIBLE | TBS_HORZ,
+            12, y, 228, 24, hwnd, (HMENU)ID_SET_ALPHA, NULL, NULL);
+        SendMessage(hAlphaSlider, TBM_SETRANGE, TRUE, MAKELPARAM(80, 255));
+        SendMessage(hAlphaSlider, TBM_SETPOS, TRUE, g_WindowAlpha);
+        y += 30;
+
+        // ---- Popup toggle ----
+        HWND chk = CreateWindowA("BUTTON", "Show bottom-right answer popup",
+            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
+            12, y, 228, 20, hwnd, (HMENU)ID_SET_POPUP, NULL, NULL);
+        SendMessage(chk, WM_SETFONT, (WPARAM)font, TRUE);
+        SendMessage(chk, BM_SETCHECK, g_PopupEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
+        y += 30;
+
+        // ---- Done button ----
+        HWND doneBtn = CreateWindowA("BUTTON", "Done",
+            WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+            80, y, 100, 28, hwnd, (HMENU)ID_SET_DONE, NULL, NULL);
+        SendMessage(doneBtn, WM_SETFONT, (WPARAM)boldFont, TRUE);
+
+        return 0;
+    }
+
+    case WM_COMMAND:
+        if (LOWORD(wp) == ID_SET_MODE_AUTO) {
+            g_ScreenshotMode = MODE_AUTO_SEND;
+            SaveConfig();
+        }
+        if (LOWORD(wp) == ID_SET_MODE_CHAT) {
+            g_ScreenshotMode = MODE_ADD_TO_CHAT;
+            SaveConfig();
+        }
+        if (LOWORD(wp) == ID_SET_COLOR) {
+            PickAccentColor(hwnd);
+            // Apply to sidebar immediately
+            if (g_MenuHwnd && IsWindow(g_MenuHwnd))
+                InvalidateRect(g_MenuHwnd, NULL, TRUE);
+        }
+        if (LOWORD(wp) == ID_SET_POPUP) {
+            g_PopupEnabled = (SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            // Need to get the actual checkbox handle
+            HWND chk = GetDlgItem(hwnd, ID_SET_POPUP);
+            if (chk) g_PopupEnabled = (SendMessage(chk, BM_GETCHECK, 0, 0) == BST_CHECKED);
+            SaveConfig();
+        }
+        if (LOWORD(wp) == ID_SET_DONE) {
+            DestroyWindow(hwnd);
+        }
+        return 0;
+
+    case WM_HSCROLL: {
+        if ((HWND)lp == hAlphaSlider) {
+            g_WindowAlpha = (BYTE)SendMessage(hAlphaSlider, TBM_GETPOS, 0, 0);
+            char abuf[32];
+            snprintf(abuf, sizeof(abuf), "%d / 255", g_WindowAlpha);
+            SetWindowTextA(hAlphaLabel, abuf);
+            SaveThemeSettings();
+
+            // Live preview on sidebar
+            if (g_MenuHwnd && IsWindow(g_MenuHwnd))
+                SetLayeredWindowAttributes(g_MenuHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+        }
+        return 0;
+    }
+
+    case WM_KEYDOWN:
+        if (wp == VK_ESCAPE) {
+            DestroyWindow(hwnd);
+            return 0;
+        }
+        break;
+
+    case WM_DESTROY:
+        g_SettingsHwnd = NULL;
+        hAlphaSlider = NULL;
+        hAlphaLabel = NULL;
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+static void ShowSettingsPopover(HWND owner) {
+    if (g_SettingsHwnd && IsWindow(g_SettingsHwnd)) {
+        SetForegroundWindow(g_SettingsHwnd);
+        return;
+    }
+
+    const char* cls = "ZPSettings";
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = SettingsProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = cls;
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
+        RegisterClassA(&wc);
+        registered = true;
+    }
+
+    // Position next to the sidebar (to its left)
+    RECT ownerRc;
+    GetWindowRect(owner, &ownerRc);
+    int popW = 260, popH = 280;
+    int popX = ownerRc.left - popW - 4;
+    int popY = ownerRc.top + 100;
+
+    g_SettingsHwnd = CreateWindowExA(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        cls, "Settings",
+        WS_POPUP | WS_VISIBLE | WS_BORDER,
+        popX, popY, popW, popH,
+        owner, NULL, GetModuleHandle(NULL), NULL);
+
+    ShowWindow(g_SettingsHwnd, SW_SHOW);
+    SetForegroundWindow(g_SettingsHwnd);
+
+    // Run local message loop until settings closes
+    MSG msg;
+    while (g_SettingsHwnd && IsWindow(g_SettingsHwnd) && GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
+    }
 }
 
 // Toggle sidebar visibility
@@ -1558,10 +2231,10 @@ static void ToggleFullMenu() {
         }
 
         // Sidebar: right edge, full height minus taskbar
-        int sideW = 240;
+        int sideW = 260;
         int sx = GetSystemMetrics(SM_CXSCREEN);
         int sy = GetSystemMetrics(SM_CYSCREEN);
-        int barH = sy - 50;  // approximate taskbar height
+        int barH = sy - 50;
 
         g_MenuHwnd = CreateWindowExA(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
@@ -1586,13 +2259,21 @@ static void ToggleFullMenu() {
     SetForegroundWindow(g_MenuHwnd);
 }
 
+
 // ============================================================================
 //  Entry Point
 // ============================================================================
 
-static const char* ZEROPOINT_VERSION = "v2.0.0";
+static const char* ZEROPOINT_VERSION = "v3.0.0";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    // Initialize GDI+ for screenshot PNG encoding
+    Gdiplus::GdiplusStartupInput gdiplusStartupInput;
+    Gdiplus::GdiplusStartup(&g_GdiplusToken, &gdiplusStartupInput, NULL);
+
+    // Initialize OLE for drag-and-drop support
+    OleInitialize(NULL);
+
     // Initialize common controls (combo box + trackbar)
     INITCOMMONCONTROLSEX icc = { sizeof(icc),
         ICC_STANDARD_CLASSES | ICC_BAR_CLASSES };
@@ -1609,6 +2290,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ------------------------------------------------------------------
     if (GetProviderKey(GetActiveProvider()).empty()) {
         if (!ShowKeyInputDialog()) {
+            Gdiplus::GdiplusShutdown(g_GdiplusToken);
+            OleUninitialize();
             CoUninitialize();
             return 0;   // user cancelled
         }
@@ -1620,6 +2303,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     int action = ShowLauncher();
 
     if (action == 0) {
+        Gdiplus::GdiplusShutdown(g_GdiplusToken);
+        OleUninitialize();
         CoUninitialize();
         return 0;
     }
@@ -1633,6 +2318,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             "Check that ZeroPointPayload.exe exists in:\n"
             "C:\\ProgramData\\ZeroPoint\\",
             "ZeroPoint", MB_OK | MB_ICONERROR);
+        Gdiplus::GdiplusShutdown(g_GdiplusToken);
+        OleUninitialize();
         CoUninitialize();
         return 1;
     }
@@ -1654,20 +2341,65 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         bool shift = (GetAsyncKeyState(VK_SHIFT)   & 0x8000) != 0;
         bool alt   = (GetAsyncKeyState(VK_MENU)    & 0x8000) != 0;
 
-        // Ctrl+Shift+Z — AI Snapshot (frosted bottom-right popup)
+        // ==============================================================
+        //  Ctrl+Shift+Z — Screenshot + Vision AI
+        //  Mode 1 (Auto-Send): capture → vision AI → popup + sidebar
+        //  Mode 2 (Add-to-Chat): capture → save to scratchpad
+        // ==============================================================
         if (ctrl && shift && (GetAsyncKeyState(0x5A) & 0x8000)) {
             if (!keyZ) {
                 keyZ = true;
-                std::string question = ExtractBluebookDOM();
-                std::string answer   = CallAI(question);
-                g_LastAnswer = answer;  // store for full menu display
-                ShowAIPopup(answer);
+
+                // Capture screenshot of the foreground window
+                int ssW = 0, ssH = 0;
+                HBITMAP hBitmap = CaptureScreenshotBitmap(ssW, ssH);
+
+                if (hBitmap) {
+                    // Save to file (for thumbnail panel + drag-and-drop)
+                    std::string ssPath = SaveScreenshotToFile(hBitmap);
+
+                    if (g_ScreenshotMode == MODE_AUTO_SEND) {
+                        // Mode 1: Auto-Send — encode and call vision AI
+                        std::string b64 = BitmapToBase64PNG(hBitmap);
+                        std::string answer = CallAIWithVision(b64, "");
+                        g_LastAnswer = answer;
+
+                        // Show popup if enabled
+                        if (g_PopupEnabled) {
+                            ShowAIPopup(answer);
+                        }
+
+                        // Refresh sidebar if visible
+                        if (g_MenuHwnd && IsWindow(g_MenuHwnd) && IsWindowVisible(g_MenuHwnd)) {
+                            InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                        }
+                    } else {
+                        // Mode 2: Add-to-Chat — screenshot goes to scratchpad
+                        g_LastAnswer = "[Screenshot saved: " + ssPath + "]\n"
+                                       "Open sidebar (Ctrl+Alt+H) to review and send.";
+
+                        // Show sidebar if not visible
+                        if (!g_MenuHwnd || !IsWindow(g_MenuHwnd) || !IsWindowVisible(g_MenuHwnd)) {
+                            ToggleFullMenu();
+                        } else {
+                            InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                        }
+                    }
+
+                    DeleteObject(hBitmap);
+                } else {
+                    // Screenshot failed — fall back to text-only CDP extraction
+                    std::string question = ExtractBluebookDOM();
+                    std::string answer = CallAI(question);
+                    g_LastAnswer = answer;
+                    if (g_PopupEnabled) ShowAIPopup(answer);
+                }
             }
         } else {
             keyZ = false;
         }
 
-        // Ctrl+Alt+H — Full frosted menu overlay (toggle)
+        // Ctrl+Alt+H — Sidebar (toggle)
         if (ctrl && alt && (GetAsyncKeyState(0x48) & 0x8000)) {
             if (!keyH) {
                 keyH = true;
@@ -1687,7 +2419,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             keyB = false;
         }
 
-        // Ctrl+Shift+X — Panic killswitch
+        // Ctrl+Shift+X — Panic killswitch (wipe everything + terminate)
         if (ctrl && shift && (GetAsyncKeyState(0x58) & 0x8000)) {
             if (!keyX) {
                 keyX = true;
@@ -1696,6 +2428,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                     DestroyWindow(g_BrowserHwnd);
                 if (g_MenuHwnd && IsWindow(g_MenuHwnd))
                     DestroyWindow(g_MenuHwnd);
+
+                // Wipe screenshot directory before panic
+                try {
+                    std::filesystem::remove_all(SCREENSHOT_DIR);
+                } catch (...) {}
+
                 PanicKillAndWipe();
                 break;    // PanicKillAndWipe terminates, but just in case
             }
@@ -1706,7 +2444,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         Sleep(10);
     }
 
+    Gdiplus::GdiplusShutdown(g_GdiplusToken);
+    OleUninitialize();
     CoUninitialize();
     return 0;
 }
-
