@@ -5,14 +5,14 @@
 #include <windows.h>
 
 
-// Placeholder for your Config and Overlay functions (add your real headers)
+// Placeholder for your real Config/Overlay functions
 extern bool SaveAPIKey(const std::string &key);
 extern void DisplayAnswerInCorner(const std::string &answer);
 extern void ToggleFullMenu();
 extern void PanicKillAndWipe();
 
 int main() {
-  // First run / API key
+  // First-run API key
   int keyResult =
       MessageBoxA(NULL,
                   "ZeroPoint Launcher\n\nNo API key detected.\n\nPaste your "
@@ -23,7 +23,7 @@ int main() {
     return 0;
 
   // Save key (your Config.cpp handles encryption)
-  // SaveAPIKey(userInputHere);   // replace with real input later
+  // SaveAPIKey(...);   // replace with real input later
 
   // Main launcher
   int injectResult =
@@ -35,22 +35,24 @@ int main() {
 
   if (injectResult == IDOK) {
     if (PerformHollowing()) {
-      MessageBoxA(NULL, "Stealth ACTIVATED.\nHollowed successfully.",
-                  "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+      MessageBoxA(
+          NULL,
+          "Stealth ACTIVATED.\nHollowed successfully.\nYou are now invisible.",
+          "ZeroPoint", MB_OK | MB_ICONINFORMATION);
     } else {
       MessageBoxA(NULL, "Hollowing failed.", "ZeroPoint", MB_OK | MB_ICONERROR);
       return 1;
     }
   }
 
-  // Background loop
+  // Background hotkey loop
   while (true) {
     if ((GetAsyncKeyState(VK_CONTROL) & 0x8000) &&
         (GetAsyncKeyState(VK_SHIFT) & 0x8000) &&
         (GetAsyncKeyState(0x5A) & 0x8000)) { // Ctrl+Shift+Z
       std::string question = ExtractBluebookDOM();
-      // TODO: replace with real WinHTTP call to Claude
-      std::string answer = "13 D\n2x=8 → x=4"; // placeholder
+      // Real AI call placeholder - replace with your WinHTTP code
+      std::string answer = "13 D\n2x=8 → x=4 (scribble ready)";
       DisplayAnswerInCorner(answer);
     }
 
