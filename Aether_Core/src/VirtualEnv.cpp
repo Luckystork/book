@@ -15,9 +15,9 @@
 //  cannot detect focus changes.
 // ============================================================================
 
-#include "VirtualEnv.h"
-#include "RDPWrapper.h"
-#include "Config.h"
+#include "../include/VirtualEnv.h"
+#include "../include/RDPWrapper.h"
+#include "../include/Config.h"
 
 #include <windows.h>
 #include <dwmapi.h>
@@ -556,13 +556,21 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         SetBkMode(memDC, TRANSPARENT);
 
-        // Big "CLICK TO LOCK" text
+        // Big "CLICK TO LOCK" text with subtle teal glow
         HFONT bigFont = VE_CreateFont(42, FW_LIGHT);
         SelectObject(memDC, bigFont);
-        SetTextColor(memDC, VE_ICY_ACCENT);
+        
+        // Glow layer (draw slightly shifted/blurred in a softer accent color)
+        SetTextColor(memDC, RGB(0x60, 0xEE, 0xFF)); // Softer teal
+        RECT glowRc1 = { 19, 29, w - 21, 89 };
+        RECT glowRc2 = { 21, 31, w - 19, 91 };
+        DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc1, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc2, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        
+        // Main text layer (icy white)
+        SetTextColor(memDC, RGB(0xFF, 0xFF, 0xFF));
         RECT bigRc = { 20, 30, w - 20, 90 };
-        DrawTextA(memDC, "CLICK TO LOCK", -1, &bigRc,
-                  DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        DrawTextA(memDC, "CLICK TO LOCK", -1, &bigRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         DeleteObject(bigFont);
 
         // Subtitle: hotkey instructions
@@ -571,12 +579,10 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetTextColor(memDC, VE_ICY_DIM);
 
         RECT line1 = { 20, 110, w - 20, 135 };
-        DrawTextA(memDC, "(Ctrl+Alt+C to Unlock)", -1, &line1,
-                  DT_CENTER | DT_SINGLELINE);
+        DrawTextA(memDC, "(Ctrl+Alt+C to Unlock)", -1, &line1, DT_CENTER | DT_SINGLELINE);
 
         RECT line2 = { 20, 140, w - 20, 165 };
-        DrawTextA(memDC, "(Ctrl+Alt+F to Toggle Fullscreen)", -1, &line2,
-                  DT_CENTER | DT_SINGLELINE);
+        DrawTextA(memDC, "(Ctrl+Alt+F to Toggle Fullscreen)", -1, &line2, DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
         // Small ZeroPoint branding
@@ -706,15 +712,23 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
 
-        // Semi-transparent overlay
+        // Semi-transparent overlay with hole cut out for selection
         RECT rc;
         GetClientRect(hwnd, &rc);
+        
+        HRGN hrgnFull = CreateRectRgn(rc.left, rc.top, rc.right, rc.bottom);
+        if (g_SnipDragging || (g_SnipRect.right - g_SnipRect.left > 0)) {
+            HRGN hrgnSnip = CreateRectRgn(g_SnipRect.left, g_SnipRect.top, g_SnipRect.right, g_SnipRect.bottom);
+            CombineRgn(hrgnFull, hrgnFull, hrgnSnip, RGN_DIFF);
+            DeleteObject(hrgnSnip);
+        }
+        SelectClipRgn(hdc, hrgnFull);
         VE_FillFrosted(hdc, rc, RGB(0, 0, 0), 80);
+        SelectClipRgn(hdc, NULL);
+        DeleteObject(hrgnFull);
 
         // Draw the selection rectangle in accent color
         if (g_SnipDragging || (g_SnipRect.right - g_SnipRect.left > 0)) {
-            // Clear the selected area (show through)
-            HBRUSH clearBr = CreateSolidBrush(RGB(0, 0, 0));
             // Draw accent border around selection
             HPEN selPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
             SelectObject(hdc, selPen);
@@ -722,7 +736,6 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             Rectangle(hdc, g_SnipRect.left, g_SnipRect.top,
                       g_SnipRect.right, g_SnipRect.bottom);
             DeleteObject(selPen);
-            DeleteObject(clearBr);
         }
 
         // Instructions text at top

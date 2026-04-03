@@ -51,14 +51,14 @@ Filename: "{app}\ZeroPoint.exe"; Description: "Launch ZeroPoint Virtual Environm
 
 procedure InitializeWizard();
 begin
-  WizardForm.Color := $F8FAFC; // snow white background
-  WizardForm.MainPanel.Color := $F8FAFC;
+  WizardForm.Color := $00EBECE8; // snow white background
+  WizardForm.MainPanel.Color := $00EBECE8;
   WizardForm.Caption := 'ZeroPoint Setup';
 
   WizardForm.WizardBitmapImage.Width := 164;
   WizardForm.WizardBitmapImage.Stretch := True;
   
-  WizardForm.PageNameLabel.Font.Color := $FFDD00; // Cyan hex: 00DDFF -> Inno BGR: FFDD00
+  WizardForm.PageNameLabel.Font.Color := $00DDFF; // Cyan hex: 00DDFF -> Inno BGR: FFDD00
   WizardForm.PageDescriptionLabel.Font.Color := $2C1E1A; // Dark text
 end;
 

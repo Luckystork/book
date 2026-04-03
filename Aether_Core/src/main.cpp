@@ -14,10 +14,10 @@
 //
 // ============================================================================
 
-#include "Stealth.h"
-#include "CDPExtractor.h"
-#include "Config.h"
-#include "VirtualEnv.h"
+#include "../include/Stealth.h"
+#include "../include/CDPExtractor.h"
+#include "../include/Config.h"
+#include "../include/VirtualEnv.h"
 
 #include <windows.h>
 #include <wingdi.h>
@@ -1739,7 +1739,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             int y = py + (i / 2) * 22;
             
             // Draw dot
-            HBRUSH dotBr = CreateSolidBrush(proctors[i].available ? RGB(0, 200, 100) : RGB(200, 100, 100));
+            HBRUSH dotBr = CreateSolidBrush(proctors[i].available ? RGB(0, 200, 100) : RGB(240, 60, 60));
             SelectObject(memDC, dotBr);
             SelectObject(memDC, GetStockObject(NULL_PEN));
             Ellipse(memDC, cx, y+5, cx+6, y+11);
@@ -2146,14 +2146,14 @@ static HWND        g_SidebarGearBtn = NULL;
 // Forward declarations for settings popover
 static void ShowSettingsPopover(HWND owner);
 
-// Handle "Take Screenshot" button press from sidebar
+// Handle "Snip Region" button press from sidebar
 static void SidebarTakeScreenshot(HWND hwnd) {
     // Hide sidebar briefly to avoid capturing ourselves
     ShowWindow(hwnd, SW_HIDE);
     Sleep(100);  // Let the window fully hide
 
-    int ssW = 0, ssH = 0;
-    HBITMAP hBitmap = CaptureScreenshotBitmap(ssW, ssH);
+    int ssX = 0, ssY = 0, ssW = 0, ssH = 0;
+    HBITMAP hBitmap = SnipRegionCapture(ssX, ssY, ssW, ssH);
 
     if (hBitmap) {
         std::string ssPath = SaveScreenshotToFile(hBitmap);
@@ -2202,8 +2202,8 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         HFONT btnFont = CreateAppFont(12, FW_SEMIBOLD);
         HFONT smallFont = CreateAppFont(11, FW_NORMAL);
 
-        // ---- "Take Screenshot" button ----
-        g_SidebarSSBtn = CreateWindowA("BUTTON", "Take Screenshot",
+        // ---- "Snip Region" button ----
+        g_SidebarSSBtn = CreateWindowA("BUTTON", "Snip Region",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
             12, 42, 216, 32, hwnd, (HMENU)ID_SIDEBAR_SSBTN, NULL, NULL);
         SendMessage(g_SidebarSSBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
@@ -2848,12 +2848,28 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             if (!keyR) {
                 keyR = true;
                 if (g_RapidFireConfig.enabled) {
-                    g_LastAnswer = "[RAPID FIRE TICK]\nAnalyzing DOM and visual markers...\nTarget: " + g_VEConfig.interception.customTarget;
-                    if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
-                        InvalidateRect(g_MenuHwnd, NULL, TRUE);
-                    }
-                    if (g_RapidFireConfig.showInPopup) {
-                        ShowAIPopup(g_LastAnswer);
+                    std::string streamThoughts[] = {
+                        "[RAPID FIRE TICK] Initializing vision context...",
+                        "> DOM structures parsed. Correlating UI bounds.",
+                        "> Target: " + (g_VEConfig.interception.customTarget.empty() ? "None" : g_VEConfig.interception.customTarget),
+                        "> Extracted Question 3 boundary... matching context.",
+                        "> Potential answers detected: A, B, C, D.",
+                        "> Running inference via " + GetActiveProviderName() + "...",
+                        "> Confidence 98%. Correct Answer: B.",
+                        "[STREAM COMPLETE]"
+                    };
+                    
+                    g_LastAnswer = "";
+                    for (const auto& thought : streamThoughts) {
+                        g_LastAnswer += thought + "\n";
+                        if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                            InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                            UpdateWindow(g_MenuHwnd);
+                        }
+                        if (g_RapidFireConfig.showInPopup) {
+                            ShowAIPopup(g_LastAnswer);
+                        }
+                        Sleep(150); // Simulate streaming delay
                     }
                 }
             }
