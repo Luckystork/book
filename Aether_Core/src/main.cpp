@@ -807,6 +807,14 @@ static void InitWebView2(HWND hwnd) {
                                 ctrl2->put_DefaultBackgroundColor(bg);
                             }
 
+                            // ---- OLE Drag-and-Drop: Enable external drops on WebView2 ----
+                            // Without this, WebView2 may reject CF_HDROP from our sidebar.
+                            // ICoreWebView2Controller4 provides put_AllowExternalDrop().
+                            ComPtr<ICoreWebView2Controller4> ctrl4;
+                            if (SUCCEEDED(controller->QueryInterface(IID_PPV_ARGS(&ctrl4)))) {
+                                ctrl4->put_AllowExternalDrop(TRUE);
+                            }
+
                             // Update URL bar when navigation completes
                             EventRegistrationToken token;
                             g_WebView->add_NavigationCompleted(
@@ -883,6 +891,15 @@ static void PaintBrowserThumbnailPanel(HDC hdc, int panelX, int panelW, int pane
                   DT_LEFT | DT_WORDBREAK);
     } else {
         for (int i = (int)g_ScreenshotHistory.size() - 1; i >= 0 && y + thumbH < panelH - 30; i--) {
+            bool isHovered = (i == g_HoveredThumb);
+
+            // ---- Hover highlight: accent glow behind hovered thumbnail ----
+            // Gives visual feedback that the thumbnail is draggable
+            if (isHovered) {
+                RECT glowRc = { panelX + 5, y - 3, panelX + 8 + thumbW + 3, y + thumbH + 3 };
+                FillFrosted(hdc, glowRc, g_AccentColor, 40);
+            }
+
             // Load thumbnail from file using GDI+
             std::wstring wPath(g_ScreenshotHistory[i].begin(), g_ScreenshotHistory[i].end());
             Gdiplus::Bitmap bmp(wPath.c_str());
@@ -891,8 +908,10 @@ static void PaintBrowserThumbnailPanel(HDC hdc, int panelX, int panelW, int pane
                 gfx.DrawImage(&bmp, panelX + 8, y, thumbW, thumbH);
             }
 
-            // Border around thumbnail
-            HPEN thumbPen = CreatePen(PS_SOLID, 1, g_BorderColor);
+            // Border — accent color when hovered, subtle gray otherwise
+            COLORREF borderClr = isHovered ? g_AccentColor : g_BorderColor;
+            int borderWidth = isHovered ? 2 : 1;
+            HPEN thumbPen = CreatePen(PS_SOLID, borderWidth, borderClr);
             HPEN oldTP = (HPEN)SelectObject(hdc, thumbPen);
             HBRUSH nullBr = (HBRUSH)GetStockObject(NULL_BRUSH);
             HGDIOBJ oldBr = SelectObject(hdc, nullBr);
@@ -982,26 +1001,29 @@ class ZPDataObject : public IDataObject {
     FORMATETC   m_fmt;
     STGMEDIUM   m_stg;
     bool        m_hasData;
+    HBITMAP     m_hThumb;       // thumbnail bitmap for IDragSourceHelper
 
 public:
-    ZPDataObject(const std::string& filePath) : m_refCount(1), m_hasData(false) {
-        // Build a DROPFILES structure containing the file path
-        // DROPFILES is the standard shell format for drag-and-drop files
-        size_t pathBytes = filePath.size() + 1;          // path + null
-        size_t totalSize = sizeof(DROPFILES) + pathBytes + 1;  // + double-null terminator
+    ZPDataObject(const std::string& filePath) : m_refCount(1), m_hasData(false), m_hThumb(NULL) {
+        // Build a DROPFILES structure containing the file path (wide/Unicode)
+        // DROPFILES is the standard shell format for drag-and-drop files.
+        // We use fWide=TRUE so WebView2 and modern shell targets get proper Unicode paths.
+        std::wstring wPath(filePath.begin(), filePath.end());
+        size_t pathBytes = (wPath.size() + 1) * sizeof(WCHAR);   // path + null (wide)
+        size_t totalSize = sizeof(DROPFILES) + pathBytes + sizeof(WCHAR);  // + double-null
 
         HGLOBAL hGlobal = GlobalAlloc(GHND | GMEM_SHARE, totalSize);
         if (!hGlobal) return;
 
         DROPFILES* pDrop = (DROPFILES*)GlobalLock(hGlobal);
         pDrop->pFiles = sizeof(DROPFILES);    // offset to file list
-        pDrop->fWide  = FALSE;                // ANSI paths
+        pDrop->fWide  = TRUE;                 // Unicode wide paths
         pDrop->pt     = { 0, 0 };
         pDrop->fNC    = FALSE;
 
-        char* pFiles = (char*)pDrop + sizeof(DROPFILES);
-        memcpy(pFiles, filePath.c_str(), pathBytes);
-        pFiles[pathBytes] = '\0';             // double-null terminator
+        WCHAR* pFiles = (WCHAR*)((BYTE*)pDrop + sizeof(DROPFILES));
+        memcpy(pFiles, wPath.c_str(), (wPath.size() + 1) * sizeof(WCHAR));
+        pFiles[wPath.size() + 1] = L'\0';     // double-null terminator
         GlobalUnlock(hGlobal);
 
         // Describe the format we provide: CF_HDROP in an HGLOBAL
@@ -1022,7 +1044,12 @@ public:
         if (m_hasData && m_stg.hGlobal) {
             GlobalFree(m_stg.hGlobal);
         }
+        if (m_hThumb) DeleteObject(m_hThumb);
     }
+
+    // Store a thumbnail bitmap for IDragSourceHelper to use as drag image
+    void SetThumbnail(HBITMAP hBmp) { m_hThumb = hBmp; }
+    HBITMAP GetThumbnail() const { return m_hThumb; }
 
     // IUnknown
     HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
@@ -1087,17 +1114,83 @@ public:
 };
 
 // ---------------------------------------------------------------------------
+//  CreateScaledThumbnail — make a small HBITMAP for the drag preview image
+//  Loads the screenshot PNG via GDI+ and scales it to ~120x80 for the drag
+//  cursor overlay. Returns NULL if loading fails.
+// ---------------------------------------------------------------------------
+
+static HBITMAP CreateScaledThumbnail(const std::string& filePath, int thumbW, int thumbH) {
+    std::wstring wPath(filePath.begin(), filePath.end());
+    Gdiplus::Bitmap srcBmp(wPath.c_str());
+    if (srcBmp.GetLastStatus() != Gdiplus::Ok) return NULL;
+
+    // Create a scaled bitmap
+    HDC screenDC = GetDC(NULL);
+    HDC memDC = CreateCompatibleDC(screenDC);
+    HBITMAP hThumb = CreateCompatibleBitmap(screenDC, thumbW, thumbH);
+    HGDIOBJ oldBmp = SelectObject(memDC, hThumb);
+
+    Gdiplus::Graphics gfx(memDC);
+    gfx.SetInterpolationMode(Gdiplus::InterpolationModeHighQualityBicubic);
+    gfx.DrawImage(&srcBmp, 0, 0, thumbW, thumbH);
+
+    SelectObject(memDC, oldBmp);
+    DeleteDC(memDC);
+    ReleaseDC(NULL, screenDC);
+    return hThumb;
+}
+
+// ---------------------------------------------------------------------------
 //  BeginThumbnailDragDrop — creates COM objects and calls DoDragDrop()
-//  This enters a modal drag loop. The user sees a file cursor while dragging.
-//  When released over WebView2, the page receives a native HTML5 drop event.
+//  This enters a modal drag loop. Uses IDragSourceHelper to show a scaled
+//  thumbnail preview under the cursor (Evadus-style visual drag feedback).
+//  When released over WebView2, the page receives a native HTML5 drop event
+//  with the screenshot as a real file — ChatGPT, Gemini, Grok all accept it.
 // ---------------------------------------------------------------------------
 
 static void BeginThumbnailDragDrop(const std::string& filePath) {
     ZPDataObject* pDataObj = new ZPDataObject(filePath);
     ZPDropSource* pDropSrc = new ZPDropSource();
 
+    // ---- IDragSourceHelper: attach a visual thumbnail to the drag cursor ----
+    // This gives the user a preview of what they're dragging, exactly like
+    // dragging a file from Windows Explorer. The shell renders the image
+    // semi-transparently under the cursor during the drag operation.
+    const int DRAG_THUMB_W = 120;
+    const int DRAG_THUMB_H = 80;
+    HBITMAP hThumb = CreateScaledThumbnail(filePath, DRAG_THUMB_W, DRAG_THUMB_H);
+
+    if (hThumb) {
+        IDragSourceHelper* pDragHelper = NULL;
+        HRESULT hrHelper = CoCreateInstance(
+            CLSID_DragDropHelper, NULL, CLSCTX_INPROC_SERVER,
+            IID_IDragSourceHelper, (void**)&pDragHelper);
+
+        if (SUCCEEDED(hrHelper) && pDragHelper) {
+            // SHDRAGIMAGE describes the bitmap, size, and cursor offset
+            SHDRAGIMAGE dragImage = {};
+            dragImage.sizeDragImage.cx = DRAG_THUMB_W;
+            dragImage.sizeDragImage.cy = DRAG_THUMB_H;
+            dragImage.ptOffset.x       = DRAG_THUMB_W / 2;   // cursor at center
+            dragImage.ptOffset.y       = DRAG_THUMB_H / 2;
+            dragImage.hbmpDragImage    = hThumb;
+            dragImage.crColorKey       = CLR_NONE;            // no transparency key
+
+            // InitializeFromBitmap takes ownership of the HBITMAP on success
+            if (SUCCEEDED(pDragHelper->InitializeFromBitmap(&dragImage, pDataObj))) {
+                hThumb = NULL;  // helper owns it now
+            }
+            pDragHelper->Release();
+        }
+
+        // If helper didn't take ownership, clean up
+        if (hThumb) DeleteObject(hThumb);
+    }
+
     DWORD dwEffect = 0;
-    // DoDragDrop is modal — it blocks until the user releases the mouse
+    // DoDragDrop is MODAL — it blocks until the user completes the drag.
+    // During this time, the shell renders the drag image under the cursor.
+    // When released over WebView2, the browser receives a native file drop.
     HRESULT hr = DoDragDrop(
         pDataObj,
         pDropSrc,
@@ -1108,17 +1201,18 @@ static void BeginThumbnailDragDrop(const std::string& filePath) {
     // If drag was cancelled or drop target didn't accept,
     // fall back to clipboard copy so the user can Ctrl+V
     if (hr == DRAGDROP_S_CANCEL || dwEffect == DROPEFFECT_NONE) {
-        // Build CF_HDROP for clipboard as fallback
-        size_t pathBytes = filePath.size() + 1;
-        size_t totalSize = sizeof(DROPFILES) + pathBytes + 1;
+        // Build CF_HDROP (wide) for clipboard as fallback
+        std::wstring wPath(filePath.begin(), filePath.end());
+        size_t pathBytes = (wPath.size() + 1) * sizeof(WCHAR);
+        size_t totalSize = sizeof(DROPFILES) + pathBytes + sizeof(WCHAR);
         HGLOBAL hClip = GlobalAlloc(GHND, totalSize);
         if (hClip) {
             DROPFILES* df = (DROPFILES*)GlobalLock(hClip);
             df->pFiles = sizeof(DROPFILES);
-            df->fWide  = FALSE;
-            char* dst = (char*)df + sizeof(DROPFILES);
-            memcpy(dst, filePath.c_str(), pathBytes);
-            dst[pathBytes] = '\0';
+            df->fWide  = TRUE;
+            WCHAR* dst = (WCHAR*)((BYTE*)df + sizeof(DROPFILES));
+            memcpy(dst, wPath.c_str(), (wPath.size() + 1) * sizeof(WCHAR));
+            dst[wPath.size() + 1] = L'\0';
             GlobalUnlock(hClip);
 
             if (OpenClipboard(g_BrowserHwnd)) {
@@ -1145,6 +1239,7 @@ static void BeginThumbnailDragDrop(const std::string& filePath) {
 static bool  g_DragPending   = false;    // LMB is down in thumbnail area
 static int   g_DragIndex     = -1;       // which screenshot index is being dragged
 static POINT g_DragStartPt   = { 0, 0 }; // mousedown position (client coords)
+static int   g_HoveredThumb  = -1;       // thumbnail index under the cursor (for highlight)
 
 // Helper: determine which thumbnail index is at a given Y position
 static int HitTestThumbnail(int mouseY) {
@@ -1224,32 +1319,75 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     // ------------------------------------------------------------------
-    //  WM_MOUSEMOVE — if drag pending and threshold exceeded, start OLE drag
+    //  WM_MOUSEMOVE — track hover for thumbnail highlight + start OLE drag
     // ------------------------------------------------------------------
     case WM_MOUSEMOVE: {
-        if (!g_DragPending || g_DragIndex < 0) break;
-
         int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
 
-        // System drag threshold — prevents accidental drags on jittery clicks
-        int cxDrag = GetSystemMetrics(SM_CXDRAG);
-        int cyDrag = GetSystemMetrics(SM_CYDRAG);
+        // ---- Hover tracking: highlight thumbnail under cursor ----
+        RECT rc2;
+        GetClientRect(hwnd, &rc2);
+        int panelX2 = rc2.right - BROWSER_PANEL_W;
 
-        if (abs(mx - g_DragStartPt.x) > cxDrag ||
-            abs(my - g_DragStartPt.y) > cyDrag) {
-            // Threshold exceeded — begin the OLE drag-and-drop operation
-            ReleaseCapture();
-            g_DragPending = false;
+        if (mx >= panelX2) {
+            int newHover = HitTestThumbnail(my);
+            if (newHover != g_HoveredThumb) {
+                g_HoveredThumb = newHover;
+                // Repaint only the thumbnail panel area
+                RECT panelRc = { panelX2, 0, rc2.right, rc2.bottom };
+                InvalidateRect(hwnd, &panelRc, FALSE);
 
-            if (g_DragIndex >= 0 && g_DragIndex < (int)g_ScreenshotHistory.size()) {
-                // DoDragDrop is MODAL — it blocks until the user completes the drag.
-                // During this time, the user sees a file-drag cursor and can drop
-                // the screenshot onto the WebView2 page (or any other drop target).
-                BeginThumbnailDragDrop(g_ScreenshotHistory[g_DragIndex]);
+                // Set cursor to hand when over a draggable thumbnail
+                if (g_HoveredThumb >= 0)
+                    SetCursor(LoadCursor(NULL, IDC_HAND));
             }
-            g_DragIndex = -1;
+
+            // Request WM_MOUSELEAVE so we can reset hover when cursor leaves
+            TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
+            TrackMouseEvent(&tme);
+        } else if (g_HoveredThumb >= 0) {
+            g_HoveredThumb = -1;
+            RECT panelRc = { panelX2, 0, rc2.right, rc2.bottom };
+            InvalidateRect(hwnd, &panelRc, FALSE);
+        }
+
+        // ---- Drag threshold check: start OLE DoDragDrop ----
+        if (g_DragPending && g_DragIndex >= 0) {
+            int cxDrag = GetSystemMetrics(SM_CXDRAG);
+            int cyDrag = GetSystemMetrics(SM_CYDRAG);
+
+            if (abs(mx - g_DragStartPt.x) > cxDrag ||
+                abs(my - g_DragStartPt.y) > cyDrag) {
+                // Threshold exceeded — begin the OLE drag-and-drop operation
+                ReleaseCapture();
+                g_DragPending = false;
+
+                if (g_DragIndex >= 0 && g_DragIndex < (int)g_ScreenshotHistory.size()) {
+                    // DoDragDrop is MODAL — it blocks until the user completes
+                    // the drag. IDragSourceHelper renders a scaled thumbnail
+                    // preview under the cursor. When released over WebView2,
+                    // the page receives a native HTML5 drop event with the file.
+                    BeginThumbnailDragDrop(g_ScreenshotHistory[g_DragIndex]);
+                }
+                g_DragIndex = -1;
+            }
         }
         return 0;
+    }
+
+    // ------------------------------------------------------------------
+    //  WM_MOUSELEAVE — reset thumbnail hover highlight
+    // ------------------------------------------------------------------
+    case WM_MOUSELEAVE: {
+        if (g_HoveredThumb >= 0) {
+            g_HoveredThumb = -1;
+            RECT rc2;
+            GetClientRect(hwnd, &rc2);
+            int panelX2 = rc2.right - BROWSER_PANEL_W;
+            RECT panelRc = { panelX2, 0, rc2.right, rc2.bottom };
+            InvalidateRect(hwnd, &panelRc, FALSE);
+        }
+        break;
     }
 
     // ------------------------------------------------------------------
@@ -1260,19 +1398,21 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             ReleaseCapture();
             g_DragPending = false;
 
-            // This was a click, not a drag — copy to clipboard as fallback
+            // This was a click, not a drag — copy file to clipboard as fallback
+            // Uses wide (Unicode) DROPFILES for modern shell compatibility
             if (g_DragIndex >= 0 && g_DragIndex < (int)g_ScreenshotHistory.size()) {
                 const std::string& filePath = g_ScreenshotHistory[g_DragIndex];
-                size_t pathBytes = filePath.size() + 1;
-                size_t totalSize = sizeof(DROPFILES) + pathBytes + 1;
+                std::wstring wPath(filePath.begin(), filePath.end());
+                size_t pathBytes = (wPath.size() + 1) * sizeof(WCHAR);
+                size_t totalSize = sizeof(DROPFILES) + pathBytes + sizeof(WCHAR);
                 HGLOBAL hClip = GlobalAlloc(GHND, totalSize);
                 if (hClip) {
                     DROPFILES* df = (DROPFILES*)GlobalLock(hClip);
                     df->pFiles = sizeof(DROPFILES);
-                    df->fWide  = FALSE;
-                    char* dst = (char*)df + sizeof(DROPFILES);
-                    memcpy(dst, filePath.c_str(), pathBytes);
-                    dst[pathBytes] = '\0';
+                    df->fWide  = TRUE;
+                    WCHAR* dst = (WCHAR*)((BYTE*)df + sizeof(DROPFILES));
+                    memcpy(dst, wPath.c_str(), (wPath.size() + 1) * sizeof(WCHAR));
+                    dst[wPath.size() + 1] = L'\0';
                     GlobalUnlock(hClip);
                     if (OpenClipboard(g_BrowserHwnd)) {
                         EmptyClipboard();
@@ -1292,8 +1432,9 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     //  WM_CAPTURECHANGED — cancel pending drag if we lost capture
     // ------------------------------------------------------------------
     case WM_CAPTURECHANGED:
-        g_DragPending = false;
-        g_DragIndex   = -1;
+        g_DragPending  = false;
+        g_DragIndex    = -1;
+        g_HoveredThumb = -1;
         break;
 
     case WM_KEYDOWN:
@@ -1311,6 +1452,7 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_DESTROY:
         g_DragPending    = false;
         g_DragIndex      = -1;
+        g_HoveredThumb   = -1;
         g_WebController  = nullptr;
         g_WebView        = nullptr;
         g_BrowserHwnd    = NULL;
