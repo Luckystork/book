@@ -1,26 +1,11 @@
 // ============================================================================
-//  ZeroPoint — Config.cpp  (v3.0)
-//  5 AI providers, per-provider API keys, screenshot mode, UI settings.
+//  ZeroPoint — Config.cpp  (v4.0)
+//  AI providers, per-provider API keys, screenshot mode, UI settings,
+//  and full Virtual Environment configuration persistence.
 //
-//  Providers:
-//    0. Claude 4.6 Opus   → Anthropic Messages API   (vision ✓)
-//    1. Grok 4            → xAI OpenAI-compat API    (vision ✓)
-//    2. GPT-5.2           → OpenAI API               (vision ✓)
-//    3. Deepseek V3.2 R1  → DeepSeek OpenAI-compat   (vision ✗, text-only)
-//    4. OpenRouter         → Unified gateway          (vision depends on model)
-//
-//  Config format (C:\ProgramData\ZeroPoint\config.ini):
-//    provider=0
-//    key_claude=sk-ant-xxxx
-//    key_grok=xai-xxxx
-//    key_gpt=sk-xxxx
-//    key_deepseek=sk-xxxx
-//    key_openrouter=sk-or-v1-xxxx
-//    or_model=0
-//    mode=0            (0=auto-send, 1=add-to-chat)
-//    popup=1           (1=show bottom-right popup, 0=sidebar only)
-//    accent=#00DDFF
-//    alpha=230
+//  Config files:
+//    C:\ProgramData\ZeroPoint\config.ini      — AI provider keys + UI prefs
+//    C:\ProgramData\ZeroPoint\ve_config.ini   — Virtual Environment settings
 // ============================================================================
 
 #include "Config.h"
@@ -28,6 +13,7 @@
 #include <fstream>
 #include <string>
 #include <vector>
+#include <sstream>
 
 // ============================================================================
 //  Provider Definitions
@@ -52,6 +38,8 @@ std::string    g_ProviderKeys[PROV_COUNT] = {};
 ScreenshotMode g_ScreenshotMode     = MODE_AUTO_SEND;
 bool           g_PopupEnabled       = true;
 
+VEConfig       g_VEConfig;
+
 // OpenRouter sub-models
 std::vector<std::string> g_OpenRouterModels = {
     "anthropic/claude-opus-4",
@@ -67,10 +55,11 @@ std::string g_OpenRouterKey;
 std::vector<std::string> g_AvailableModels;
 int g_ActiveModelIndex = 0;
 
-static const std::string CONFIG_PATH = "C:\\ProgramData\\ZeroPoint\\config.ini";
+static const std::string CONFIG_PATH    = "C:\\ProgramData\\ZeroPoint\\config.ini";
+static const std::string VE_CONFIG_PATH = "C:\\ProgramData\\ZeroPoint\\ve_config.ini";
 
 // ============================================================================
-//  Load / Save
+//  Load / Save — main config (AI + UI)
 // ============================================================================
 
 void LoadConfig() {
@@ -106,12 +95,14 @@ void LoadConfig() {
     }
 
     g_OpenRouterKey = g_ProviderKeys[PROV_OPENROUTER];
+
+    // Also load VE config
+    LoadVEConfig();
 }
 
 void SaveConfig() {
     CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
 
-    // Read existing to preserve accent/alpha/other settings
     std::vector<std::string> lines;
     bool found[12] = {};
     {
@@ -142,6 +133,80 @@ void SaveConfig() {
 
     std::ofstream out(CONFIG_PATH);
     for (const auto& l : lines) out << l << "\n";
+}
+
+// ============================================================================
+//  Load / Save — VE config (display, audio, resources, interception)
+// ============================================================================
+
+void LoadVEConfig() {
+    // Initialize default proctors
+    if (g_VEConfig.interception.proctors.empty()) {
+        g_VEConfig.interception.proctors = {
+            { "Safe Exam Browser",            "SafeExamBrowser.exe",   true,  false },
+            { "PearsonVue OnVue",             "OnVUE.exe",             true,  false },
+            { "Respondus LockDown Browser",   "LockDownBrowser.exe",   true,  false },
+            { "ProProctor",                   "ProProctor.exe",        false, false },
+            { "Guardian Browser",             "GuardianBrowser.exe",   true,  false },
+            { "QuestionMark Secure",          "QMSecure.exe",          true,  false },
+        };
+    }
+
+    std::ifstream file(VE_CONFIG_PATH);
+    if (!file.is_open()) return;
+
+    std::string line;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#') continue;
+
+        // Display
+        if      (line.rfind("res_w=", 0) == 0)        g_VEConfig.display.resW = atoi(line.c_str() + 6);
+        else if (line.rfind("res_h=", 0) == 0)        g_VEConfig.display.resH = atoi(line.c_str() + 6);
+        else if (line.rfind("color_depth=", 0) == 0)   g_VEConfig.display.colorDepth = atoi(line.c_str() + 12);
+        else if (line.rfind("multi_monitor=", 0) == 0)  g_VEConfig.display.multiMonitor = (atoi(line.c_str() + 14) != 0);
+        else if (line.rfind("fullscreen=", 0) == 0)    g_VEConfig.display.fullScreen = (atoi(line.c_str() + 11) != 0);
+        // Audio
+        else if (line.rfind("audio_mode=", 0) == 0)    g_VEConfig.audioMode = (VEAudioMode)atoi(line.c_str() + 11);
+        // Resources
+        else if (line.rfind("clipboard=", 0) == 0)     g_VEConfig.resources.clipboard = (atoi(line.c_str() + 10) != 0);
+        else if (line.rfind("local_drives=", 0) == 0)   g_VEConfig.resources.localDrives = (atoi(line.c_str() + 13) != 0);
+        else if (line.rfind("printers=", 0) == 0)      g_VEConfig.resources.printers = (atoi(line.c_str() + 9) != 0);
+        else if (line.rfind("font_smooth=", 0) == 0)    g_VEConfig.resources.fontSmoothing = (atoi(line.c_str() + 12) != 0);
+        else if (line.rfind("desktop_comp=", 0) == 0)   g_VEConfig.resources.desktopCompo = (atoi(line.c_str() + 13) != 0);
+        else if (line.rfind("conn_quality=", 0) == 0)   g_VEConfig.resources.connectionQual = atoi(line.c_str() + 13);
+        // Interception
+        else if (line.rfind("custom_target=", 0) == 0)  g_VEConfig.interception.customTarget = line.substr(14);
+        // Wallpaper
+        else if (line.rfind("wallpaper=", 0) == 0)     g_VEConfig.wallpaperPath = line.substr(10);
+    }
+}
+
+void SaveVEConfig() {
+    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+
+    std::ofstream out(VE_CONFIG_PATH);
+    if (!out.is_open()) return;
+
+    out << "# ZeroPoint Virtual Environment Config\n";
+    // Display
+    out << "res_w=" << g_VEConfig.display.resW << "\n";
+    out << "res_h=" << g_VEConfig.display.resH << "\n";
+    out << "color_depth=" << g_VEConfig.display.colorDepth << "\n";
+    out << "multi_monitor=" << (g_VEConfig.display.multiMonitor ? 1 : 0) << "\n";
+    out << "fullscreen=" << (g_VEConfig.display.fullScreen ? 1 : 0) << "\n";
+    // Audio
+    out << "audio_mode=" << (int)g_VEConfig.audioMode << "\n";
+    // Resources
+    out << "clipboard=" << (g_VEConfig.resources.clipboard ? 1 : 0) << "\n";
+    out << "local_drives=" << (g_VEConfig.resources.localDrives ? 1 : 0) << "\n";
+    out << "printers=" << (g_VEConfig.resources.printers ? 1 : 0) << "\n";
+    out << "font_smooth=" << (g_VEConfig.resources.fontSmoothing ? 1 : 0) << "\n";
+    out << "desktop_comp=" << (g_VEConfig.resources.desktopCompo ? 1 : 0) << "\n";
+    out << "conn_quality=" << g_VEConfig.resources.connectionQual << "\n";
+    // Interception
+    out << "custom_target=" << g_VEConfig.interception.customTarget << "\n";
+    // Wallpaper
+    out << "wallpaper=" << g_VEConfig.wallpaperPath << "\n";
 }
 
 // ============================================================================
@@ -190,7 +255,6 @@ bool ActiveProviderHasVision() {
 }
 
 std::string GetActiveModel() { return GetActiveProviderName(); }
-
 void SetActiveModel(int index) { SetActiveProvider(index); }
 
 void SetOpenRouterModel(int index) {
