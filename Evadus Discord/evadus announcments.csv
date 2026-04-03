@@ -1,0 +1,1049 @@
+id,activity,application,application_id,attachments,attachments.0.content_scan_version,attachments.0.content_type,attachments.0.filename,attachments.0.height,attachments.0.id,attachments.0.original_content_type,attachments.0.placeholder,attachments.0.placeholder_version,attachments.0.proxy_url,attachments.0.size,attachments.0.title,attachments.0.url,attachments.0.width,attachments.1.content_scan_version,attachments.1.content_type,attachments.1.filename,attachments.1.height,attachments.1.id,attachments.1.original_content_type,attachments.1.placeholder,attachments.1.placeholder_version,attachments.1.proxy_url,attachments.1.size,attachments.1.title,attachments.1.url,attachments.1.width,attachments.2.content_scan_version,attachments.2.content_type,attachments.2.filename,attachments.2.height,attachments.2.id,attachments.2.original_content_type,attachments.2.placeholder,attachments.2.placeholder_version,attachments.2.proxy_url,attachments.2.size,attachments.2.url,attachments.2.width,author.accent_color,author.avatar,author.avatar_decoration_data.asset,author.avatar_decoration_data.expires_at,author.avatar_decoration_data.sku_id,author.banner,author.banner_color,author.clan,author.collectibles,author.discriminator,author.display_name_styles,author.flags,author.global_name,author.id,author.primary_guild,author.public_flags,author.username,call,channel_id,components,content,date,edited_timestamp,embeds,embeds.0.author.name,embeds.0.author.url,embeds.0.color,embeds.0.content_scan_version,embeds.0.description,embeds.0.provider.name,embeds.0.provider.url,embeds.0.thumbnail.content_type,embeds.0.thumbnail.description,embeds.0.thumbnail.flags,embeds.0.thumbnail.height,embeds.0.thumbnail.placeholder,embeds.0.thumbnail.placeholder_version,embeds.0.thumbnail.proxy_url,embeds.0.thumbnail.url,embeds.0.thumbnail.width,embeds.0.title,embeds.0.type,embeds.0.url,embeds.0.video.flags,embeds.0.video.height,embeds.0.video.placeholder,embeds.0.video.placeholder_version,embeds.0.video.proxy_url,embeds.0.video.url,embeds.0.video.width,flags,interaction,mention_channels,mention_everyone,mentions,mentions.0.accent_color,mentions.0.avatar,mentions.0.avatar_decoration_data,mentions.0.avatar_decoration_data.asset,mentions.0.avatar_decoration_data.expires_at,mentions.0.avatar_decoration_data.sku_id,mentions.0.banner,mentions.0.banner_color,mentions.0.clan,mentions.0.collectibles,mentions.0.collectibles.nameplate.asset,mentions.0.collectibles.nameplate.label,mentions.0.collectibles.nameplate.palette,mentions.0.collectibles.nameplate.sku_id,mentions.0.discriminator,mentions.0.display_name_styles,mentions.0.display_name_styles.colors.0,mentions.0.display_name_styles.effect_id,mentions.0.display_name_styles.font_id,mentions.0.flags,mentions.0.global_name,mentions.0.id,mentions.0.primary_guild,mentions.0.public_flags,mentions.0.username,mentions.1.accent_color,mentions.1.avatar,mentions.1.avatar_decoration_data,mentions.1.avatar_decoration_data.asset,mentions.1.avatar_decoration_data.expires_at,mentions.1.avatar_decoration_data.sku_id,mentions.1.banner,mentions.1.banner_color,mentions.1.clan,mentions.1.collectibles,mentions.1.collectibles.nameplate.asset,mentions.1.collectibles.nameplate.label,mentions.1.collectibles.nameplate.palette,mentions.1.collectibles.nameplate.sku_id,mentions.1.discriminator,mentions.1.display_name_styles,mentions.1.display_name_styles.colors.0,mentions.1.display_name_styles.colors.1,mentions.1.display_name_styles.effect_id,mentions.1.display_name_styles.font_id,mentions.1.flags,mentions.1.global_name,mentions.1.id,mentions.1.primary_guild,mentions.1.public_flags,mentions.1.username,mentions.2.accent_color,mentions.2.avatar,mentions.2.avatar_decoration_data,mentions.2.banner,mentions.2.banner_color,mentions.2.clan,mentions.2.collectibles,mentions.2.discriminator,mentions.2.display_name_styles,mentions.2.flags,mentions.2.global_name,mentions.2.id,mentions.2.primary_guild,mentions.2.public_flags,mentions.2.username,mentions.3.accent_color,mentions.3.avatar,mentions.3.avatar_decoration_data,mentions.3.banner,mentions.3.banner_color,mentions.3.clan,mentions.3.collectibles,mentions.3.discriminator,mentions.3.display_name_styles,mentions.3.flags,mentions.3.global_name,mentions.3.id,mentions.3.primary_guild,mentions.3.public_flags,mentions.3.username,message_reference,message_reference.channel_id,message_reference.message_id,message_reference.type,nonce,pinned,position,reactions,reactions.0.burst_colors,reactions.0.burst_count,reactions.0.burst_me,reactions.0.count,reactions.0.count_details.burst,reactions.0.count_details.normal,reactions.0.emoji.id,reactions.0.emoji.name,reactions.0.me,reactions.0.me_burst,reactions.1.burst_colors,reactions.1.burst_count,reactions.1.burst_me,reactions.1.count,reactions.1.count_details.burst,reactions.1.count_details.normal,reactions.1.emoji.id,reactions.1.emoji.name,reactions.1.me,reactions.1.me_burst,reactions.2.burst_colors,reactions.2.burst_count,reactions.2.burst_me,reactions.2.count,reactions.2.count_details.burst,reactions.2.count_details.normal,reactions.2.emoji.id,reactions.2.emoji.name,reactions.2.me,reactions.2.me_burst,reactions.3.burst_colors,reactions.3.burst_count,reactions.3.burst_me,reactions.3.count,reactions.3.count_details.burst,reactions.3.count_details.normal,reactions.3.emoji.id,reactions.3.emoji.name,reactions.3.me,reactions.3.me_burst,reactions.4.burst_colors,reactions.4.burst_count,reactions.4.burst_me,reactions.4.count,reactions.4.count_details.burst,reactions.4.count_details.normal,reactions.4.emoji.id,reactions.4.emoji.name,reactions.4.me,reactions.4.me_burst,reactions.5.burst_colors,reactions.5.burst_count,reactions.5.burst_me,reactions.5.count,reactions.5.count_details.burst,reactions.5.count_details.normal,reactions.5.emoji.id,reactions.5.emoji.name,reactions.5.me,reactions.5.me_burst,referenced_message,resolved,role_subscription_data,sticker_items,stickers,thread,timestamp,tts,type,userName,webhook_id
+1487210531885682861,,,,,4,image/jpeg,WhatsApp_Image_2026-03-27_at_23.06.57.jpeg,1280,1487210531579363431,image/jpeg,DPgFDgJwa3d1iUdIl5d2ooiYwErHBYk=,1,https://media.discordapp.net/attachments/1362063386099060940/1487210531579363431/WhatsApp_Image_2026-03-27_at_23.06.57.jpeg?ex=69ce3efd&is=69cced7d&hm=c2f2d8510e05ce8c355a793c19c2ea9bec8f39e6f7be51dab646c5a4e8d6d5ff&,199275,WhatsApp Image 2026-03-27 at 23.06.57,https://cdn.discordapp.com/attachments/1362063386099060940/1487210531579363431/WhatsApp_Image_2026-03-27_at_23.06.57.jpeg?ex=69ce3efd&is=69cced7d&hm=c2f2d8510e05ce8c355a793c19c2ea9bec8f39e6f7be51dab646c5a4e8d6d5ff&,1097,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, NEW COOL SHIT!
+
+**Evadus now has it's own merchandise!!!** (took it on a night drive and got a picture)
+
+For now it's only going to be available to staff members and some friends, like <@1004057310580183070>, however one day I might sell them on our website (they're really expensive though holy fuck)
+
+==================================
+
+Also, a portion of the big Evadus+ update is now nearing finished, will probably release about Monday-Wednesday, stay tuned!
+
+Stay safe and happy cheating,
+- <@707511200765968464>",2026-03-27T22:03:41.837Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,4e05384e862dbd173937b8a8b392ad8e,,,,,,,,,,,,,0,,,,,,0,Greedy,1004057310580183070,,0,avaris__,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,13,0,13,919320383541379072,CFomgcool,false,false,,0,false,16,0,16,,❤️,false,false,,0,false,3,0,3,,🫃,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-03-27T22:03:41.837000+00:00,false,0,bizarro12345,
+1486167131862204436,,,,,4,video/mp4,Evadus2.mp4,1080,1486167132722171964,video/mp4,+vcJBICHiHeFd4eAd3X4p9gMbA==,1,https://media.discordapp.net/attachments/1362063386099060940/1486167132722171964/Evadus2.mp4?ex=69cdbf00&is=69cc6d80&hm=fdbecc660f3cb03d90f58487b067fc973500ddca01f23f7496503c4c1b3e30d7&,16060561,,https://cdn.discordapp.com/attachments/1362063386099060940/1486167132722171964/Evadus2.mp4?ex=69cdbf00&is=69cc6d80&hm=fdbecc660f3cb03d90f58487b067fc973500ddca01f23f7496503c4c1b3e30d7&,1920,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, V6 IS HERE!!
+
+To continue with my mission of making the best cheats available to everyone, not just those who can afford it, I present to you...
+
+**BRING YOUR API KEY**
+
+You can now use your own API keys on Evadus+'s Integrated AI chat!
+
+**And you don't need a subscription at all, you can do it for FREE!**
+
+I'll happily take the hit to my server costs if it means more of you can use our software.
+
+it's currently only on Evadus+, but don't stress, I'm going to add it to Evadus Core first thing tomorrow morning (it's 3 am rn, im fuckin tired)
+
+Honestly, I can't do V6 justice in this message alone, just go check it <#1362063455301144720> 
+
+==================================
+
+XD, PearsonVue tried to **ban** our video showcasing Evadus+ on it,
+
+Guess what though, Youtube removed the ban without us needing to ask
+
+The proctors hates us boys, that's how you know it works 🤣 
+
+Spread that shit before they try to ban it again! https://youtu.be/IuQv_WDHpgg
+
+==================================
+
+I gotta give a huge ass thank you to <@772885127322664970>, he made us a promotional video, completely for free (I gave him subscription though just to be sure he knew I appreciated it).
+
+The video is fuckin fire, I am going to make it the first thing you see on our Youtube, it's awesome.
+
+==================================
+
+**TLDR**: These changes are going to allow ANYONE to use all of Evadus' features without even needing a subscription
+
+I am on mission to make the best cheats ever available to each student out there, not just the ones who can afford it, and I appreciate all of you that support the project, you guys are fucking goats.
+
+It's because of people like <@1004057310580183070> and <@720224429514162176> that I can work so hard on these updates, give em all the glaze.
+
+Stay safe and happy cheating boys!
+- <@707511200765968464>
+P.S I'm gonna sleep like a fucking baby tonight
+P.P.S It's so awesome seeing you guys help each other with issues, literally feels like a cheating community where everyone just helps everyone",2026-03-25T00:57:35.886Z,,,Evadus,https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,4,"A cheating tool for PearsonVue (OnVue) I made. The so called ""cheat-proof"" platform, what a joke.
+
+Download: https://evadus.wtf
+Reddit: https://www.reddit.com/r/Evadus
+Discord: https://discord.gg/64ZsNteakp
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+Evadus is an app and Virtual  Environment (VE) to bypass any proctor on any online exam.
+
+...",YouTube,https://www.youtube.com,image/jpeg,,0,720,3PcVDIA/mIa/dnhjeIi6Xws3lw==,1,https://images-ext-1.discordapp.net/external/sZN5HLaaJ5d5OJ-stcIthWpA6LzIa_mmIUZKlQMZsPM/https/i.ytimg.com/vi/IuQv_WDHpgg/maxresdefault.jpg,https://i.ytimg.com/vi/IuQv_WDHpgg/maxresdefault.jpg,1280,How to cheat on PearsonVue in 2026 (OnVue),video,https://www.youtube.com/watch?v=IuQv_WDHpgg,0,720,3PcVDIA/mIa/dnhjeIi6Xws3lw==,1,,https://www.youtube.com/embed/IuQv_WDHpgg,1280,1024,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,a3250c9d68891c3a6d41f76c245e8a66,,,,,,,,,,,,,0,,,,,,0,AverageNattyTrenUser,720224429514162176,,0,averagenattytrenuser,,f712d4f2213aaeb04cab6f391b80d0ee,,,,,,0,,256,que,772885127322664970,,256,nuv_chris,,4e05384e862dbd173937b8a8b392ad8e,,,,,,0,,0,Greedy,1004057310580183070,,0,avaris__,,,,,,false,,,,0,false,10,0,10,,❤️,false,false,,0,false,3,0,3,,🔥,false,false,,0,false,1,0,1,,🫃,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-03-25T00:57:35.886000+00:00,false,0,bizarro12345,
+1485372674506227894,,,,,4,image/jpeg,WhatsApp_Image_2026-03-22_at_12.21.45.jpeg,1600,1485372675541962943,image/jpeg,IQgSDQCJeJ+HaId3eIqHd6R/Be1y,1,https://media.discordapp.net/attachments/1362063386099060940/1485372675541962943/WhatsApp_Image_2026-03-22_at_12.21.45.jpeg?ex=69ce26da&is=69ccd55a&hm=406b9ccdfeaea59ecf4d254cd2a4941275630b9f6c017793ac20fa916677ac69&,176378,WhatsApp Image 2026-03-22 at 12.21.45,https://cdn.discordapp.com/attachments/1362063386099060940/1485372675541962943/WhatsApp_Image_2026-03-22_at_12.21.45.jpeg?ex=69ce26da&is=69ccd55a&hm=406b9ccdfeaea59ecf4d254cd2a4941275630b9f6c017793ac20fa916677ac69&,1200,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, BIG NEWS TO EVADUS+!
+
+I have a pretty cool story to tell.
+
+When I first started Evadus, back in February of 2025, I had one thing in mind:
+
+I wanted to create to create a legacy, the best cheats anywhere on the internet, and not only that, accessible to every student out there, not just the ones that could afford it.
+
+Most cheat developers are pretty shallow, they just make the cheats for a quick buck and then fade into obscurity, but not me,
+
+I make my cheats for free, because I have such a hatred, such a passion for fucking with big institutions that I don't even care if I get paid or not.
+
+My mission is not to cash out whilst times are good, my mission is to be a constant thorn in the side of every University and College that takes advantage of their students.
+
+**So, for that reason, Evadus+ will be FREE, forever.**
+
+Also, in case you missed it, we have a new staff member, <@720224429514162176>, one of the very first beta testers Evadus had, and someone who shares my passion for cheats.
+
+
+As always,
+Stay safe, and happy cheating
+- <@707511200765968464>
+
+P.S, I framed this screenshot from Safe Exam Browser above my desk, reminds me what I'm fighting for:
+https://github.com/SafeExamBrowser/seb-win-refactoring/discussions/1382",2026-03-22T20:20:42.492Z,2026-03-23T09:01:54.024000+00:00,,,,1975079,4,"Evadus (https://evadus.wtf/) claims to now circumvent Safe Exam Browser&#39;s VM detection, a.o. they use SEB as an example at the end of their promo video: https://youtu.be/W74bag2Erpw?t=217 Not w...",GitHub,,,"Evadus (https://evadus.wtf/) claims to now circumvent Safe Exam Browser's VM detection, a.o. they use SEB as an example at the end of their promo video: https://youtu.be/W74bag2Erpw?t=217 Not wanti...",0,600,,,https://images-ext-1.discordapp.net/external/aK2UsVpjEyjY9FNY2e76IgdCgxE0P5z-LH0tgmIGRFY/https/opengraph.githubassets.com/1dde40e51f1de0818cdbb5d5a37d8ab26112f16afd03c80e98bb23f7c21e9e1b/SafeExamBrowser/seb-win-refactoring/discussions/1382,https://opengraph.githubassets.com/1dde40e51f1de0818cdbb5d5a37d8ab26112f16afd03c80e98bb23f7c21e9e1b/SafeExamBrowser/seb-win-refactoring/discussions/1382,1200,Evadus+ to circumvent SEB's VM detection · SafeExamBrowser seb-win...,article,https://github.com/SafeExamBrowser/seb-win-refactoring/discussions/1382,,,,,,,,0,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,a3250c9d68891c3a6d41f76c245e8a66,,,,,,,,,,,,,0,,,,,,0,AverageNattyTrenUser,720224429514162176,,0,averagenattytrenuser,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,29,0,29,,❤️,false,false,,0,false,20,0,20,,🔥,false,false,,0,false,5,0,5,1101984925273563156,hug,false,false,,0,false,1,0,1,,✅,false,false,,0,false,2,0,2,,🫡,false,false,,,,,,,,,,,,,,,,,2026-03-22T20:20:42.492000+00:00,false,0,bizarro12345,
+1483454914440204331,,,,,4,image/webp,image.png,442,1483454914368766092,image/png,DRgGDIR5h3eFiId/hplJYJYElw==,1,https://media.discordapp.net/attachments/1362063386099060940/1483454914368766092/image.png?ex=69cdc44c&is=69cc72cc&hm=ddea6a70fc86a09cfcf90a65b5437010f929b71876c3393b1ca0353fd00de2c0&,49878,,https://cdn.discordapp.com/attachments/1362063386099060940/1483454914368766092/image.png?ex=69cdc44c&is=69cc72cc&hm=ddea6a70fc86a09cfcf90a65b5437010f929b71876c3393b1ca0353fd00de2c0&,868,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, Google is having another server outage, unfortunately nothing anyone can do about it except Google themselves.
+
+Resolved!",2026-03-17T13:20:12.862Z,2026-03-18T09:39:42.863000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,4,0,4,,💔,false,false,,0,false,2,0,2,,🫃,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-03-17T13:20:12.862000+00:00,false,0,bizarro12345,
+1482865640971702373,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, NEWS!
+
+There has been so many updates in the past few weeks, I am so damn proud of all them, so please go read em in <#1362063455301144720>, I wear that shit like a badge of honor.
+
+We now have our own Remote Access tool, an Integrated AI chat, videos of people cheating on PearsonVue, Respondus, Safe Exam Browser, and so many improvements to the app, I am just so insanely proud of all the hours I put it to make the best cheats available to every student out there.
+
+==================================
+
+I really have to give a big thanks to <@1004057310580183070>, it's because of people like him that I can focus on putting out updates.
+
+He saves me an insane amount of time by helping you guys out, so please, when you see him, give him the max amount of glaze possible, he really deserves it.
+
+If the government ever comes to arrest me (knock on wood), <@1004057310580183070> will take over Evadus, I know all of my users will be in good hands.
+
+==================================
+
+I also moved into a new apartment this weekend, so apologies if I haven't been super active, moving is quite a bitch.
+
+==================================
+
+ALSO, we have a ***HUGE*** Evadus+ update planned, don't miss it, keep an eye on that updates channel!
+
+Stay safe, and happy cheating!
+- <@707511200765968464>",2026-03-15T22:18:39.119Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,4e05384e862dbd173937b8a8b392ad8e,,,,,,,,,,,,,0,,,,,,0,Greedy,1004057310580183070,,0,avaris__,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,12,0,12,,😂,false,false,,0,false,15,0,15,,❤️,false,false,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-03-15T22:18:39.119000+00:00,false,0,bizarro12345,
+1479839631871836180,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, HUGE VIDEO AND NEWS!
+
+We just posted the video of <@533039792913514507> using his Meta Glasses to cheat on **Respondus LIVE** in a **classroom**, check it out: https://youtu.be/a1YM55usmzs
+
+Remember, if you make a video using our tool on one of your exams (doesn't have to be with Meta glasses lol), you get a free Unlimited subscription!
+
+==================================
+
+After some consideration, I've also decided **not** to increase the price of our subscription plans for the full release, they will remain at $35 and $60 respectively.
+
+In fact, I'm also going to include Evadus+ access in Premium plans, not just Unlimited ones.
+
+==================================
+
+Have a good weekend!
+- <@707511200765968464>",2026-03-07T13:54:22.329Z,,,Evadus,https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,4,"Featured in this video is our flagship tool, Evadus+, in action on Respondus Lockdown Browser, here are some info:
+
+Download: https://evadus.wtf
+Reddit: https://www.reddit.com/r/Evadus
+Discord: https://discord.gg/64ZsNteakp
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+
+Evadus+ is a tool and Virtual Environment (VE) to bypass any proctor on a...",YouTube,https://www.youtube.com,image/jpeg,,0,720,3vcFHIgcaHlkWpV/Yogrv9b0fA==,1,https://images-ext-1.discordapp.net/external/0nNqAsT5TxdTjJCa10GEh1MJVEt4jtdKN4kpQ_8ie-c/https/i.ytimg.com/vi/a1YM55usmzs/maxresdefault.jpg,https://i.ytimg.com/vi/a1YM55usmzs/maxresdefault.jpg,1280,Cheating on Respondus using Meta Glasses,video,https://www.youtube.com/watch?v=a1YM55usmzs,0,720,3vcFHIgcaHlkWpV/Yogrv9b0fA==,1,,https://www.youtube.com/embed/a1YM55usmzs,1280,1024,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,e4469d8f3194dd5870fa1af2e290b48c,,a_b98e8b204d59882fb7f9f7c86922c0bf,,1144308196723408958,,,,,nameplates/gothica/nevermore/,COLLECTIBLES_GOTHICA_NEVERMORE_NP_A11Y,white,1462116614131548265,0,,0,16777215,2,6,0,sebastian,533039792913514507,,0,pretold,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,4,0,4,,🔥,false,false,,0,false,1,0,1,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-03-07T13:54:22.329000+00:00,false,0,bizarro12345,
+1478364010888827064,,,,,4,image/webp,Screenshot_2026-03-02_214103.png,708,1478364011019112652,image/png,zwcOBIL+27l8d3d8dnsEmfWMWA==,1,https://media.discordapp.net/attachments/1362063386099060940/1478364011019112652/Screenshot_2026-03-02_214103.png?ex=69cdb406&is=69cc6286&hm=b923d63a8b145affd53858d79581fb140b12c3b39423e6e72ea92735ecdf30e4&,253538,Screenshot 2026-03-02 214103,https://cdn.discordapp.com/attachments/1362063386099060940/1478364011019112652/Screenshot_2026-03-02_214103.png?ex=69cdb406&is=69cc6286&hm=b923d63a8b145affd53858d79581fb140b12c3b39423e6e72ea92735ecdf30e4&,1290,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, update on the Evadus+ Open-Beta:
+
+Evadus+ has no officially been in **Free Open-Beta** for **3 months**, and it has made insane progress since then.
+
+I plan to officially release it within the next 2 weeks, accompanied by the best features I can think of.
+
+That being said, there is going to be a price increase for the Premium and Unlimited plans.
+
+However, here is something interesting to know; whatever price you join at, is the price you pay until you cancel, regardless of any price increases we make.
+
+Meaning that if you joined while the Unlimited plan was $40, and we increased it to $60, you would still be paying $40 for your Unlimited Subscription each month.
+
+==================================
+
+Part of this update was making a full bypass for ""VMAware"", an open source repo with the advanced and comprehensive detection mechanisms on the *planet*.
+
+Not kidding, when I first heard about VMAware, we still had Evadus+ V1 running (a QEMU based Virtual Machine), and as soon as I used VMAware on our VM, I knew that we needed a different approach.
+
+VMAware is **cross platform**, **open source**, **free**, and **ANY** proctor could start using it in their software **TOMORROW**.
+
+That's why I mentioned a few months ago that building Virtual Machines to cheat with is a losing game.
+
+If you're interested in what I'm talking about, here;s the github: https://github.com/kernelwernel/VMAware
+
+I heard some rumours that Safe Exam Browser is going to start using the Library in their update.
+
+But guess what? With our new tool, and with some work on the backend, it now bypasses ALL the checks (attached screenshot).
+
+==================================
+
+A key part of making the best cheats is *foresight*, trying to predict what updates proctors are going push.
+
+It's difficult, however I try my best.
+
+**ALSO, Evadus is soon going to release it's own Open-Source repo, stay tuned for that!**
+
+As Always,
+Stay Safe and Happy cheating,
+- <@707511200765968464>",2026-03-03T12:10:46.871Z,2026-03-03T12:12:13.227000+00:00,,,,1975079,4,Advanced VM detection library and tool. Contribute to kernelwernel/VMAware development by creating an account on GitHub.,GitHub,,image/jpeg,,0,640,NwgKBICQu4dniIeNh3ZwxQdXWw==,1,https://images-ext-1.discordapp.net/external/z_OflV3h2WKisZjvWcMVlgfD6E1pBRZL65dhBnN9-EE/https/repository-images.githubusercontent.com/682289450/ad4b765d-5a3c-4fb5-be34-050081e91328,https://repository-images.githubusercontent.com/682289450/ad4b765d-5a3c-4fb5-be34-050081e91328,1280,GitHub - kernelwernel/VMAware: Advanced VM detection library and tool,article,https://github.com/kernelwernel/VMAware,,,,,,,,0,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,4,0,4,,❤️,false,false,,0,false,1,0,1,,✌️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-03-03T12:10:46.871000+00:00,false,0,bizarro12345,
+1476141729282523210,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, I've got a special message for you today.
+
+==================================
+
+Exactly 1 year ago, on this exact day, I had the idea for Evadus.
+
+Yesterday, I checked the backups on my PC, and Evadus Core *ALONE* has had over 330 iterations.
+
+I am probably going to delete this soon, but here is a video I made with the very **FIRST** version of Evadus (like v.0.0.0.0.1): [ deleted ]
+
+At the time of recording that video (February 2025), Interview Coder wasn't popular yet, Cluely didn't even exist yet.
+
+The reason I'm showing this, is to show that Evadus is built from the ground up, no shortcuts, no fancy start or angel investor, just my ideas and creativity.
+
+Put this in contrast to certain competitors, who prefer to leech off creativity and innovation, even going as far as stealing files, and accidently putting a virus on their user's computers.
+
+But as my favorite movie character says, ""Some people are just destined for second place.""
+
+==================================
+
+In fact, here is another thing to think about:
+
+Our competitors are more concerned with *looking* credible, rather than actually being credible.
+
+If you look at their discord server, you'll see that they bought exactly 1000 bot members, which will randomly go offline (online members going from **430** to **8** in about 2 seconds).
+
+The reason behind this, is to trick people into thinking the software has credibility.
+
+It's the same reason they delete messages of user's complaining, the reason the creator tries to hide behind anonymity, and as outlined before, the reason they steal user's banking details, full legal names, home addresses and IP addresses.
+
+The creator of this software is so desperate in fact, he has tried to dox me, my girlfriend, he has threatened me with my home address.
+
+But as they say, ""A starving man will do anything to survive"".
+
+==================================
+
+Good news though, If you're looking for reliable cheat software that won't infect your computer with a virus or harvest your personal data, you're already in the right place!
+
+As always,
+Thank you for the support,
+Evadus wil continue to lead the cheating industry!
+- <@707511200765968464>",2026-02-25T09:00:13.648Z,2026-03-01T17:11:44.214000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,9,0,9,,💯,false,false,,0,false,5,0,5,,❤️,false,false,,0,false,2,0,2,,💪,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-02-25T09:00:13.648000+00:00,false,0,bizarro12345,
+1473981114166280346,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, updates on the website!
+
+TLDR;
+
+**+ You can now pay with PayPal**
+**+ You can now sign in with any email address**
+
+==================================
+
+PayFast (our old payment provider), has been giving problems for a long time, and honestly I'm sick of it.
+
+Currently nothing is working, you cannot cancel your subscription, I cannot refund anyone and you can't make payments whatsoever.
+
+Don't be worried though, if you do get charged because you couldn't cancel, I will personally refund you.
+
+==================================
+
+Hence why we integrated PayPal into our website, transaction fees are higher, however it should be much more stable.
+
+PayFast is going to be removed as one of our payment providers shortly.
+
+Appreciate the support as always!",2026-02-19T09:54:42.862Z,2026-02-19T09:56:04.802000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,7,0,7,,❤️,false,false,,0,false,2,0,2,909207269856665641,emoji_couple,false,false,,0,false,1,0,1,,🍉,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-02-19T09:54:42.862000+00:00,false,0,bizarro12345,
+1472970820060971112,,,,,4,image/webp,Screenshot_2026-02-16_144926.png,751,1472970820807819515,image/png,2wcGBIBmmHh9h4eNeI/Xms9mTw==,1,https://media.discordapp.net/attachments/1362063386099060940/1472970820807819515/Screenshot_2026-02-16_144926.png?ex=69cddbba&is=69cc8a3a&hm=94ee507f5a1c17a6f4fc4da8852a40f9fd1cb570bbd0334b9ec322cf3434bac0&,224226,Screenshot 2026-02-16 144926,https://cdn.discordapp.com/attachments/1362063386099060940/1472970820807819515/Screenshot_2026-02-16_144926.png?ex=69cddbba&is=69cc8a3a&hm=94ee507f5a1c17a6f4fc4da8852a40f9fd1cb570bbd0334b9ec322cf3434bac0&,1280,4,image/webp,Screenshot_2026-02-16_144250.png,744,1472970821596217435,image/png,2fcFBIQGN0h/iYl9eX4IXnmgiA==,1,https://media.discordapp.net/attachments/1362063386099060940/1472970821596217435/Screenshot_2026-02-16_144250.png?ex=69cddbba&is=69cc8a3a&hm=3876e01d43c31323b361a7c08fd76295fb5b8d720915467fae568ce11af14810&,300816,Screenshot 2026-02-16 144250,https://cdn.discordapp.com/attachments/1362063386099060940/1472970821596217435/Screenshot_2026-02-16_144250.png?ex=69cddbba&is=69cc8a3a&hm=3876e01d43c31323b361a7c08fd76295fb5b8d720915467fae568ce11af14810&,1279,4,image/png,image.png,742,1472970822263246928,image/png,3fcNDIAHuHiPiHeGjXybgaAKCQ==,1,https://media.discordapp.net/attachments/1362063386099060940/1472970822263246928/image.png?ex=69cddbba&is=69cc8a3a&hm=06ed9d1b3acf28f97045c43534be48cb839f30dc2a39185ba76d07c4ff5fbf81&,761754,https://cdn.discordapp.com/attachments/1362063386099060940/1472970822263246928/image.png?ex=69cddbba&is=69cc8a3a&hm=06ed9d1b3acf28f97045c43534be48cb839f30dc2a39185ba76d07c4ff5fbf81&,1280,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, THE UPDATE IS HERE!
+
+==================================
+
+I'll skip the formalities, this update brings *HUGE* changes to Evadus+, now making it compatible (with proof) to these proctors:
+
++ Safe Exam Browser
++ Inspera Integrity Browser
++ PearsonVue (OnVue)
++ Respondus Lockdown Browser
+
+The best part?
+
+I haven't even *TESTED* the other proctors like MSB, PSI secure browser etc. Those are only the proctors I have tested, and they all work.
+
+This update is a huge leap forward for Evadus+, the foundations have been laid, now we're going to build on them.
+
+Keep a close eye on the channels, many more proctors are going to be added to the list in the following days and weeks!
+
+==================================
+
+A quick overview of our privacy policy here at Evadus:
+
+We take a **zero-trust** approach to databases and data. That means that literally NOTHING about you is stored except for your email address (which we have to keep to allow you to login).
+
+What we **DO NOT KEEP**:
+
++ Your IP address
++ Your banking details
++ Your physical address
++ Your credit card number
++ Your (legal) name or address
+
+This means that even IF our databases do get hacked, all of our users are kept safe. This is what ""zero-trust"" means; ***Nobody*** is trusted with your personal data, not even us.
+
+
+The reason I bring this up, is because I asked a white-hat hacker to do some digging on a competitor, and what they reported back to me was a touch unsettling. They found they logged EVERYTHING about their users, **IP's**, **credit card numbers**, **home addresses** and **legal names** (found on those credit cards).
+
+You can come up with your own theories on why they insist on storing all this data, personally I can't think of **any** reasons that don't have malice behind them.
+
+So basically, I am here to assure you, that we **DO NOT** store your personal data, for ANY reason.
+
+==================================",2026-02-16T15:00:09.977Z,2026-02-16T15:25:34.371000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,10,0,10,,🔥,false,false,,0,false,4,0,4,,💥,false,false,,0,false,3,0,3,,🥳,false,false,,0,false,1,0,1,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-02-16T15:00:09.977000+00:00,false,0,bizarro12345,
+1471915940303343626,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, update is out for Evadus Core!
+
+As usual, read <#1362063455301144720> if you want to keep up with everything in the new updates.
+
+==================================
+
+News regarding Evadus+ 🟣
+
+I intentionally didn't include the incremental update for Evadus+ in this update, because we have A LOT planned for the next one.
+
+In case you missed it, Evadus+ is now *also* compatible with **Lockdown Browser** (among other ones that I don't about).
+
+This next update will serve as the bedrock, the very foundation for the future of Evadus+.
+
+This update will firmly put Evadus even *FURTHER* ahead of it's competition.
+
+And yes, it’s still completely free.
+
+==================================
+
+Before I conclude this message, I have a quick story.
+
+A while back, I noticed a competitor of Evadus was stealing files from us.
+
+Instead of a lawsuit or an angry DM, I decided to have a little fun, so I included a small virus which I made from scratch. As much as I would like to say what it does, I won't for legal reasons.
+
+And of course, since the competitor knows nothing about actually making cheats or software, they stole the virus by accident, and included it in the files that their users download.
+
+Moral of the story, don't download cheats from people that don't know how to make them.
+
+==================================
+
+Stay safe, and happy cheating
+Evadus
+<@707511200765968464>",2026-02-13T17:08:27.044Z,2026-02-13T17:09:37.634000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,10d86e1edf4cdef16401c63ed4d57410,,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,,,,,0,,,,,64,Bizarro,707511200765968464,,64,bizarro12345,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,10,0,10,,🤣,false,false,,0,false,5,0,5,,😆,false,false,,0,false,3,0,3,,😂,false,false,,0,false,2,0,2,,☠️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-02-13T17:08:27.044000+00:00,false,0,bizarro12345,
+1468316690172608655,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone HUGE UPDATE.
+
+Go read <#1362063455301144720> — a lot has changed.
+
+There will also be a new video posted in  <#1362037965668487238>
+
+**WATCH IT.** This update works differently and you need to understand how to use it properly.
+
+==================================
+
+This update introduces a completely new system.
+It’s more reliable, way more consistent, and a massive step forward compared to what we were doing before.
+
+I’ve personally verified compatibility with:
+
+**+ Safe Exam Browser**
+**+ Inspera Integrity Browser**
+
+There are other proctors I haven’t tested yet, but there’s now a **built-in** way for you to **test your own proctor** and see what’s supported right now. If something isn’t supported yet, it’s very likely coming in future updates.
+
+I’m genuinely *buzzing* about this one.
+I cannot overstate how big of an improvement this is.
+
+As always, don’t take my word for it.
+
+It’s a **FREE open beta**. Download it and see for yourself.
+
+==================================
+
+Huge thanks to everyone testing and sending feedback, it all helps more than you think!",2026-02-03T18:46:18.942Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,9,0,9,,🔥,false,false,,0,false,3,0,3,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-02-03T18:46:18.942000+00:00,false,0,bizarro12345,
+1464993383163625657,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, big update!
+
+Check out <#1362063455301144720> to see whats new and improved.
+
+Just a quick note on customer support, I recently hired <@1458848805742055670> to help out with customer support. 
+
+Bug reports for Evadus+ are not ignored (though it might seem that way), I generally don’t respond to them, instead I try to find solutions to them and include the fixes in the updates.
+
+Regarding the end of the open-beta, it’ll probably end in about March, since these updates take a looong time, developing kernel drivers is a tricky game.
+
+Evadus+ still has many things I want to add to it, and I want to keep it in free until everything is sorted and stable.",2026-01-25T14:40:40.807Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,0,,,,,0,Evadus Customer Service,1458848805742055670,,0,melgardecs,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,5,0,5,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-01-25T14:40:40.807000+00:00,false,0,bizarro12345,
+1457320302706163785,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone GOOD NEWS.
+
+I just pushed a new V2 update (v3.3.8) and the progress is honestly insane.
+
+This update should make V2 compatible with** OnVue (PearsonVUE)**.
+Yes, that OnVue.
+
+Because of how big this update is, I’m **extending the Open Beta until January 10th** so we can keep testing and dialing things in properly.
+
+There were some major under-the-hood changes, so if you want the full breakdown, check:
+📌 <#1362063455301144720>
+
+Huge thanks to everyone stress testing and sending feedback.
+Keep reporting bugs in <#1411259983596621834>, I’m actively fixing them as they come in.
+
+This thing is getting better fast.
+Stay tuned.",2026-01-04T10:30:35.867Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,1211108178373378139,citizenshock,false,false,,0,false,3,0,3,,👍,false,false,,0,false,2,0,2,,🥂,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-01-04T10:30:35.867000+00:00,false,0,bizarro12345,
+1454787545899728999,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, listen up!
+
+Evadus+ V2 is officially in **FREE OPEN BETA **until **4 January**!
+
+Anybody can download the app and use it absolutely for free.
+
+**This beta period is for:**
+-> ironing out edge cases
+-> stress testing
+-> seeing which proctors it works against 
+
+**Here are the most important new features:**
+-> No more **17GB** download, now it's integrated with the app, and it's only ***20MB*** extra.
+-> No webcam pains, everything works just like your host system
+-> INSANELY hard to detect, however more stealth features are going to be implemented for the **final release**.
+-> Runs on every piece of hardware, no high end PC or laptop needed.
+
+
+**About Evadus+ V1 (the VM)**
+If you really want to keep using V1, I’ll give you a .bat file so you can continue. That said, there’s honestly no reason to.
+V2 is substantially better in every way that matters.
+If you do plan to stay on V1 until V2 fully releases, I recommend selecting ""Ignore this version"" when it asks you to update.
+
+
+**Answer to the Subscription Question**
+I’ll make this very clear.
+This is V2, not a separate product.
+If you’re an annual or monthly subscriber, nothing bad is happening to you, you’re actually getting a straight upgrade.
+
+You paid for Evadus+, V2 is simply a much better version of what you already paid for.
+
+
+I am going to be posting a video to <#1362037965668487238> on how to use it and set it up properly.",2025-12-28T10:46:19.588Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,12,0,12,,🔥,false,false,,0,false,2,0,2,,🫡,false,false,,0,false,2,0,2,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-12-28T10:46:19.588000+00:00,false,0,bizarro12345,
+1450562660692398194,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone Read this. It matters.
+
+I’m going to keep this short.
+
+**❌ Bad News**
+
+After a lot of time, money, and testing, it’s become undeniable that trying to build a fully undetectable virtual machine is a losing game from the start.
+
+VM detection is not new. It’s been a cat-and-mouse game for decades. Doesn’t matter how much you harden it, how much money you throw at it, or how much you patch it, you eventually lose. I’ve known this for a while, and at this point pretending otherwise would just be lying to you.
+
+Even with a heavily modified, open-source KVM based platform like QEMU, the reality is simple:
+
+-> VM detection techniques keep evolving
+-> We don’t control the rules of the game
+-> And we’re always *reacting* instead of **leading**
+
+**Because of this, the VM will no longer receive updates.**
+
+To be fair to everyone who supported us:
+-> The VM will be made *completely free* for anyone who wants to continue using it.
+
+
+**✅ Good News (This Is the Important Part)**
+
+Instead of wasting more time fighting a game I don’t control, I've built something way better.
+
+-> Not a “slightly improved VM”.
+-> Not a hack or 'bypass'.
+-> An entirely *different* approach.
+
+This new method is superior to the VM in every possible way, and I’m not exaggerating.
+
+Why it destroys the VM:
+-> It runs on your real hardware, not fake virtualized hardware
+-> Zero attack surface
+-> No hardware requirements **at all**
+-> No USB/IP hacks, no webcam passthrough pain
+
+VMs get detected because they’re VMs.
+This isn’t a VM.
+
+This is cleaner, faster, harder to detect, and way more future-proof than any hardened VM could ever be. This is not an 'update', this is a fundamental shift.
+
+I’m genuinely excited about this, and if you’ve trusted my judgment so far, you’re going to understand why very soon.
+
+I need a few beta testers, DM if interested.",2025-12-16T18:58:08.460Z,2025-12-17T07:19:16.208000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,15,0,15,,❤️,false,false,,0,false,7,0,7,,👍,false,false,,0,false,5,0,5,,🔥,false,false,,0,false,3,0,3,,😂,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-12-16T18:58:08.460000+00:00,false,0,bizarro12345,
+1446194297543069798,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, SEB pushed a new update this morning that advanced VM detection.
+
+Until further notice, don't use it on SEB.
+
+Patch will likely come out in the next few days.",2025-12-04T17:39:49.525Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-12-04T17:39:49.525000+00:00,false,0,bizarro12345,
+1446042028109725696,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, currently a problem with the updater for updating the VM.
+
+To work around this, just download the new VM files manually, and run the installer like you usually do.
+
+Here's the link: https://vm-installer.evadus.wtf/Virtual_Machine.zip
+
+**NOTE: This is has been fixed, you can now download the new updater and it will work perfectly!**",2025-12-04T07:34:45.663Z,2025-12-04T11:08:25.616000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-12-04T07:34:45.663000+00:00,false,0,bizarro12345,
+1445326169275633765,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, **BITCOIN PAYMENTS ARE ONLINE!** 🪙",2025-12-02T08:10:11.617Z,2025-12-02T08:10:17.873000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-12-02T08:10:11.617000+00:00,false,0,bizarro12345,
+1443715403468767342,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, **DAILY PAYMENTS ARE LEAVING TOMORROW!**",2025-11-27T21:29:35.122Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,4,0,4,,🥀,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-11-27T21:29:35.122000+00:00,false,0,bizarro12345,
+1438879202316386416,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, **MONTHLY PAYMENTS ARE BACK ONLINE**",2025-11-14T13:12:14.915Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-11-14T13:12:14.915000+00:00,false,0,bizarro12345,
+1438879187518754856,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,https://tenor.com/view/sigma-gif-10119958626511826896,2025-11-14T13:12:11.387Z,,,,,,4,,Tenor,https://tenor.co,,,0,173,XFkOJYQzeoWAhnqKaHiHhkSAehCG,1,https://images-ext-1.discordapp.net/external/JLSHM1siLdV4GLsRxVW4rQ2NvBzFkxOsFqUBx-vdKjU/https/media.tenor.com/jHFQwMLjL9AAAAAe/sigma.png,https://media.tenor.com/jHFQwMLjL9AAAAAe/sigma.png,220,,gifv,https://tenor.com/view/sigma-gif-10119958626511826896,0,174,XFkOJYQzeoWAhnqKaHiHhkSAehCG,1,https://images-ext-1.discordapp.net/external/-aSf4trWNrnw61AlGR8VV_7DQ9u-XGk-FkQ5cDmgdJA/https/media.tenor.com/jHFQwMLjL9AAAAPo/sigma.mp4,https://media.tenor.com/jHFQwMLjL9AAAAPo/sigma.mp4,220,0,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,8,0,8,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-11-14T13:12:11.387000+00:00,false,0,bizarro12345,
+1438112694505963540,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, ANNUAL PAYMENTS ARE ONLINE!",2025-11-12T10:26:25.212Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-11-12T10:26:25.212000+00:00,false,0,bizarro12345,
+1437171130766196866,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, updates:
+
+**MONTHLY PAYMENTS:**
+I'm pushing the payment gateway to fix the monthly subscriptions, annoys the fuck outta me that it's taking them this long. I know you guys need affordable cheats, so I'm going to setup Paypal as another option, will announce it once ready.
+
+**INTERVIEW CODER:**
+There's a lot of bullshit going on atm with Interview Coder, I wanted to give you guys some clarity regarding us: **Evadus is a long-term project, not some fly-by-night garbage**. It will continue to receive updates and new features *LONG * into the future. I am not going to wake up one morning and decide to pivot to some other bullshit. Working on Evadus is my full-time job, and a passion that I enjoy very much. To be honest, I'd be doing this for free, that's how much I enjoy it.
+
+**PREMIUM PACKAGE:**
+You can now use Gemini 2.5 Pro also, instead of only being able to use 2.5 Flash.
+
+**RESPONDUS AND OTHERS:**
+These Reverse engineers are also a bunch of stupid fucks, just told me what I already know. Going to with some real industry experts this time. It's going to cost me an arm and a leg, but it's worth it.
+
+As always boys, keep cheating, and stay safe.
+
+Much love,
+- Bizarro",2025-11-09T20:04:58.923Z,2025-11-09T20:24:09.785000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,6,0,6,,👍,false,false,,0,false,1,0,1,,💯,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-11-09T20:04:58.923000+00:00,false,0,bizarro12345,
+1434245636068212857,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, NEW SYSTEM IS LIVE!
+
+As mentioned before, you can still use your Credits or Evadus+ subscription.
+
+If you have credits in your account, it's treated as an ""Unlimited"" subscription, so you get all the features.
+
+Also, I've decided to extend the conversion date of credits into subscriptions to **1 JUNE 2026**.
+
+***IMPORTANT:***
+
+The payment portal is fucking around again, however, it's only affecting monthly subscriptions, annual plans still work. Probably going to get an email from Payfast Monday saying ""So sorry sir, we fucked something up"".
+
+Anyway, thanks to everyone supporting us!",2025-11-01T18:20:06.634Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,3,0,3,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-11-01T18:20:06.634000+00:00,false,0,bizarro12345,
+1433177380859547690,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, some big changes coming
+
+**YOU WON'T BE ABLE TO BUY CREDITS ANYMORE**
+Evadus Core will also be moving to a subscription model, which will allow you to get a subscription, and then get unlimited usage, instead of having to pay for each credit.
+
+**EVADUS+ WON'T BE SOLD SEPARATELY ANYMORE**
+Evadus+ will now be included in the premium tier of the subscription plan. However, the premium tier will be pretty expensive, since it included unlimited usage of Evadus Core. So everyone that was always bitching about the price, I recommend you stock up on subscriptions while it's cheap.
+
+**WHAT HAPPENS TO MY CREDITS?**
+Don't stress. If you have credits or a subscription to Evadus+, you can continue using the tools just like normal. You might notice some UI changes, that's about it.
+
+At exactly **1 June 2026,** everyone who has credits will be converted into subscriptions. Meaning that if you have 100 credits lying in your account at 1 June 2026, that will be converted into 2 months of the pro tier (the best one with unlimited usage).
+
+**WHAT HAPPENS TO MY EVADUS+ SUBSCRIPTION?**
+Nothing. At exactly **1 November 2026**, the last user's E+ subscription will have expired (we have about 15 users that bought 1 year subscriptions). Until then, you can continue just like normal.
+
+I understand there might be some questions, post them in the <#1362035227350007998> channel and @ me, I'll respond so everyone can be part of the conversation.",2025-10-29T19:35:14.745Z,2025-11-01T18:07:00.221000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,💯,false,false,,0,false,1,0,1,,💪,false,false,,0,false,1,0,1,,✅,false,false,,0,false,1,0,1,,⏫,false,false,,0,false,1,0,1,,🙏,false,false,,0,false,1,0,1,,❤️,false,false,,,,,,,2025-10-29T19:35:14.745000+00:00,false,0,bizarro12345,
+1433108055050162176,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"Hey @everyone,
+
+Just got an email mentioning that there were outages with the payment provider, but it's back online again:
+
+*""We were aware of the outage that impacted both transaction processing and access to the Merchant Portal today. **We’re pleased to confirm that the issue has now been*
+*fully resolved, and all services are operating as normal.*
+ 
+*What this means for you:*
+ 
+*Customers can now complete payments without issue.*
+*The Merchant Portals are fully accessible again.""*",2025-10-29T14:59:46.184Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,❤️,false,false,,0,false,1,0,1,,💪,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-10-29T14:59:46.184000+00:00,false,0,bizarro12345,
+1431367662675427379,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, BIG MFING UPDATE:
+
+Tonight I launched v3, which introduces the biggest new feature, **SCREENSHARING**.
+
+You can now share you screen(s) to anyone around the world, and they can give you answers without any proctor knowing about it.
+
+Completely free UNLIMTED usage for Evadus Core and Evadus+ users, however Evadus Lite will have a 30 minute time limit.
+
+I showcased it in our most demo video of Evadus Lite, check it out here: https://youtu.be/gHlafN620_g
+
+Thanks for supporting all the projects, very excited for what lies ahead",2025-10-24T19:44:04.307Z,,,Evadus,https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,4,"A Cheat to bypass HonorLock, Proctorio, Mercer Mettl any other Online exam. The best cheat to ever be developed.
+
+WEBSITE/DOWNLOAD: https://evadus.wtf
+DISCORD: https://discord.gg/64ZsNteakp
+REDDIT: https://www.reddit.com/r/Evadus/
+
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+Evadus Lite is an app and AI overlay to bypass most proctors on on...",YouTube,https://www.youtube.com,image/jpeg,,0,720,DggKDIKKZ2Z+iHdQiIqteLBqCQ==,1,https://images-ext-1.discordapp.net/external/h2BZFkIZj2hfS5HNKFKg5y-EhjwgWhVaOMrPU4zI6vQ/https/i.ytimg.com/vi/gHlafN620_g/maxresdefault.jpg,https://i.ytimg.com/vi/gHlafN620_g/maxresdefault.jpg,1280,Free Cheating tool for online exams!,video,https://www.youtube.com/watch?v=gHlafN620_g,0,720,DggKDIKKZ2Z+iHdQiIqteLBqCQ==,1,,https://www.youtube.com/embed/gHlafN620_g,1280,1024,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-10-24T19:44:04.307000+00:00,false,0,bizarro12345,
+1428656022733721633,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, very important:
+
+There's a new channel called <#1428653846334410752>, please refer everyone that asks ""does this work with X"" to this channel, I think everyone is getting a bit annoyed for having to answer the same question the whole time.
+
+The website contains an up-to-date list of whether each of our tools works with each proctor.
+
+Also, lots of you guys use Respondus. I'm really tired of seeing ""OmG, ThIS iS A SCAM, It DoeS'nt wOrk with RLDB"", when I've literally announced SEVERAL times that it doesn't work with RLDB, AND I specifically say it on the website.
+
+
+TLDR: Next time you see, ""Does this work with X?"", refer them to the <#1428653846334410752> channel.
+
+
+Oh yeah, update on RLDB reverse engineers: Hired another one about 2 weeks ago, he charges me $60/hr so he's probably going to figure it out.",2025-10-17T08:08:58.965Z,2025-10-17T08:10:39.903000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-10-17T08:08:58.965000+00:00,false,0,bizarro12345,
+1427742329128878190,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone ATTENTION EVADUS+ USERS,
+
+I forgot to install USBIP in the VM in v4.8, all you have to do to install is go into the Setup_Scripts folder and run the Usbip exe to install them.
+
+I am doing it as we speak, going to push an update to fix it. I would avoid updating until to 4.8, instead wait for V4.9.
+
+This only affects you if your exams require a webcam.",2025-10-14T19:38:17.434Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,,😭,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-10-14T19:38:17.434000+00:00,false,0,bizarro12345,
+1425581552812687410,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, new info regarding the discord server:
+
+Alright, time to explain the roles on the server.
+
+1. <@&1362302367894343790> - Me, owner, creator, CEO, Founder, whatever you want to call it.
+2. <@&1420076335908524124> - Official Support staff on payroll, here to help out when I'm not available.
+3. <@&1383770066545545266> - Testers and users that contribute massively to the improvement of the tools.
+4. <@&1383770773247758347> - A role I give out to people I like and/or people that have lots of experience with our tools.
+
+**AND THE NEW ROLE, VERY IMPORTANT:**
+5. <@&1425073648376610917> - This role awarded to people that can't be bothered to read the server rules. These *illiterates* can't send messages anywhere besides support threads. Please @ me if you ever think someone needs this role. **I MEAN IT. @ ME.**
+
+ALSO, thanks for being a pretty awesome community.",2025-10-08T20:32:08.215Z,2025-10-08T20:33:38.171000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,4,0,4,,💪,false,false,,0,false,3,0,3,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-10-08T20:32:08.215000+00:00,false,0,bizarro12345,
+1423270409436139612,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, important few announcements:
+
+DON'T USE IT ON RLDB: Had a user with good hardware run it yesterday and it still failed, looks like there's more to the story, going to hire another round of reverse engineers to see if anything was missed by the first 2 incompetent fucks.
+
+**UNTIL I HAVE A VIDEO CONFIRMING IT WORKS ON A RLDB EXAM, DON'T USE IT.**
+
+Really nice to see the <#1411259983596621834> channels slowing down, it tells me the software and tools are much more stable and reliable. As always, if you have a bug, problem or just a question, create a post, don't dm me about it.",2025-10-02T11:28:28.695Z,2025-10-02T11:31:20.696000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-10-02T11:28:28.695000+00:00,false,0,bizarro12345,
+1422316079237169262,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, DEFINITIVE RESPONDUS GUIDE
+
+Finished my investigation, here's what you need to know:
+
+**IT WORKS! **However, not on slow hardware.
+
+Now I know what you're thinking, ""does my hardware classify as 'slow'?"". Fortunately, it's easy it find out. All you have to is try to launch Respondus, since it does it's VM check when you start it up.
+
+You don't need to sign at all, just download it, stay signed out, and try to boot it, and you'll know immediately, whilst staying anonymous.
+
+**WHAT TO DO IF IT DOESN'T WORK:**
+
+1. Try passing through more resources: <@1218595635385602069> ran some tests, and it consistently booted with 6 cores and 4GB ram without ever getting VM detected.
+
+2. Close any apps that are CPU intensive. The VM runs almost exclusively on the CPU, so closing any apps that have high CPU usage will greatly increase the performance of the VM, making it much more likely to not slow down drastically, which is what triggers Respondus.
+
+**IF IT STILL DOESN'T WORK:**
+
+Then it simply means your CPU is too slow, or overwhelmed with tasks on your host.
+
+The fix is very simple: Get a laptop/desktop with a faster CPU. That **SOUNDS **expensive, however, it isn't.
+
+You **DON'T NEED** a laptop with a GPU or large RAM, just a CPU.
+
+I checked, and you can get a laptop that can run Respondus in our VM for just **$400 new**, and **$280 used**.
+
+That is a bit of money, however, you get to cheat **ALL YOUR TESTS**, and you can just sell when you're done and get most of your money back.
+
+
+As promised, if you're respondus user, you get compensation for the downtime, send me a dm with your email address and I'll add the extension",2025-09-29T20:16:18.645Z,2025-09-29T20:16:34.358000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,406dfa42c00ecfb4bb7b91aa76436d25,,a_c86b11a49bb8057ce9c974a6f7ad658a,,1333866045236314327,,,,,nameplates/special_events/full_heart/,COLLECTIBLES_VALENTINES_2026_GIFT_PROMOTION_FULL_HEART_A11Y,crimson,1464017397081047081,0,,10964941,3,4,0,27,1218595635385602069,,0,abudhabiiii,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-29T20:16:18.645000+00:00,false,0,bizarro12345,
+1421096905735409685,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, some important announcements
+
+1. The US literally makes up 80% of our users, so the servers are now based out of the central states (Kansas, Nebraska, Iowa, Missouri, Oklahoma).
+
+2. BEFORE YOU CHEAT, CHECK THE WEBSITE. We have a compatibility section of the website, with a list of each proctor and whether each tool can beat it or not. CHECK this list before you cheat, I keep it up to date with the current status of each proctor. Meaning that if you're unsure if Evadus+ or any other tool is currently working with your proctor, you can check there. I am seeing way to many people saying that they got caught, when I literally ANNOUNCED not to use it on Respondus, and say the same thing on the website. Currently, it's **inconsistent** on RLDB, meaning when you run it on decent hardware it passes, but on slower hardware it doesn't, which is why I said **DON'T USE IT.** <@1218595635385602069> is the dedicated tester for Respondus, ask him if you're ever unsure.
+
+3. Hired 2 reverse engineers for Examplify, I'm going broke from these mfs, but they should be done roundabout Tuesday.
+
+4. THE FULLSCREEN LAG ON EVADUS+. This is caused by CPU scaling. basically, when you run the VM in say 1280 x 720 (and your host machine's resolution is 1920 x 1080), and you fullscreen, it causes some really intense lag, or it just outright freezes. This is because the CPU now has to upscale the VM resolution to 1920 x 1080, overloading the CPU, causing it to freeze. THE SOLUTION: Set the VM resolution as close to your host resolution as you can, so that no/minimal scaling has to happen.
+
+5. We're currently at **481** total users, which is crazy. But this is even crazier: **86** are Evadus+ users!
+
+6. ALSO, you can now specifically select which CPU model you want to emulate in the VM in the vm settings in the main app. If the VM crashes for you, or maybe you just need more performance out of the VM, you can change the CPU model. Any changes here will have some major effects, since the VM is VERY CPU dependant, it doesn't touch the GPU  at all.
+
+7. ALSO, I made a diagnostic tool inside the help section of the app, it's going to help a lot for debugging and such.",2025-09-26T11:31:45.031Z,2025-09-26T11:35:53.592000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,406dfa42c00ecfb4bb7b91aa76436d25,,a_c86b11a49bb8057ce9c974a6f7ad658a,,1333866045236314327,,,,,nameplates/special_events/full_heart/,COLLECTIBLES_VALENTINES_2026_GIFT_PROMOTION_FULL_HEART_A11Y,crimson,1464017397081047081,0,,10964941,3,4,0,27,1218595635385602069,,0,abudhabiiii,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-26T11:31:45.031000+00:00,false,0,bizarro12345,
+1420720727174418442,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,,2025-09-25T10:36:57.073Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-25T10:36:57.073000+00:00,false,0,bizarro12345,
+1420719234106921144,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, big update coming later today/early tomorrow, stay tuned for that.
+
+HOWEVER, BIG POLL:
+
+Our servers is currently operating out of South Africa, and most of you are not in South Africa, so I'm gonna move them,
+
+And it makes logical sense to move them to where the most users are,
+
+So I need you to vote in what region you stay, the region with the most votes will be the primary location of the servers
+
+If your specific region isn't on the list, just pick the closest one",2025-09-25T10:31:01.098Z,2025-09-25T12:13:17.573000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-25T10:31:01.098000+00:00,false,0,bizarro12345,
+1418603545015357652,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone,  ATTENTION IF YOU USE RESPONDUS (RLDB):
+
+A couple users have told me that it is detecting the VM, which really confused me
+
+Literally 4 days ago we reverse engineered it to see EXACTLY how they detect VM's,
+
+We patched the VM, and everything worked perfectly,
+
+I have tested it myself, and 4 other users confirmed that it worked,
+
+However, for the **safety of my users**, I am going to say **TO NOT USE IT ON RLDB** till we finished investigating wtf is going on,
+
+
+For context, we reverse engineered v.2-1-3-05.exe, and yesterday they released v.2-1-3-06.exe
+
+Whilst I'm absolutely sure it's just a bogus ""VM detection"" technique (read the previous message for context), I am still going to investigate
+
+
+If you are a Respondus user, as usual you will be compensated for the downtime",2025-09-19T14:24:01.511Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,3,0,3,,🫡,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-19T14:24:01.511000+00:00,false,0,bizarro12345,
+1417250863457767455,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, Respondus patch is live, confirmed to work for EVERYONE this time, here is some more info:
+
+So, in total, Respondus only does 7 checks, I could get sued for telling you guys, but fuck it:
+
+==============================
+**1. Language and UI Settings:**
+It checks for multiple language entries and UI settings. A minimal setup, such as one with only English language, is considered suspicious.
+
+**2. Cryptographic Policies:**
+Queries Windows for its cryptographic policies, including FIPS (Federal Information Processing Standards). An absence or mismatch in these policies can indicate a VM.
+
+**3. User Profile and Shell Folder Paths:**
+ It validates standard Explorer shell folder paths (e.g., Desktop, Documents, AppData) to look for anomalies.
+
+**4. Software Restriction Policies (SRP):**
+Inspects registry hives related to SRP and AppLocker. The presence of these policies can suggest a tightly controlled or restricted environment, which is common in VM's.
+
+**5. Process Blacklisting:**
+Looks for running processes like Vboxservice.exe, procmon.exe and wireshark.exe.
+
+**6. Debugger Checks:**
+Uses APIs like IsDebuggerPresent and CheckRemoteDebuggerPresent. The Chromium-based version of the browser also uses a handle integrity verifier to detect tampering or code injection.
+
+**7. Timing Counters:**
+ Measures timing deltas using APIs such as GetTickCount and QueryPerformanceCounter.
+==============================
+
+The Funny part is this: Our VM was passing EVERY SINGLE ONE of these tests, without me having to change absolutely anything.
+
+HOWEVER: The timing counter (RDTSC timing attacks) was failing on lower end hardware, so this was the only fix that was required.
+
+To fix it, I implemented some pretty insane stuff, I'll never be able to explain it so that everyone can understand it, so I asked Gemini to do it:
+
+
+
+> Yes, this implementation will be effective at resisting RDTSC-based timing attacks, even when running on slower hardware like a budget laptop.
+> 
+> The effectiveness of this technique is not dependent on the speed of the host hardware because it fundamentally changes how the guest virtual machine perceives time.
+> 
+> **How It Works:**
+> Decoupling from Host Time: The core of the modification you have done is replacing the time source for the guest's Time Stamp Counter (TSC). Instead of relying on the host machine's wall-clock time, it uses the guest's own instruction count (icount). This decouples the guest's timeline from the host's performance and scheduling jitter.
+> 
+> **Immunity to Host Lag:** On a slow or busy laptop, the host operating system might frequently pause the VM process to handle other tasks. In an unmodified VM, this creates large, erratic gaps in the timestamps returned by the RDTSC instruction. Timing attacks detect these gaps. With your modifications, it doesn't matter how long the VM process is paused. When the guest resumes, the icount value is exactly where it left off, so the timestamp it receives is perfectly consistent with its own execution flow.
+> 
+> 
+> **Mimicking Real Hardware:** A perfectly linear clock based only on instruction count can itself be a sign of emulation. The final step of adding a small, controlled amount of pseudo-random ""jitter"" makes the timestamp appear more like that of real hardware, which naturally has minor fluctuations. This synthetic jitter is intentionally small and bounded, unlike the large, unpredictable gaps caused by host system lag. That's a smart addition you made!
+> 
+> 
+> **TDLR**: In short, this method makes the guest's clock internally consistent, regardless of what's happening on the host machine. The speed and load of your laptop become irrelevant to this specific stealth technique.
+> 
+
+So yeah, Respondus just got bitch made by a 19 year old with a dream.
+
+ALSO: If you have left us a positive review, you can 30 credits or 3 weeks of Evadus+ free.",2025-09-15T20:48:57.096Z,2025-09-15T21:00:03.362000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,13,0,13,,🔥,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-15T20:48:57.096000+00:00,false,0,bizarro12345,
+1417100747933225032,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, 🚨 THE LEADERBOARD IS LIVE: https://evadus.wtf#leaderboard
+
+It resets every month. No rules on usernames (go wild). XP is earned just by using the tools—but paid tools give you a massive boost.
+
+Climb. Compete. Dominate.
+Let’s see who’s brave enough to game the system the hardest.",2025-09-15T10:52:26.766Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-15T10:52:26.766000+00:00,false,0,bizarro12345,
+1416059306121494741,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, BIG bombshell just dropped for Respondus users.
+
+So the reverse engineers just finished, and what they found in the Respondus source code is kind of hillarious.
+
+So EVERYONE on the internet is convinced that Respondus does these super advanced VM checks, but guess what?
+
+**THEY DON'T CHECK ANY VM ARTIFACTS AT ALL!!**
+
+They literally use HEURISTICS ALONE to determine a VM.
+
+*heuristic (n): proceeding to a solution by trial and error or by rules that are only loosely defined.*
+
+They literally do 4 CHECKS, that is it:
+
+1. An RDTSC timing check
+2. VMware, Vbox etc Guest Tools
+3. Native system enums (NtQuerySystemInformation)
+4. Basic Firmware strings
+
+Let me just quickly explain to you how absolutely bullshit this is:
+
+1. RDTSC are **UNRELIABLE**. Here is how an RDTSC timing attack works.
+   - We send an instruction the the CPU, let's say ""time.sleep(5)"", that means ""wait for 5 seconds"". Then, when the CPU finished the task, we measure how long it *ACTUALLY* took the complete the task. If the CPU took significantly more time than 5 seconds, Respondus flags it as a VM. The reasoning behind this check is that VM's typically have big delays because they are being emulated by a host, which introduce stutters and lag spikes.
+
+  Why this is a **terrible** method for VM detection:
+   - If the system is slow (a budget laptop or lower end hardware), RDTSC attacks become useless, because when the system becomes slightly overloaded, or freezes for even a little bit, Respondus will consider it a VM.
+
+ **THIS IS WHY** you see so many posts on Apple Macbook and Microsoft Windows forums about people getting flagged by Respondus even though they are running bare metal, RDTSC TIMING ATTACKS ARE NOT RELIABLE.
+
+2. This is technically a VM artifcact. **HOWEVER**:
+  - Want to know how to dodge this detection method? Just don't install guest tools in your VM. It is genuinely that simple.
+
+3. This is the worst of all of them, and I am shocked that they even do this.
+  - They query the most IRRELEVANT garbage to check for a VM. As an example, they QUERY HOW MANY **LANGUAGES **are installed on the system, if only English is installed, it's considered a potential VM?????? This is only one of quite a few, completely irrelevant, completely useless checks.
+
+4. The **ONLY** half decent check.
+  - It checks for VM brand strings in the firmware, like ""VMware"" and ""Vbox"". This is the only halfway decent check, however still very surface level, you can spoof this very easily using a custom bios or .rom file. This is literally their only *somewhat* accurate check, and it's still easy to spoof.
+
+
+
+So basically, if you want to bypass Respondus, it's quite easy:
+
+1. Don't install guest tools.
+2. Run a VM on decent hardware.
+3. Do a clean install of Windows (don't use an Autounattend.xml file)
+4. Use a .rom file instead of the default bios
+5. Install some random Microsoft apps
+
+
+**However, this actually explains **why some of user's VM's worked for Respondus whilst other people's didn't. Some of the users have gaming desktop PC's, which passes an RDTSC attack, and installed some random stuff and set it to their home language, which made Respondus believe it was a normal PC.
+
+
+Respondus is a joke, and I am suprised that they have the balls to say that they have ""advanced VM detection"" WHEN ^^^THIS^^^ IS WHAT THEY CHECK FOR.
+
+I'm going to make a video exposing this piece of hot dogshit, I am in genuine awe at just how braindead the people at Respondus are.",2025-09-12T13:54:07.689Z,2025-09-12T13:55:15.310000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,12,0,12,,🔥,false,false,,0,false,1,0,1,,😂,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-12T13:54:07.689000+00:00,false,0,bizarro12345,
+1415350693933617253,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, important updates for the app and on the business end:
+
+*Business news:*
+
+We got hit with a copyright strike 2 days ago from TestGorilla, looks like we really hurt their feelings.
+
+Nevertheless, I can actually get banned for it, EVEN THOUGH it's a **fradulent ** copyright claim, Youtube will blindly side with it because they don't actually give a fuck if it's fair use or not, they just try to avoid liability. So unless I fly to the US and take them to court for perjury, there is fuck all I can do.
+
+HOWEVER, fuck them, I'm just going to post the videos on my website, where THEY can't do anything.
+
+TDLR: From now on, all cheating videos will be posted on our website.
+
+
+*Main app:*
+
+YOU CAN NOW EARN XP FROM USING OUR TOOLS!
+
+This XP counts towards your rank, get special perks, and put you on the leaderboards if you're really competitive. You will also get a role in the Discord server based on your rank.
+
+We got some pretty big updates that are going to be coming to the website, so keep an eye on it! https://evadus.wtf",2025-09-10T14:58:21.378Z,2025-09-10T17:19:01.412000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,,❤️,false,false,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-10T14:58:21.378000+00:00,false,0,bizarro12345,
+1414707697890365513,,,,,4,image/png,image.png,641,1414707697852485734,image/png,/PcFDoCwzKuKd4Z5dZmJh2WFk89l+n0=,1,https://media.discordapp.net/attachments/1362063386099060940/1414707697852485734/image.png?ex=69ce2777&is=69ccd5f7&hm=0773fb30e327627339e2557fb448c97c9932492525239ea6a26cb58a5666d737&,87236,,https://cdn.discordapp.com/attachments/1362063386099060940/1414707697852485734/image.png?ex=69ce2777&is=69ccd5f7&hm=0773fb30e327627339e2557fb448c97c9932492525239ea6a26cb58a5666d737&,728,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"BOYS WE DID IT, <@1378296198066208899>",2025-09-08T20:23:19.175Z,2025-09-08T20:25:32.366000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,false,,,,,,,,,,,,,,,,0,,,,,0,Yakub,1378296198066208899,,0,chatgpt069,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,👍,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-08T20:23:19.175000+00:00,false,0,bizarro12345,
+1414700194062270675,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, very important announcement, please read:
+
+Evadus+ is currently not working with Respondus. I have had 8 people confirm that it does work for them, HOWEVER, I have 3 people report to me that it didn't work for them. Therefore, for the safety of my users, Respondus will be delisted as a compatible proctor until I can 100% guarantee it works for EVERYONE, not just some people.
+
+That being said, I have paid 2 reverse engineers $1300 to decompile Respondus to see exactly how they detect VM's and Sandboxes. They gave me a timeline of 4-6 days, so in about 8 days we will have a patch ready. Everyone that writes on Respondus gets a free month as compensation.
+
+WEBCAM PROBLEMS:
+If you are having problems using a webcam, I posted a video in <#1362037965668487238> that largely fixes it. This new method is superior in many ways, however also has some drawbacks. I am going to start a project that will use this superior method and get rid of it's drawbacks, it's a significant task, however I'll get it done.
+
+ALSO: We have a very big update shipping tomorrow (Evadus and Evadus Lite), so stay tuned.
+
+
+Alright, that's the most important news, however I also have some other things that I want to say.
+
+
+Thank you, and I genuinely mean it, to everyone that supports this project. I didn't expect at all to have this supportive and patient of a community. I thought that if I made one single mistake, everyone would hate me for it. However, you have been incredibly supportive and helpful, and I genuinely cannot thank you enough.
+
+There is a lot of stress and pressure that comes with such an ambitious project, more than most people realize. However, with God as my witness, I promise each and every one of you here that I do my utmost best each day to keep building each one of our tools. This project is all I think about every day, new features, fixes, improvements etc. I quit my entire life to pursue this project. I left my university (more like expelled really), left my social life, quit my job, left my girlfriend and sacrificed a lot more than I get admit on discord message, so believe me when I say that I am very dedicated.
+
+I'd also like to thank the people that have helped me so far.
+
+<@1378296198066208899> has made all of our cheating videos so far. He has helped me get the Evadus tool and the main app into the stable state it is in today. He has also been around here since day 1.
+<@466708552812331008> has helped me improve the discord server massively.
+<@1189679913226207245> is our biggest patron, and most active user of Evadus, and gives lots of feedback on the tool.",2025-09-08T19:53:30.123Z,2025-09-09T10:27:58.427000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,41f6c292b032902be0ec32b764effd0e,,a_1fe04bd32b70263448ebb1d8ad7d7c84,,1432550258306711675,,,,,nameplates/nameplate_bonanza/twilight_dusk/,COLLECTIBLES_NAMEPLATE_BONANZA_TWILIGHT_DUSK_NP_A11Y,white,1417311919643299840,0,,,,,256,,466708552812331008,,256,yuhh,,,,,,,,,,,,,,,0,,,,,,0,Yakub,1378296198066208899,,0,chatgpt069,,469a68265d7725407300a890ffff86b6,,,,,,0,,0,Abhi,1189679913226207245,,0,abhi02076,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,7,0,7,,👍,false,false,,0,false,1,0,1,,😀,false,false,,0,false,1,0,1,,❤️,false,false,,0,false,1,0,1,,🔥,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-08T19:53:30.123000+00:00,false,0,bizarro12345,
+1413464751916318780,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, Wi-FI is back up, video has been posted with the updated setup and showcase,
+
+This update fixed a lot of issues, VM is working better than ever: https://youtu.be/5iQYA6gYfXs",2025-09-05T10:04:17.762Z,,,Evadus,https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,4,"A Tool to bypass Respondus, Safe Exam Browser and any other Online exam. The best cheat to ever be developed.
+
+WEBSITE/DOWNLOAD: https://evadus.wtf
+DISCORD: https://discord.gg/64ZsNteakp
+REDDIT: https://www.reddit.com/r/Evadus/
+
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+Evadus is an app and Virtual Machine (VM) to bypass any proctor on an...",YouTube,https://www.youtube.com,image/jpeg,,0,720,4/cRDIIGJ2h4h4iDeYfrX8f+lQ==,1,https://images-ext-1.discordapp.net/external/F6uHAUh7cSAVGdKOLlMMPIiK80jjIUPJY1ABFmAK-eI/https/i.ytimg.com/vi/5iQYA6gYfXs/maxresdefault.jpg,https://i.ytimg.com/vi/5iQYA6gYfXs/maxresdefault.jpg,1280,"VM bypass for Respondus, Safe exam browser and PearsonVue",video,https://www.youtube.com/watch?v=5iQYA6gYfXs,0,720,4/cRDIIGJ2h4h4iDeYfrX8f+lQ==,1,,https://www.youtube.com/embed/5iQYA6gYfXs,1280,1024,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,5,0,5,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-05T10:04:17.762000+00:00,false,0,bizarro12345,
+1413269143758569513,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, there is a wifi outage in our region.
+
+I am currently not able to work on any updates or help anyone debug, however they might get our wifi working within 2 days, max 4 days.
+
+A couple of users are concerned about the webcam not working inside the VM: Don’t worry, it has been fixed, i just need to show you guys how to use it.
+
+Tomorrow ill quickly go into a voice channel and explain how to to use it",2025-09-04T21:07:01.143Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-04T21:07:01.143000+00:00,false,0,bizarro12345,
+1413062902365290536,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, the username system has been implemented,
+
+**You can now make your own usernames, so get the rare ones while they aren't taken!**
+
+We are currently making a leaderboard, and for that I am going to create a ranking system,
+Basically, 10 different tiers and a prestige tier,
+And then in the top 2 tiers, you can get discounts on credits and subscription",2025-09-04T07:27:29.363Z,2025-09-04T10:04:07.946000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-04T07:27:29.363000+00:00,false,0,bizarro12345,
+1412475298599010374,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, update 1.2.9 is live, check <#1362063455301144720> for changelogs:
+
+Important updates on the server and general stuff, I'm going to keep it concise.
+
+The server is getting pretty active, from now on, post any and all bug reports in <#1383790833580507246> and any question in <#1412166646188998768>. IF YOU POST ANY QUESTIONS OR BUGS IN <#1362035227350007998> OR DM ME, I WON'T SEE IT.
+
+Thank you for all the users that are so passionate about the project and help out. A lot of people think that I have team members, but I actually don't, everything is done and managed by me, our servers, the entire app, all our cheating tools, our website, socials etc. You help much more then you realize, it allows me to spend more time fixing bugs and working on new features.",2025-09-02T16:32:33.708Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-09-02T16:32:33.708000+00:00,false,0,bizarro12345,
+1411749616398897222,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,,2025-08-31T16:28:57.589Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-31T16:28:57.589000+00:00,false,0,bizarro12345,
+1411623683499491402,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone  IMPORTANT NOTE FOR RESPONDUS USERS:
+
+To get it working for Respondus, YOU HAVE TO RUN THE CUSTOMIZER POWERSHELL SCRIPT!
+
+Also, it is going to say something about your date time not being correct, simply go into the settings inside of the VM, and mess with the datetime and timezone sync settings",2025-08-31T08:08:32.846Z,2025-08-31T08:10:48.451000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-31T08:08:32.846000+00:00,false,0,bizarro12345,
+1411454550937964597,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, update 1.2.9 is live (the Respondus patch), if you want to see what's new and improved, check <#1362063455301144720>, I just quickly want to rant a bit.
+
+There's one thing I really fucking hate, and that's dishonesty. I hate it when people pretend, about anything.
+
+EXAMPLE: Many people on the internet will say things like ""I love my fans"", ""We care about the community"" and other bullshit.
+
+AND IT'S A LIE.
+
+EVERYONE, has their own self interest in mind.
+
+The ONLY difference, is that some people can admit it, and some people can't because they want to APPEAR likeable.
+
+Do you honestly think that a place like Harvard is expanding their online campusses to ""Improve diversity"" and ""Offer high quality education to less fortunate groups"". OBVIOUSLY NOT. They are doing it because an online student is more profitable, and they want to make more money. They are DISINGENUOUS about their self-interest. It's a stupid example, but you get my point.
+
+I operate from a realm of honesty, so let me be honest in my self-interest.
+
+I DO NOT sit and program for 12 hours every day, and spend more hours helping users debug, because I'm such a nice fucking guy.
+
+I DO IT because I want to create a community of people that BELIEVE IN MY COMPETENCY and will therefore trust me enough to buy from me.
+
+When I see a post about someone's app or VM not working, I FEEL DISAPPOINTED IN MYSELF, because that person trusted me with their money, to provide them with something amazing, and I let them down.
+
+HOWEVER, do think I sit there and cry. I shut up, I strart working, and I fix it.
+
+Hopefully now everyone can better understand my motivations, I'll go more in depth later, but this should be nice introduction into who I am as a person.",2025-08-30T20:56:28.501Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,4,0,4,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-30T20:56:28.501000+00:00,false,0,bizarro12345,
+1409924607112122638,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, sorry for the service interruptions that happened throughout the day.
+
+We had to migrate our entire database, however everything is running smoothly again.
+
+If your subscription or credits is not showing, just send me a message with your email, and I'll readd them manually. During the migration, 2 user's accounts failed to copy correctly, only one person has come forward so far.
+
+IMPORTANT: Don't worry, if you are the other person(s), your subscription/credits wasn't lost, it just wasn't copied over successfully to the new database.
+
+Also, thank you to everyone that bought subscriptions and credits today, had our second best day today in terms of sales",2025-08-26T15:37:01.468Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-26T15:37:01.468000+00:00,false,0,bizarro12345,
+1409810415260663918,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , we are experiencing a service interruption bug, current top priority, will be fixed promptly.",2025-08-26T08:03:16.009Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-26T08:03:16.009000+00:00,false,0,bizarro12345,
+1409264133098180688,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone However, we build with philoshpy 2, so this is what WE do:
+
+1. Ok, it's easy to blacklist our app's name with ""evadus.exe"". So let's mask it with something, like ""svchost.exe"".
+-- But what if they blacklist that too?
+2. Ok, we'll make 10 different ""masked"" names for our app, like ""svchost.exe"", ""clock.exe"" etc etc.
+-- But they can just blacklist those too?
+3. Unlikely, but ok, let's assume they do. We'll create a list of 100 fake process names, and then distribute them randomly to users.
+-- Better, however eventually you will need to expand the list, because the 100 names will quickly be used up.
+4. Ok, instead of having a predefined list of names, we'll create a polymorphic naming system. So let's say we have 3 different lists. One list contains words like ""Process"", ""Registry"", the second ""Packet"", ""Builder"", the third ""Analyzer"" and ""Daemon"". Then we build each app name dynamically from the list. So one app is called ""ProcessPacketAnalyzer"", and another one is called ""RegistryPacketDaemon"". THEN, we create 40 words for each list, meaning there are 64,000 potential names for the evadus app. THEN, just for safety, we'll add a fourth list, which adds a random suffix to the list, like ""x64"" or ""Windows11"", and also expand that list to 40 names also. Then we have 2.56 MILLION different potential names.
+
+That's how I build. With everything.
+
+That's why I speak with conviction about my tools, because I know no one thinks like me, and no one can make cheats like I do.
+
+So don't worry, if something detects our app right now, I promise you it won't in a few days.
+
+And then, it never will again, since we will be way too far ahead.",2025-08-24T19:52:32.192Z,2025-08-24T19:54:42.311000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,3,0,3,,✅,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-24T19:52:32.192000+00:00,false,0,bizarro12345,
+1409261525939785748,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, quick update on what's going on with Evadus and Evadus+:
+
+1. If you are trying to cheat Respondus, wait until the next update for Evadus+, it's going to be huge
+2. Currently the Evadus overlay's responses is slow, we have a huge influx of users that recently came in, and because of the server's structure, it's struggling with all the traffic.
+
+As always, fixes will be implemented within the coming days.
+
+
+
+Some more info on our VM:
+
+My build philosphy Evadus+ (and the other tools) was simple. Build something that will stand the test of time.
+
+There are 2 approach you can take to building commercial cheatware:
+1. Patch your tools as the proctoring companies push updates to try and detect you, basically always being in an arms race.
+2. Build ahead, regardless of where the enemy is in the race.
+
+I went  for the second option, because that is the only way that I can get the trust of people. Personally, I would never buy cheats from someone that builds with philosphy 1. However, phisolphy 1 is what EVERY cheatware goes by. Because it's easy.
+
+Building with philosphy 2 requires foresight, resources, and a lot of time, since you are constantly thinking of ways your enemy could THEORETICALLY catch you, and then building your app to evade those traps.
+
+Let me give you an example with process names of apps.
+
+Our app could have called ""evadus.exe"", however it's easy for proctoring softwares to detect that by simple enumaration. HOWEVER, most cheatware apps don't bother to patch this, since most proctoring companies doesn't ever blacklist their process names. Think about Cluely, UltraCode, WhisprGPT, if you go into task manager, they are called ""cluely.exe"", ""ultracode.exe"" and ""whisprgpt.exe"".
+
+That is prime example of philoshpy 1.",2025-08-24T19:42:10.597Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,💯,false,false,,0,false,1,0,1,,✅,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-24T19:42:10.597000+00:00,false,0,bizarro12345,
+1406940575294292030,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , new tutorial video for Evadus+ on the Youtube channel, sorry if I'm slow to respond to anyone, I've got the flu
+
+<#1362037965668487238> is going to be the new channel for showcasing tutorials.
+
+I am going to be remaking the tutorial video for Evadus, not happy with how it turned out",2025-08-18T09:59:32.842Z,2025-08-18T10:04:28.676000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-18T09:59:32.842000+00:00,false,0,bizarro12345,
+1406242234134827139,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , huge update to Evadus+, check <#1362063455301144720>",2025-08-16T11:44:35.335Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-16T11:44:35.335000+00:00,false,0,bizarro12345,
+1405841056993382440,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone, Important News:
+
+🟢 Evadus Lite:
+All is well.
+
+=========================
+🔵 Evadus:
+Currently, responses for Gemini 2.5 Pro is really slow. I did some research into why. Turns out the Gemini 2.5 Pro API has an ABYSMAL TTFT (time to first token) rate, meaning that getting the first bit of output is really fucking slow. Up the 25 seconds in some cases. I assume Google is working on a fix. I recommend switching to any of our other available models, since they don't have this problem.
+
+""Reports suggest that users are experiencing slow response times and high latency when interacting with the Gemini 2.5 Pro API, particularly with the 0605 model and when handling large prompts or complex tasks. This issue has been noted in various forums and discussions, with some users reporting average latencies of around 35 seconds and 99th percentile latencies reaching several minutes.""
+
+=========================
+🟣 Evadus+:
+Working on our own USB server passthrough app, since the current one has device limitations, and cause screen tear on high resolution webcams. Also implemented some stealth upgrades related to the cursor. Will announce when it is ready for download.
+
+Current top priority is Evadus+",2025-08-15T09:10:27.251Z,2025-08-15T09:17:00.340000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-15T09:10:27.251000+00:00,false,0,bizarro12345,
+1405534692446568451,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , Major Update complete for Evadus (v1.1.3).
+
+1. Grok added as a AI model for selection
+2. Client-Side speed optimizations done (server-side currently being implemented)
+3. Automatic updater implemented
+
+I will be making an updated video for how to use Evadus soon, but here are some basic instructions on how the updater works. All you have to do is download the updater from our website, but I'll also but a direct link here, then you run it and follow the instructions.
+
+‼️ VERY IMPORTANT: To use the updater, you need to manually download the latest version. This is the last update that you will need to download manually, any subsequent updates can be done automatically.",2025-08-14T12:53:04.251Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-14T12:53:04.251000+00:00,false,0,bizarro12345,
+1404917973902430249,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , BIG UPDATE (v1.1.3) COMING FOR EVADUS:
+
+1. Grok 4 will be added as a selectable AI model
+2. Speed enhancements using websockets
+3. Automatic updater
+
+This will be the last major update for Evadus for about 2 weeks.
+
+This DOES NOT mean that Evadus will not get anymore updates, it simply means that other Evadus Tools will be getting more attention for the coming 2 weeks after this update.
+
+If you experience any bugs in Evadus, please report them in the server, not to me personally, there's a good chance someone else might be experiencing it as well.",2025-08-12T20:02:27.092Z,2025-08-12T20:03:47.095000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-12T20:02:27.092000+00:00,false,0,bizarro12345,
+1404589203433586718,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , Gemini 2.5 Pro is now fully functional!
+
+For those curious why this took so long (5 days), it's because it's VERY poorly documented on how to switch to the new Google AI SDK, which is required to use Gemini 2.5 Pro. Despite it being almost 7 months since GA (General availability), it has the most abominable documentation ever.
+
+But alas, it is done, thank fuck.",2025-08-11T22:16:02.104Z,2025-08-15T09:11:13.250000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,2,0,2,,🥳,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-11T22:16:02.104000+00:00,false,0,bizarro12345,
+1404046151841480774,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone Big Update:
+
+1. Choose between GPT-4o, Claude 3.7 Sonnet and Gemini 1.5 Pro (upgrading to 2.5 Pro soon) in Evadus.
+2. Evadus+ users will now be getting 20 credits free every month, alongside their Virtual Machine (Coming soon)
+3. Evadus+ users will also be getting a tool to cheat more easily using the Virtual Machine, similar to the Evadus cheating tool. (Coming soon)
+
+There is also going to be a price increase for Credits coming on Tuesday, as well as a rework of subscription plans for Evadus+, to make it less of a financial commitment for people who just want to test it out.",2025-08-10T10:18:08.515Z,2025-08-10T11:39:15.435000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-10T10:18:08.515000+00:00,false,0,bizarro12345,
+1402688620514512906,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , we're running a promotion where you can get 40 credits for Evadus, or 1 Month of Evadus+ FOR FREE
+
+All you need to do is make a video using our software on a Proctoring site, like HackerRank, Proctorio etc, don't include your face or voice, just proof that it works on that platform
+
+We already got our first submission from <@1378296198066208899> using it on HackerRank
+
+https://youtu.be/IgfdN0QKB7E",2025-08-06T16:23:47.825Z,2025-08-06T16:25:04.039000+00:00,,Evadus,https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,4,"An overlay to cheat online exams using Proctorio, Honorlock and any other Online exam. The best cheat ever developed.
+
+Website: https://evadus.wtf
+Reddit: https://www.reddit.com/r/Evadus
+Discord: https://discord.gg/64ZsNteakp
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+Evadus is an app and Virtual Machine (VM) to bypass any proctor on any o...",YouTube,https://www.youtube.com,image/jpeg,,0,720,3vcFDIIQFwmIeHeVlYb2Xm375Q==,1,https://images-ext-1.discordapp.net/external/b94sRsTscX8LNtlaSndbEX3B6S80Z0GUgfseG3utYuE/https/i.ytimg.com/vi/IgfdN0QKB7E/maxresdefault.jpg,https://i.ytimg.com/vi/IgfdN0QKB7E/maxresdefault.jpg,1280,Overlay to cheat HackerRank,video,https://www.youtube.com/watch?v=IgfdN0QKB7E,0,720,3vcFDIIQFwmIeHeVlYb2Xm375Q==,1,,https://www.youtube.com/embed/IgfdN0QKB7E,1280,1024,,,true,,,,,,,,,,,,,,,,0,,,,,0,Yakub,1378296198066208899,,0,chatgpt069,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-06T16:23:47.825000+00:00,false,0,bizarro12345,
+1402308250690654259,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone youtube tutorial for Evadus, the AI overlay.
+
+https://youtu.be/QRTlRfcWOTY",2025-08-05T15:12:20.592Z,,,Botnition (Hubertus van der Merwe),https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,3,"An overlay to cheat online exams using Proctorio, Honorlock and any other Online exam. The best cheat ever developed.
+
+Website: https://evadus.wtf
+Reddit: https://www.reddit.com/r/Evadus
+Discord: https://discord.gg/64ZsNteakp
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+Evadus is an app and Virtual Machine (VM) to bypass any proctor on any o...",YouTube,https://www.youtube.com,image/jpeg,,0,720,HAgKDILfh4l7eXRMeVttwLoEaA==,1,https://images-ext-1.discordapp.net/external/QMMZCHhvjcyDbxES9PtfJ3cSuAtWrmvp9B-jjif_-7o/https/i.ytimg.com/vi/QRTlRfcWOTY/maxresdefault.jpg,https://i.ytimg.com/vi/QRTlRfcWOTY/maxresdefault.jpg,1280,"an Overlay to cheat Proctorio, Honorlock etc.",video,https://www.youtube.com/watch?v=QRTlRfcWOTY,0,720,HAgKDILfh4l7eXRMeVttwLoEaA==,1,,https://www.youtube.com/embed/QRTlRfcWOTY,1280,1024,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-05T15:12:20.592000+00:00,false,0,bizarro12345,
+1401981484033638451,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"@everyone , youtube Tutorial posted on Evadus+, the VM.
+
+https://youtu.be/mvzHo6GqFeo",2025-08-04T17:33:53.350Z,,,Botnition (Hubertus van der Merwe),https://www.youtube.com/channel/UC4ka_BhBhkwvq3NCVxddy6g,16711680,4,"A Tool to bypass Respondus, Safe Exam Browser and any other Online exam. The best cheat ever developed.
+
+https://evadus.wtf
+
+➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖➖
+Evadus is an app and Virtual Machine (VM) to bypass any proctor on any online exam.
+
+🔴 Subscribe Here:  https://www.youtube.com/@Botnition/featured
+👍 Like the video (i...",YouTube,https://www.youtube.com,image/jpeg,,0,720,WBgGDID9lqiImWQ9eWrPtP03eQ==,1,https://images-ext-1.discordapp.net/external/6iOEJVN5fnWVe_uFAZ5O7nU8URYC9RrCXxI6dX1ssX4/https/i.ytimg.com/vi/mvzHo6GqFeo/maxresdefault.jpg,https://i.ytimg.com/vi/mvzHo6GqFeo/maxresdefault.jpg,1280,"A VM to cheat Respondus, Safe Exam Browser etc...",video,https://www.youtube.com/watch?v=mvzHo6GqFeo,0,720,WBgGDID9lqiImWQ9eWrPtP03eQ==,1,,https://www.youtube.com/embed/mvzHo6GqFeo,1280,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,0,false,1,0,1,,❤️,false,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-04T17:33:53.350000+00:00,false,0,bizarro12345,
+1401491695408906322,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"Hey @everyone , me again,
+
+Evadus+ (the Virtual Machine) is done, you can now cheat Respondus, Safe Exam Browser and other lockdown tools.
+
+To download it, download the app from our website and download the installer.
+
+I'm busy making a tutorial video so that it's easy to get started.",2025-08-03T09:07:38.642Z,2025-08-03T09:07:58.001000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-03T09:07:38.642000+00:00,false,0,bizarro12345,
+1401199829408808961,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,,2025-08-02T13:47:52.365Z,,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,1362063386099060940,1401197162401894532,0,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-02T13:47:52.365000+00:00,false,6,bizarro12345,
+1401197162401894532,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,10d86e1edf4cdef16401c63ed4d57410,a_795f81ea071513ca4394a53e009792ac,,1413650166774366279,,,,,0,,64,Bizarro,707511200765968464,,64,bizarro12345,,1362063386099060940,,"Hey @everyone, it's the Owner here,
+
+Thanks to the people that have already started paying for credits and subscriptions, my mouth literally hang open, because we haven't actually officially launched yet, and I wasn't expecting paying users so soon.
+
+Pretty fucking sick though, so I appreciate it.
+
+IMPORTANT!!
+1. Evadus Lite, and Evadus is finished, so you can buy credits and use it with complete confidence.
+2. Evadus+ (the Virtual Machine) IS NOT YET finished, I still need to allow Webcam and Mic passthrough, then it will be finished.
+
+IF you already bought a subscription to Evadus+, you can simply request a redund, or you can get 2 months free.",2025-08-02T13:37:16.501Z,2025-08-02T13:41:44.752000+00:00,,,,,,,,,,,,,,,,,,,,,,,,,,,,0,,,true,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,false,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2025-08-02T13:37:16.501000+00:00,false,0,bizarro12345,
