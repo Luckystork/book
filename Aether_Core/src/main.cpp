@@ -1,11 +1,20 @@
 // ============================================================================
 //  ZeroPoint — Premium Windows Utility
-//  main.cpp — Frosted glass launcher, icy/snowy theme, custom accent + alpha
+//  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
+//             browser, enhanced AI popup, custom accent color + transparency
+// ============================================================================
+//
+//  BUILD REQUIREMENTS:
+//    - Microsoft.Web.WebView2 NuGet package (WebView2Loader.dll + headers)
+//    - Windows 10 1809+ with Edge WebView2 Runtime installed
+//    - Link: winhttp, dwmapi, comctl32, gdi32, msimg32, WebView2Loader
+//
 // ============================================================================
 
 #include "Stealth.h"
 #include "CDPExtractor.h"
 #include "Config.h"
+
 #include <windows.h>
 #include <wingdi.h>
 #include <winhttp.h>
@@ -17,21 +26,30 @@
 #include <fstream>
 #include <sstream>
 #include <algorithm>
+#include <functional>
+#include <wrl.h>         // Microsoft::WRL::ComPtr for WebView2 COM pointers
+#include <wil/com.h>     // wil helpers (optional, from WebView2 SDK samples)
+
+// ---- WebView2 headers ----
+#include <WebView2.h>
+#include <WebView2EnvironmentOptions.h>
 
 #pragma comment(lib, "winhttp.lib")
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "comctl32.lib")
 #pragma comment(lib, "gdi32.lib")
 #pragma comment(lib, "msimg32.lib")
+#pragma comment(lib, "WebView2Loader.lib")
+
+using namespace Microsoft::WRL;
 
 // ============================================================================
 //  Theme Configuration
 // ============================================================================
 // Icy / snowy / white theme — bright, clean, frosted glass aesthetic.
-// Accent color and window alpha are user-configurable and saved to config.ini.
+// Accent color and window alpha are user-configurable and persisted.
 //
-//  config.ini format:
-//    <openrouter key>         (line 1 — existing)
+//  config.ini lines (appended after the OpenRouter key):
 //    accent=#RRGGBB           (accent color, default #00DDFF)
 //    alpha=230                (window opacity 0-255, default 230)
 
@@ -41,18 +59,19 @@ static BYTE     g_WindowAlpha   = 230;                      // transparency leve
 // Icy/snowy palette — bright whites with subtle blue tints
 static COLORREF g_BgColor       = RGB(0xF0, 0xF4, 0xFA);   // soft snow white
 static COLORREF g_BgPanel       = RGB(0xFF, 0xFF, 0xFF);   // pure white panels
-static COLORREF g_BgFrost       = RGB(0xE8, 0xEF, 0xF8);   // frosted overlay
+static COLORREF g_BgFrost       = RGB(0xE8, 0xEF, 0xF8);   // frosted overlay tint
 static COLORREF g_TextPrimary   = RGB(0x1A, 0x1E, 0x2C);   // crisp dark text
 static COLORREF g_TextSecondary = RGB(0x60, 0x6A, 0x80);   // dimmed cool gray
 static COLORREF g_BorderColor   = RGB(0xD0, 0xD8, 0xE8);   // subtle icy border
-static COLORREF g_BtnNormal     = RGB(0xF5, 0xF8, 0xFF);   // button normal
+static COLORREF g_BtnNormal     = RGB(0xF5, 0xF8, 0xFF);   // button bg
 static COLORREF g_BtnHover      = RGB(0xE0, 0xEA, 0xF8);   // button hover
 static COLORREF g_ShadowColor   = RGB(0xC0, 0xCC, 0xDD);   // soft shadow
+static COLORREF g_GlowColor     = RGB(0xD8, 0xEE, 0xFF);   // inner glow tint
 
 static const char* THEME_CONFIG = "C:\\ProgramData\\ZeroPoint\\config.ini";
 
 // ============================================================================
-//  Theme Persistence — Load / Save accent color + alpha
+//  Theme Persistence — Load / Save accent color + alpha to config.ini
 // ============================================================================
 
 static void LoadThemeSettings() {
@@ -60,14 +79,12 @@ static void LoadThemeSettings() {
     if (!f.is_open()) return;
     std::string line;
     while (std::getline(f, line)) {
-        // Parse accent=#RRGGBB
         if (line.rfind("accent=", 0) == 0 && line.size() >= 14) {
             unsigned int r = 0, g = 0, b = 0;
             if (sscanf(line.c_str() + 8, "%02x%02x%02x", &r, &g, &b) == 3) {
                 g_AccentColor = RGB(r, g, b);
             }
         }
-        // Parse alpha=NNN (0-255)
         if (line.rfind("alpha=", 0) == 0) {
             int val = atoi(line.c_str() + 6);
             if (val >= 0 && val <= 255) g_WindowAlpha = (BYTE)val;
@@ -76,7 +93,6 @@ static void LoadThemeSettings() {
 }
 
 static void SaveThemeSettings() {
-    // Read existing config, update or append theme lines
     std::vector<std::string> lines;
     bool foundAccent = false, foundAlpha = false;
     {
@@ -125,7 +141,7 @@ static HFONT CreateAppFont(int size, int weight = FW_NORMAL) {
                        CLEARTYPE_QUALITY, DEFAULT_PITCH | FF_SWISS, "Segoe UI");
 }
 
-// Alpha-blended rectangle fill — simulates frosted glass layer
+// Alpha-blended fill — premultiplied alpha for true translucency
 static void FillFrosted(HDC hdc, const RECT& rc, COLORREF base, BYTE alpha) {
     HDC mem = CreateCompatibleDC(hdc);
     BITMAPINFO bi = {};
@@ -139,7 +155,6 @@ static void FillFrosted(HDC hdc, const RECT& rc, COLORREF base, BYTE alpha) {
     HBITMAP bmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
     HGDIOBJ old = SelectObject(mem, bmp);
 
-    // Premultiplied alpha color
     BYTE r = (BYTE)((GetRValue(base) * alpha) / 255);
     BYTE g = (BYTE)((GetGValue(base) * alpha) / 255);
     BYTE b = (BYTE)((GetBValue(base) * alpha) / 255);
@@ -183,7 +198,7 @@ static void DrawIcyButton(HDC hdc, const RECT& rc, const char* text,
     DeleteObject(font);
 }
 
-// Thin accent-colored horizontal rule
+// Accent-colored horizontal rule
 static void DrawAccentLine(HDC hdc, int x, int y, int w) {
     HPEN pen = CreatePen(PS_SOLID, 2, g_AccentColor);
     HGDIOBJ old = SelectObject(hdc, pen);
@@ -193,10 +208,16 @@ static void DrawAccentLine(HDC hdc, int x, int y, int w) {
     DeleteObject(pen);
 }
 
-// Subtle drop shadow behind a rectangle
+// Soft drop shadow beneath a rect
 static void DrawSoftShadow(HDC hdc, const RECT& rc) {
     RECT shadow = { rc.left + 3, rc.top + 3, rc.right + 3, rc.bottom + 3 };
     FillFrosted(hdc, shadow, g_ShadowColor, 60);
+}
+
+// Inner glow — a subtle lighter rect inset by 2px for depth
+static void DrawInnerGlow(HDC hdc, const RECT& rc) {
+    RECT glow = { rc.left + 2, rc.top + 2, rc.right - 2, rc.bottom - 2 };
+    FillFrosted(hdc, glow, g_GlowColor, 40);
 }
 
 // ============================================================================
@@ -248,15 +269,150 @@ std::string CallAI(const std::string& question) {
 }
 
 // ============================================================================
-//  Invisible Browser placeholder
+//  WebView2 Invisible Browser
 // ============================================================================
+// Real WebView2-based browser window that is:
+//   - Hidden from screen recording via WDA_EXCLUDEFROMCAPTURE (Win10 2004+)
+//   - Layered + transparent for stealth
+//   - Full browsing capability (Google, YouTube, ChatGPT, etc.)
+//   - Toggle on/off with Ctrl+Alt+B
+//
+// Requires: WebView2 Runtime + WebView2Loader.dll alongside the .exe
 
+static HWND                         g_BrowserHwnd    = NULL;
+static ComPtr<ICoreWebView2>        g_WebView        = nullptr;
+static ComPtr<ICoreWebView2Controller> g_WebController = nullptr;
+static bool                         g_BrowserVisible = false;
+
+// Forward declarations
+static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+static void             InitWebView2(HWND hwnd);
+
+static void CreateBrowserWindow() {
+    if (g_BrowserHwnd && IsWindow(g_BrowserHwnd)) return; // already created
+
+    const char* cls = "ZPInvisibleBrowser";
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = BrowserProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = cls;
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        wc.hbrBackground  = (HBRUSH)GetStockObject(WHITE_BRUSH);
+        RegisterClassA(&wc);
+        registered = true;
+    }
+
+    int w = 1100, h = 750;
+    int sx = GetSystemMetrics(SM_CXSCREEN);
+    int sy = GetSystemMetrics(SM_CYSCREEN);
+
+    g_BrowserHwnd = CreateWindowExA(
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        cls, "ZeroPoint Browser",
+        WS_POPUP,
+        (sx - w) / 2, (sy - h) / 2, w, h,
+        NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    // Make the window translucent with the user's saved alpha
+    SetLayeredWindowAttributes(g_BrowserHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+
+    // Hide from screen recording / capture (Windows 10 2004+)
+    // WDA_EXCLUDEFROMCAPTURE = 0x00000011
+    typedef BOOL(WINAPI* PFN_SetWindowDisplayAffinity)(HWND, DWORD);
+    PFN_SetWindowDisplayAffinity pSetAffinity =
+        (PFN_SetWindowDisplayAffinity)GetProcAddress(
+            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+    if (pSetAffinity) {
+        pSetAffinity(g_BrowserHwnd, 0x00000011); // WDA_EXCLUDEFROMCAPTURE
+    }
+
+    // Initialize WebView2 inside this window
+    InitWebView2(g_BrowserHwnd);
+}
+
+static void InitWebView2(HWND hwnd) {
+    // Create WebView2 environment asynchronously, then create the controller
+    HRESULT hr = CreateCoreWebView2EnvironmentWithOptions(
+        nullptr, nullptr, nullptr,
+        Callback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler>(
+            [hwnd](HRESULT result, ICoreWebView2Environment* env) -> HRESULT {
+                if (FAILED(result) || !env) return result;
+
+                env->CreateCoreWebView2Controller(hwnd,
+                    Callback<ICoreWebView2CreateCoreWebView2ControllerCompletedHandler>(
+                        [hwnd](HRESULT result, ICoreWebView2Controller* controller) -> HRESULT {
+                            if (FAILED(result) || !controller) return result;
+
+                            g_WebController = controller;
+                            controller->get_CoreWebView2(&g_WebView);
+
+                            // Fit WebView to the host window
+                            RECT bounds;
+                            GetClientRect(hwnd, &bounds);
+                            g_WebController->put_Bounds(bounds);
+
+                            // Navigate to a default page
+                            g_WebView->Navigate(L"https://www.google.com");
+
+                            // Make WebView background transparent for frosted effect
+                            ComPtr<ICoreWebView2Controller2> ctrl2;
+                            if (SUCCEEDED(controller->QueryInterface(IID_PPV_ARGS(&ctrl2)))) {
+                                COREWEBVIEW2_COLOR bgColor = { 0, 255, 255, 255 }; // transparent white
+                                ctrl2->put_DefaultBackgroundColor(bgColor);
+                            }
+
+                            return S_OK;
+                        }).Get());
+                return S_OK;
+            }).Get());
+
+    if (FAILED(hr)) {
+        MessageBoxA(hwnd,
+            "WebView2 Runtime not found.\n\n"
+            "Install the Edge WebView2 Runtime from:\n"
+            "https://developer.microsoft.com/en-us/microsoft-edge/webview2/\n\n"
+            "Falling back to placeholder mode.",
+            "ZeroPoint - Browser", MB_OK | MB_ICONWARNING);
+    }
+}
+
+static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_SIZE: {
+        if (g_WebController) {
+            RECT bounds;
+            GetClientRect(hwnd, &bounds);
+            g_WebController->put_Bounds(bounds);
+        }
+        return 0;
+    }
+    case WM_DESTROY:
+        g_WebController = nullptr;
+        g_WebView       = nullptr;
+        g_BrowserHwnd   = NULL;
+        g_BrowserVisible = false;
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+// Toggle browser visibility — called from Ctrl+Alt+B hotkey
 void OpenInvisibleBrowser() {
-    MessageBoxA(NULL,
-        "Invisible Browser Activated\n\n"
-        "You can now open any website (Google, YouTube, ChatGPT web, etc.)\n\n"
-        "Press Ctrl+Alt+B again to close",
-        "ZeroPoint - Invisible Browser", MB_OK | MB_ICONINFORMATION);
+    if (g_BrowserVisible && g_BrowserHwnd && IsWindow(g_BrowserHwnd)) {
+        // Hide the browser
+        ShowWindow(g_BrowserHwnd, SW_HIDE);
+        g_BrowserVisible = false;
+    } else {
+        // Create if needed, then show
+        CreateBrowserWindow();
+        if (g_BrowserHwnd) {
+            ShowWindow(g_BrowserHwnd, SW_SHOW);
+            SetForegroundWindow(g_BrowserHwnd);
+            g_BrowserVisible = true;
+        }
+    }
 }
 
 // ============================================================================
@@ -265,22 +421,14 @@ void OpenInvisibleBrowser() {
 
 static bool PickAccentColor(HWND owner) {
     static COLORREF customColors[16] = {
-        RGB(0x00, 0xDD, 0xFF),  // icy cyan (default)
-        RGB(0x00, 0xFF, 0x88),  // mint
-        RGB(0x88, 0xBB, 0xFF),  // periwinkle
-        RGB(0xFF, 0x44, 0x88),  // pink
-        RGB(0xFF, 0xAA, 0x00),  // amber
-        RGB(0x00, 0xFF, 0xCC),  // teal
-        RGB(0x44, 0x88, 0xFF),  // blue
-        RGB(0xAA, 0x55, 0xFF),  // violet
-        RGB(0xFF, 0xFF, 0xFF),  // white
-        RGB(0xCC, 0xDD, 0xFF),  // ice blue
-        RGB(0x00, 0xBB, 0xFF),  // sky
-        RGB(0x66, 0xFF, 0x66),  // lime
-        RGB(0xFF, 0xDD, 0x00),  // gold
-        RGB(0xFF, 0x66, 0x00),  // orange
-        RGB(0xDD, 0x00, 0xFF),  // magenta
-        RGB(0x00, 0xFF, 0xFF),  // aqua
+        RGB(0x00, 0xDD, 0xFF),  RGB(0x00, 0xFF, 0x88),
+        RGB(0x88, 0xBB, 0xFF),  RGB(0xFF, 0x44, 0x88),
+        RGB(0xFF, 0xAA, 0x00),  RGB(0x00, 0xFF, 0xCC),
+        RGB(0x44, 0x88, 0xFF),  RGB(0xAA, 0x55, 0xFF),
+        RGB(0xFF, 0xFF, 0xFF),  RGB(0xCC, 0xDD, 0xFF),
+        RGB(0x00, 0xBB, 0xFF),  RGB(0x66, 0xFF, 0x66),
+        RGB(0xFF, 0xDD, 0x00),  RGB(0xFF, 0x66, 0x00),
+        RGB(0xDD, 0x00, 0xFF),  RGB(0x00, 0xFF, 0xFF),
     };
 
     CHOOSECOLORA cc = {};
@@ -299,7 +447,7 @@ static bool PickAccentColor(HWND owner) {
 }
 
 // ============================================================================
-//  Alpha/Transparency Picker — simple slider dialog
+//  Alpha/Transparency Picker — slider dialog with live preview
 // ============================================================================
 
 static HWND g_hAlphaSlider = NULL;
@@ -311,26 +459,22 @@ static LRESULT CALLBACK AlphaDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
     case WM_CREATE: {
         g_TempAlpha = g_WindowAlpha;
 
-        // Title
         CreateWindowA("STATIC", "Window Transparency",
             WS_CHILD | WS_VISIBLE | SS_CENTER,
             20, 15, 260, 20, hwnd, NULL, NULL, NULL);
 
-        // Slider (trackbar)
         g_hAlphaSlider = CreateWindowA(TRACKBAR_CLASSA, NULL,
             WS_CHILD | WS_VISIBLE | TBS_HORZ | TBS_TOOLTIPS,
             30, 50, 240, 30, hwnd, (HMENU)2001, NULL, NULL);
         SendMessage(g_hAlphaSlider, TBM_SETRANGE, TRUE, MAKELPARAM(80, 255));
         SendMessage(g_hAlphaSlider, TBM_SETPOS, TRUE, g_WindowAlpha);
 
-        // Label showing current value
         char buf[32];
         snprintf(buf, sizeof(buf), "Opacity: %d / 255", g_WindowAlpha);
         g_hAlphaLabel = CreateWindowA("STATIC", buf,
             WS_CHILD | WS_VISIBLE | SS_CENTER,
             30, 85, 240, 18, hwnd, NULL, NULL, NULL);
 
-        // OK button
         CreateWindowA("BUTTON", "Apply",
             WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
             100, 115, 100, 30, hwnd, (HMENU)IDOK, NULL, NULL);
@@ -345,7 +489,7 @@ static LRESULT CALLBACK AlphaDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             snprintf(buf, sizeof(buf), "Opacity: %d / 255", g_TempAlpha);
             SetWindowTextA(g_hAlphaLabel, buf);
 
-            // Live preview — update parent window alpha
+            // Live preview on parent launcher
             HWND parent = GetParent(hwnd);
             if (parent) SetLayeredWindowAttributes(parent, 0, g_TempAlpha, LWA_ALPHA);
         }
@@ -378,14 +522,12 @@ static void ShowAlphaPicker(HWND owner) {
 
     RECT ownerRc;
     GetWindowRect(owner, &ownerRc);
-    int x = ownerRc.left + 60;
-    int y = ownerRc.top + 80;
 
     HWND hwnd = CreateWindowExA(
         WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         cls, "Transparency",
         WS_POPUP | WS_VISIBLE | WS_BORDER,
-        x, y, 300, 160,
+        ownerRc.left + 60, ownerRc.top + 80, 300, 160,
         owner, NULL, GetModuleHandle(NULL), NULL);
 
     ShowWindow(hwnd, SW_SHOW);
@@ -401,7 +543,7 @@ static void ShowAlphaPicker(HWND owner) {
 }
 
 // ============================================================================
-//  Launcher Window — icy frosted glass WNDPROC
+//  Launcher Window — icy frosted glass WNDPROC with full double-buffered paint
 // ============================================================================
 
 #define ID_BTN_INJECT   1001
@@ -410,13 +552,10 @@ static void ShowAlphaPicker(HWND owner) {
 #define ID_BTN_QUIT     1004
 #define ID_COMBO_MODEL  1005
 
-static int  g_LauncherResult = 0;   // 0=quit, 1=inject
+static int  g_LauncherResult = 0;
 static int  g_HoveredBtn     = 0;
-
-// Button rectangles (set once based on window size)
 static RECT g_BtnInject, g_BtnTheme, g_BtnAlpha, g_BtnQuit;
 
-// Enable DWM blur-behind for frosted glass effect
 static void EnableBlurBehind(HWND hwnd) {
     DWM_BLURBEHIND bb = {};
     bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
@@ -425,7 +564,7 @@ static void EnableBlurBehind(HWND hwnd) {
     DwmEnableBlurBehindWindow(hwnd, &bb);
     DeleteObject(bb.hRgnBlur);
 
-    // DWMWA_USE_IMMERSIVE_DARK_MODE = 20 (disable dark title for icy look)
+    // Keep light mode for the icy look
     BOOL darkMode = FALSE;
     DwmSetWindowAttribute(hwnd, 20, &darkMode, sizeof(darkMode));
 }
@@ -437,7 +576,6 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     case WM_CREATE: {
         EnableBlurBehind(hwnd);
 
-        // Model selector combo box
         hCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
             70, 218, 300, 200, hwnd, (HMENU)ID_COMBO_MODEL, NULL, NULL);
@@ -451,8 +589,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     }
 
     case WM_COMMAND: {
-        int id = LOWORD(wp);
-        if (id == ID_COMBO_MODEL && HIWORD(wp) == CBN_SELCHANGE) {
+        if (LOWORD(wp) == ID_COMBO_MODEL && HIWORD(wp) == CBN_SELCHANGE) {
             int sel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
             if (sel >= 0) SetActiveModel(sel);
             InvalidateRect(hwnd, NULL, TRUE);
@@ -471,22 +608,23 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         int w = clientRc.right;
         int h = clientRc.bottom;
 
-        // --- Double-buffer ---
+        // ---- Double-buffer ----
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
         HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
 
-        // Snow-white background
+        // Snow-white base
         HBRUSH bgBrush = CreateSolidBrush(g_BgColor);
         FillRect(memDC, &clientRc, bgBrush);
         DeleteObject(bgBrush);
 
-        // Frosted glass panel with soft shadow
+        // Frosted glass panel + shadow + glow
         RECT panelRc = { 16, 16, w - 16, h - 16 };
         DrawSoftShadow(memDC, panelRc);
         FillFrosted(memDC, panelRc, g_BgPanel, 220);
+        DrawInnerGlow(memDC, panelRc);
 
-        // Outer frost border (accent color)
+        // Outer accent border
         HPEN borderPen = CreatePen(PS_SOLID, 1, g_AccentColor);
         SelectObject(memDC, borderPen);
         SelectObject(memDC, GetStockObject(NULL_BRUSH));
@@ -503,7 +641,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 
         SetBkMode(memDC, TRANSPARENT);
 
-        // ---- Title: "ZeroPoint" ----
+        // ---- Title ----
         HFONT titleFont = CreateAppFont(38, FW_LIGHT);
         SelectObject(memDC, titleFont);
         SetTextColor(memDC, g_TextPrimary);
@@ -523,7 +661,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
                   DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
-        // ---- Hotkey list ----
+        // ---- Hotkeys ----
         HFONT hotkeyFont = CreateAppFont(12, FW_NORMAL);
         SelectObject(memDC, hotkeyFont);
 
@@ -536,17 +674,13 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 
         int hotkeyY = 118;
         for (int i = 0; i < 4; i++) {
-            // Key combo in accent color
             SetTextColor(memDC, g_AccentColor);
             RECT keyRc = { 70, hotkeyY, 200, hotkeyY + 16 };
-            DrawTextA(memDC, hotkeys[i].key, -1, &keyRc,
-                      DT_LEFT | DT_SINGLELINE);
+            DrawTextA(memDC, hotkeys[i].key, -1, &keyRc, DT_LEFT | DT_SINGLELINE);
 
-            // Description in secondary color
             SetTextColor(memDC, g_TextSecondary);
             RECT descRc = { 210, hotkeyY, w - 40, hotkeyY + 16 };
-            DrawTextA(memDC, hotkeys[i].desc, -1, &descRc,
-                      DT_LEFT | DT_SINGLELINE);
+            DrawTextA(memDC, hotkeys[i].desc, -1, &descRc, DT_LEFT | DT_SINGLELINE);
 
             hotkeyY += 20;
         }
@@ -557,21 +691,15 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         SelectObject(memDC, labelFont);
         SetTextColor(memDC, g_AccentColor);
         RECT modelLabelRc = { 70, 203, w - 70, 218 };
-        DrawTextA(memDC, "SELECT MODEL", -1, &modelLabelRc,
-                  DT_LEFT | DT_SINGLELINE);
+        DrawTextA(memDC, "SELECT MODEL", -1, &modelLabelRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(labelFont);
 
-        // (combo box at y=218 is a real HWND — drawn by Windows)
-
-        // Accent divider before buttons
+        // Accent divider
         DrawAccentLine(memDC, 70, 252, w - 140);
 
         // ---- Buttons ----
-        // Row 1: INJECT (accent) + CUSTOMIZE THEME
         g_BtnInject = { 40, 268, 215, 306 };
         g_BtnTheme  = { 225, 268, 400, 306 };
-
-        // Row 2: TRANSPARENCY + QUIT
         g_BtnAlpha  = { 40, 316, 215, 354 };
         g_BtnQuit   = { 225, 316, 400, 354 };
 
@@ -584,7 +712,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         DrawIcyButton(memDC, g_BtnQuit, "QUIT",
                       g_HoveredBtn == ID_BTN_QUIT, false);
 
-        // ---- Accent color swatch (small circle next to title) ----
+        // ---- Accent swatch dot ----
         HBRUSH swatchBrush = CreateSolidBrush(g_AccentColor);
         HPEN swatchPen = CreatePen(PS_SOLID, 1, g_BorderColor);
         SelectObject(memDC, swatchBrush);
@@ -603,7 +731,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
-        // ---- Blit to screen ----
+        // ---- Blit ----
         BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBmp);
         DeleteObject(memBmp);
@@ -639,20 +767,16 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return 0;
 
     case WM_LBUTTONUP: {
-        int mx = LOWORD(lp), my = HIWORD(lp);
-        POINT pt = { mx, my };
+        POINT pt = { LOWORD(lp), HIWORD(lp) };
 
         if (PtInRect(&g_BtnInject, pt)) {
             g_LauncherResult = 1;
             DestroyWindow(hwnd);
         } else if (PtInRect(&g_BtnTheme, pt)) {
-            // Open accent color picker
             PickAccentColor(hwnd);
             InvalidateRect(hwnd, NULL, TRUE);
         } else if (PtInRect(&g_BtnAlpha, pt)) {
-            // Open transparency slider
             ShowAlphaPicker(hwnd);
-            // Re-apply alpha after picker closes
             SetLayeredWindowAttributes(hwnd, 0, g_WindowAlpha, LWA_ALPHA);
             InvalidateRect(hwnd, NULL, TRUE);
         } else if (PtInRect(&g_BtnQuit, pt)) {
@@ -662,17 +786,16 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return 0;
     }
 
-    // Draggable borderless window — click anywhere to drag
     case WM_NCHITTEST: {
         LRESULT hit = DefWindowProc(hwnd, msg, wp, lp);
         if (hit == HTCLIENT) {
-            // Don't override hits on the combo box area
             POINT pt;
             pt.x = LOWORD(lp); pt.y = HIWORD(lp);
             ScreenToClient(hwnd, &pt);
+            // Don't intercept clicks on the combo box region
             if (pt.y >= 210 && pt.y <= 245 && pt.x >= 60 && pt.x <= 380)
-                return HTCLIENT; // let combo box work
-            return HTCAPTION;
+                return HTCLIENT;
+            return HTCAPTION; // drag the window from anywhere else
         }
         return hit;
     }
@@ -699,19 +822,15 @@ static int ShowLauncher() {
     int winW = 440, winH = 400;
     int screenW = GetSystemMetrics(SM_CXSCREEN);
     int screenH = GetSystemMetrics(SM_CYSCREEN);
-    int posX = (screenW - winW) / 2;
-    int posY = (screenH - winH) / 2;
 
     HWND hwnd = CreateWindowExA(
         WS_EX_LAYERED | WS_EX_TOPMOST,
         className, "ZeroPoint",
         WS_POPUP | WS_VISIBLE,
-        posX, posY, winW, winH,
+        (screenW - winW) / 2, (screenH - winH) / 2, winW, winH,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
-    // Apply saved transparency level
     SetLayeredWindowAttributes(hwnd, 0, g_WindowAlpha, LWA_ALPHA);
-
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
 
@@ -726,13 +845,26 @@ static int ShowLauncher() {
 }
 
 // ============================================================================
-//  Frosted AI Answer Popup (bottom-right toast)
+//  Enhanced Frosted AI Answer Popup — icy/snowy theme
 // ============================================================================
+// Premium bottom-right toast: bright white frosted glass, soft shadow,
+// inner glow, accent header bar, auto-dismiss, click to close.
 
 static std::string g_PopupText;
 
 static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
+    case WM_CREATE: {
+        // Enable blur-behind for true frosted glass on supported systems
+        DWM_BLURBEHIND bb = {};
+        bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable  = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        DeleteObject(bb.hRgnBlur);
+        return 0;
+    }
+
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
@@ -740,49 +872,85 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         GetClientRect(hwnd, &rc);
         int w = rc.right, h = rc.bottom;
 
-        // Double-buffer
+        // ---- Double-buffer ----
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
         HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
 
-        // Snow-white background
-        HBRUSH bg = CreateSolidBrush(g_BgColor);
-        FillRect(memDC, &rc, bg);
-        DeleteObject(bg);
+        // Snow-white base fill
+        HBRUSH bgBrush = CreateSolidBrush(g_BgColor);
+        FillRect(memDC, &rc, bgBrush);
+        DeleteObject(bgBrush);
 
-        // Frosted overlay
+        // Frosted glass overlay with inner glow
         FillFrosted(memDC, rc, g_BgPanel, 230);
+        DrawInnerGlow(memDC, rc);
 
-        // Accent border
-        HPEN pen = CreatePen(PS_SOLID, 2, g_AccentColor);
-        SelectObject(memDC, pen);
+        // Soft shadow at the bottom edge (simulates floating)
+        RECT shadowRc = { 4, h - 6, w - 4, h };
+        FillFrosted(memDC, shadowRc, g_ShadowColor, 50);
+
+        // ---- Accent header bar ----
+        // A thin frosted accent strip at the top
+        RECT accentBar = { 0, 0, w, 4 };
+        HBRUSH accentBrush = CreateSolidBrush(g_AccentColor);
+        FillRect(memDC, &accentBar, accentBrush);
+        DeleteObject(accentBrush);
+
+        // Outer border — accent color, rounded
+        HPEN borderPen = CreatePen(PS_SOLID, 2, g_AccentColor);
+        SelectObject(memDC, borderPen);
         SelectObject(memDC, GetStockObject(NULL_BRUSH));
-        RoundRect(memDC, 0, 0, w, h, 14, 14);
-        DeleteObject(pen);
+        RoundRect(memDC, 0, 0, w, h, 16, 16);
+        DeleteObject(borderPen);
+
+        // Inner border — subtle icy edge
+        HPEN innerPen = CreatePen(PS_SOLID, 1, g_BorderColor);
+        SelectObject(memDC, innerPen);
+        RoundRect(memDC, 1, 1, w - 1, h - 1, 14, 14);
+        DeleteObject(innerPen);
 
         SetBkMode(memDC, TRANSPARENT);
 
-        // Title bar — accent colored
-        HFONT titleFont = CreateAppFont(13, FW_BOLD);
+        // ---- Title "ZeroPoint AI" ----
+        HFONT titleFont = CreateAppFont(15, FW_BOLD);
         SelectObject(memDC, titleFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT titleRc = { 14, 10, w - 14, 28 };
+        RECT titleRc = { 16, 12, w - 16, 32 };
         DrawTextA(memDC, "ZeroPoint AI", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(titleFont);
 
-        // Thin separator
-        DrawAccentLine(memDC, 14, 32, w - 28);
+        // Model tag (small, right-aligned)
+        HFONT tagFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, tagFont);
+        SetTextColor(memDC, g_TextSecondary);
+        RECT tagRc = { w - 180, 14, w - 16, 30 };
+        std::string modelTag = GetActiveModel();
+        DrawTextA(memDC, modelTag.c_str(), -1, &tagRc, DT_RIGHT | DT_SINGLELINE);
+        DeleteObject(tagFont);
 
-        // Answer text — dark on white
+        // Accent separator
+        DrawAccentLine(memDC, 16, 36, w - 32);
+
+        // ---- Close hint ----
+        HFONT hintFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, hintFont);
+        SetTextColor(memDC, g_ShadowColor);
+        RECT hintRc = { 16, h - 22, w - 16, h - 6 };
+        DrawTextA(memDC, "click anywhere to dismiss", -1, &hintRc,
+                  DT_CENTER | DT_SINGLELINE);
+        DeleteObject(hintFont);
+
+        // ---- Answer text ----
         HFONT textFont = CreateAppFont(13, FW_NORMAL);
         SelectObject(memDC, textFont);
         SetTextColor(memDC, g_TextPrimary);
-        RECT textRc = { 14, 38, w - 14, h - 10 };
+        RECT textRc = { 16, 44, w - 16, h - 26 };
         DrawTextA(memDC, g_PopupText.c_str(), -1, &textRc,
                   DT_LEFT | DT_WORDBREAK);
         DeleteObject(textFont);
 
-        // Blit
+        // ---- Blit to screen ----
         BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBmp);
         DeleteObject(memBmp);
@@ -797,6 +965,7 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
 
     case WM_TIMER:
+        // Fade out could be added here; for now, just dismiss
         DestroyWindow(hwnd);
         return 0;
 
@@ -811,14 +980,18 @@ static void ShowAIPopup(const std::string& text) {
     g_PopupText = text;
 
     const char* cls = "ZeroPointPopup";
-    WNDCLASSA wc = {};
-    wc.lpfnWndProc   = PopupProc;
-    wc.hInstance      = GetModuleHandle(NULL);
-    wc.lpszClassName  = cls;
-    wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
-    RegisterClassA(&wc);
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = PopupProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = cls;
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassA(&wc);
+        registered = true;
+    }
 
-    int w = 420, h = 280;
+    int w = 440, h = 300;
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
 
@@ -829,8 +1002,11 @@ static void ShowAIPopup(const std::string& text) {
         sx - w - 24, sy - h - 60, w, h,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
+    // Use the user's saved transparency
     SetLayeredWindowAttributes(hwnd, 0, g_WindowAlpha, LWA_ALPHA);
-    SetTimer(hwnd, 1, 12000, NULL); // auto-dismiss after 12s
+
+    // Auto-dismiss after 15 seconds
+    SetTimer(hwnd, 1, 15000, NULL);
 
     ShowWindow(hwnd, SW_SHOW);
     UpdateWindow(hwnd);
@@ -840,7 +1016,6 @@ static void ShowAIPopup(const std::string& text) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-    UnregisterClassA(cls, GetModuleHandle(NULL));
 }
 
 // ============================================================================
@@ -848,10 +1023,13 @@ static void ShowAIPopup(const std::string& text) {
 // ============================================================================
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    // Initialize common controls (needed for combo box + trackbar)
+    // Initialize common controls (combo box + trackbar)
     INITCOMMONCONTROLSEX icc = { sizeof(icc),
         ICC_STANDARD_CLASSES | ICC_BAR_CLASSES };
     InitCommonControlsEx(&icc);
+
+    // Initialize COM for WebView2
+    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
 
     LoadConfig();
     LoadThemeSettings();
@@ -868,7 +1046,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             "Then relaunch ZeroPoint.",
             "ZeroPoint - First Launch",
             MB_OKCANCEL | MB_ICONINFORMATION);
-        if (result == IDCANCEL) return 0;
+        if (result == IDCANCEL) {
+            CoUninitialize();
+            return 0;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -876,13 +1057,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // ------------------------------------------------------------------
     int action = ShowLauncher();
 
-    if (action == 0) return 0; // User chose Quit
+    if (action == 0) {
+        CoUninitialize();
+        return 0;
+    }
 
     // ------------------------------------------------------------------
     //  Inject
     // ------------------------------------------------------------------
     if (!PerformHollowing()) {
         MessageBoxA(NULL, "Injection failed.", "ZeroPoint", MB_OK | MB_ICONERROR);
+        CoUninitialize();
         return 1;
     }
 
@@ -892,6 +1077,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     bool keyZ = false, keyH = false, keyB = false, keyX = false;
 
     while (true) {
+        // Process pending messages (needed for WebView2 async callbacks)
+        MSG msg;
+        while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
+
         bool ctrl  = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
         bool shift = (GetAsyncKeyState(VK_SHIFT)   & 0x8000) != 0;
         bool alt   = (GetAsyncKeyState(VK_MENU)    & 0x8000) != 0;
@@ -918,7 +1110,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             keyH = false;
         }
 
-        // Ctrl+Alt+B — Invisible browser
+        // Ctrl+Alt+B — Invisible WebView2 browser (toggle)
         if (ctrl && alt && (GetAsyncKeyState(0x42) & 0x8000)) {
             if (!keyB) {
                 keyB = true;
@@ -932,6 +1124,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         if (ctrl && shift && (GetAsyncKeyState(0x58) & 0x8000)) {
             if (!keyX) {
                 keyX = true;
+                // Destroy browser window if open
+                if (g_BrowserHwnd && IsWindow(g_BrowserHwnd)) {
+                    DestroyWindow(g_BrowserHwnd);
+                }
                 PanicKillAndWipe();
                 break;
             }
@@ -942,5 +1138,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         Sleep(10);
     }
 
+    CoUninitialize();
     return 0;
 }
