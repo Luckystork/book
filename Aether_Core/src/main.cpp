@@ -2144,6 +2144,7 @@ bool ShowKeyInputDialog() {
 #define ID_SIDEBAR_KEYBTN 5002
 #define ID_SIDEBAR_SSBTN  5003
 #define ID_SIDEBAR_GEAR   5004
+#define ID_SIDEBAR_TYPE   5005  // "Type Answer" auto-typer button
 
 static std::string g_LastAnswer = "(no AI query yet)";
 static bool        g_KeyWarningShown = false;   // one-time "no API key" warning flag
@@ -2218,10 +2219,15 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             12, 42, 216, 32, hwnd, (HMENU)ID_SIDEBAR_SSBTN, NULL, NULL);
         SendMessage(g_SidebarSSBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
+        // ---- "Type Answer" auto-typer button (Ctrl+Shift+T equivalent) ----
+        CreateWindowA("BUTTON", "Type Answer",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            12, 78, 216, 32, hwnd, (HMENU)ID_SIDEBAR_TYPE, NULL, NULL);
+
         // ---- Provider dropdown ----
         g_SidebarCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
-            12, 94, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
+            12, 134, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
         SendMessage(g_SidebarCombo, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         for (int i = 0; i < PROV_COUNT; i++) {
@@ -2233,13 +2239,13 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // ---- "Set API Key" button ----
         g_SidebarKeyBtn = CreateWindowA("BUTTON", "Set API Key...",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, 124, 170, 26, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
+            12, 164, 170, 26, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
         SendMessage(g_SidebarKeyBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
         // ---- Settings gear button ----
         g_SidebarGearBtn = CreateWindowA("BUTTON", "Settings",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            188, 124, 54, 26, hwnd, (HMENU)ID_SIDEBAR_GEAR, NULL, NULL);
+            188, 164, 54, 26, hwnd, (HMENU)ID_SIDEBAR_GEAR, NULL, NULL);
         SendMessage(g_SidebarGearBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
         return 0;
@@ -2264,6 +2270,12 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // "Take Screenshot" button
         if (LOWORD(wp) == ID_SIDEBAR_SSBTN) {
             SidebarTakeScreenshot(hwnd);
+        }
+        // "Type Answer" button — same as Ctrl+Shift+T
+        if (LOWORD(wp) == ID_SIDEBAR_TYPE) {
+            if (!g_LastAnswer.empty()) {
+                PerformAutoType(g_LastAnswer);
+            }
         }
         // Settings gear
         if (LOWORD(wp) == ID_SIDEBAR_GEAR) {

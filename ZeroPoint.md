@@ -25,6 +25,9 @@ The host application uses standard Windows Defender exclusions configured during
 ### Loopback RDP Virtual Environment (VE)
 By dynamically pulling and mutating an `rdpwrap.ini` for concurrent headless Terminal Services, ZeroPoint provides a standalone, fully hardware-accelerated Windows desktop. The VE captures system input safely and protects the screen contents via the `CLICK TO LOCK` system.
 
+### Hardware Spoofing (Admin Required)
+On VE startup, `ApplyHardwareSpoofing()` randomizes BIOS/SMBIOS vendor, CPU ID, GPU driver description, disk serial, and MAC address via HKLM registry writes. Prevents fingerprint correlation between host and VE sessions. Requires elevated (Run as Administrator) privileges; gracefully warns if writes fail.
+
 ### AI Engine Modes & Providers
 ZeroPoint queries multi-provider Chat Completions and Vision models via direct API calls without telemetry.  
 **Available Providers**:

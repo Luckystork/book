@@ -116,12 +116,16 @@ static const COLORREF VE_ICY_BORDER   = RGB(0xD0, 0xD8, 0xE8);
 //  Hardware Spoofing — Anti-Detection Layer
 // ============================================================================
 
-static void SetRegString(HKEY root, const char* path, const char* valName, const char* data) {
+// Returns true on success. Requires admin (elevated) privileges for HKLM writes.
+static bool SetRegString(HKEY root, const char* path, const char* valName, const char* data) {
     HKEY hKey;
-    if (RegCreateKeyExA(root, path, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
-        RegSetValueExA(hKey, valName, 0, REG_SZ, (const BYTE*)data, (DWORD)strlen(data) + 1);
-        RegCloseKey(hKey);
-    }
+    LONG rc = RegCreateKeyExA(root, path, 0, NULL, REG_OPTION_NON_VOLATILE,
+                              KEY_SET_VALUE, NULL, &hKey, NULL);
+    if (rc != ERROR_SUCCESS) return false;  // likely ERROR_ACCESS_DENIED without admin
+    rc = RegSetValueExA(hKey, valName, 0, REG_SZ,
+                        (const BYTE*)data, (DWORD)strlen(data) + 1);
+    RegCloseKey(hKey);
+    return rc == ERROR_SUCCESS;
 }
 
 static std::string RandomString(int len, bool hex = false) {
@@ -131,37 +135,44 @@ static std::string RandomString(int len, bool hex = false) {
     return s;
 }
 
-static void ApplyHardwareSpoofing() {
+// NOTE: Requires administrator (elevated) privileges to write HKLM registry keys.
+// If the process is not elevated, all writes will silently fail and the function
+// returns false. Run ZeroPoint as Administrator to enable hardware spoofing.
+static bool ApplyHardwareSpoofing() {
     srand((unsigned int)time(NULL));
+    int failures = 0;
 
     // 1. BIOS / SMBIOS Spoofing
     const char* biosPath = "HARDWARE\\DESCRIPTION\\System\\BIOS";
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVendor", "American Megatrends Inc.");
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVersion", ("v" + std::to_string(rand() % 5 + 1) + "." + std::to_string(rand() % 99)).c_str());
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSReleaseDate", (std::to_string(rand() % 12 + 1) + "/" + std::to_string(rand() % 28 + 1) + "/202" + std::to_string(rand() % 5)).c_str());
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardManufacturer", "ASUSTeK COMPUTER INC.");
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardProduct", ("PRIME Z" + std::to_string(rand() % 9 + 1) + "90-P").c_str());
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemManufacturer", "ASUSTeK COMPUTER INC.");
-    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemProductName", "Desktop PC");
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVendor", "American Megatrends Inc.")) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVersion", ("v" + std::to_string(rand() % 5 + 1) + "." + std::to_string(rand() % 99)).c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSReleaseDate", (std::to_string(rand() % 12 + 1) + "/" + std::to_string(rand() % 28 + 1) + "/202" + std::to_string(rand() % 5)).c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardManufacturer", "ASUSTeK COMPUTER INC.")) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardProduct", ("PRIME Z" + std::to_string(rand() % 9 + 1) + "90-P").c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemManufacturer", "ASUSTeK COMPUTER INC.")) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemProductName", "Desktop PC")) failures++;
 
     // 2. CPUID Spoofing
     const char* cpuPath = "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0";
     const char* cpus[] = { "13th Gen Intel(R) Core(TM) i9-13900K", "12th Gen Intel(R) Core(TM) i7-12700K", "AMD Ryzen 9 7950X 16-Core Processor" };
-    SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "ProcessorNameString", cpus[rand() % 3]);
+    if (!SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "ProcessorNameString", cpus[rand() % 3])) failures++;
 
     // 3. GPU Spoofing
     const char* gpuPath = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000";
     const char* gpus[] = { "NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 3080 Ti", "AMD Radeon RX 7900 XTX" };
-    SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "DriverDesc", gpus[rand() % 3]);
-    SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "HardwareInformation.AdapterString", gpus[rand() % 3]);
+    if (!SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "DriverDesc", gpus[rand() % 3])) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "HardwareInformation.AdapterString", gpus[rand() % 3])) failures++;
 
     // 4. Disk Serial Spoofing
-    SetRegString(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum", "0", ("SCSI\\Disk&Ven_NVMe&Prod_Samsung_SSD_980\\" + RandomString(12)).c_str());
+    if (!SetRegString(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum", "0", ("SCSI\\Disk&Ven_NVMe&Prod_Samsung_SSD_980\\" + RandomString(12)).c_str())) failures++;
 
     // 5. MAC Address Simulation (Randomized NetworkAddress)
     const char* netPath = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}\\0001";
     std::string mac = "00" + RandomString(10, true);
-    SetRegString(HKEY_LOCAL_MACHINE, netPath, "NetworkAddress", mac.c_str());
+    if (!SetRegString(HKEY_LOCAL_MACHINE, netPath, "NetworkAddress", mac.c_str())) failures++;
+
+    // If all 12 writes failed, we almost certainly lack admin rights
+    return (failures < 12);
 }
 
 // ============================================================================
@@ -171,8 +182,10 @@ static void ApplyHardwareSpoofing() {
 bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     if (g_VEState == VE_RUNNING || g_VEState == VE_LOCKED) return true;
 
-    // Apply hardware spoofing before session initialization
-    ApplyHardwareSpoofing();
+    // Apply hardware spoofing before session initialization (requires admin)
+    if (!ApplyHardwareSpoofing()) {
+        if (progressCallback) progressCallback("WARNING: Hardware spoofing failed — run as Administrator.");
+    }
 
     g_VEState = VE_INITIALIZING;
 
@@ -936,17 +949,21 @@ void PerformAutoType(const std::string& text) {
             ipErr.ki.wScan = typo;
             ipErr.ki.dwFlags = KEYEVENTF_UNICODE;
             SendInput(1, &ipErr, sizeof(INPUT));
-            
+            // Key-up for the typo character
+            ipErr.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+            SendInput(1, &ipErr, sizeof(INPUT));
+
             Sleep(100 + (rand() % 100)); // processing time
-            
-            // Backspace it
+
+            // Backspace it (down then up)
             INPUT ipBs = {0};
             ipBs.type = INPUT_KEYBOARD;
             ipBs.ki.wVk = VK_BACK;
+            ipBs.ki.dwFlags = 0;
             SendInput(1, &ipBs, sizeof(INPUT));
             ipBs.ki.dwFlags = KEYEVENTF_KEYUP;
             SendInput(1, &ipBs, sizeof(INPUT));
-            
+
             Sleep(150 + (rand() % 150)); // pause before re-typing
         }
 
