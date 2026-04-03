@@ -17,6 +17,7 @@
 #include "Stealth.h"
 #include "CDPExtractor.h"
 #include "Config.h"
+#include "VirtualEnv.h"
 
 #include <windows.h>
 #include <wingdi.h>
@@ -1605,58 +1606,49 @@ static void ShowAlphaPicker(HWND owner) {
     UnregisterClassA(cls, GetModuleHandle(NULL));
 }
 
+
 // ============================================================================
-//  Launcher Window — icy frosted glass WNDPROC with full double-buffered paint
+//  Launcher Window — Premium 440x400 Frosted Glass 
 // ============================================================================
 
 #define ID_BTN_INJECT       1001
-#define ID_BTN_THEME        1002
-#define ID_BTN_ALPHA        1003
-#define ID_BTN_QUIT         1004
-#define ID_COMBO_PROVIDER   1005
+#define ID_BTN_GEAR         1002
 
 static int  g_LauncherResult = 0;
 static int  g_HoveredBtn     = 0;
-static RECT g_BtnInject, g_BtnTheme, g_BtnAlpha, g_BtnQuit;
+static RECT g_BtnInject, g_BtnGear;
 
 static void EnableBlurBehind(HWND hwnd) {
-    DWM_BLURBEHIND bb = {};
+    DWM_BLURBEHIND bb = {0};
     bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
     bb.fEnable  = TRUE;
     bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
     DwmEnableBlurBehindWindow(hwnd, &bb);
     DeleteObject(bb.hRgnBlur);
 
-    // Keep light mode for the icy look
     BOOL darkMode = FALSE;
     DwmSetWindowAttribute(hwnd, 20, &darkMode, sizeof(darkMode));
 }
 
-static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    static HWND hProvCombo = NULL;
+// Draw settings gear icon icon with GDI curves
+static void DrawGearIcon(HDC hdc, int x, int y, int size, COLORREF color) {
+    HPEN pen = CreatePen(PS_SOLID, 2, color);
+    HBRUSH brush = CreateSolidBrush(color);
+    HGDIOBJ oldP = SelectObject(hdc, pen);
+    HGDIOBJ oldB = SelectObject(hdc, brush);
 
+    Ellipse(hdc, x+2, y+2, x+size-2, y+size-2);
+    
+    SelectObject(hdc, oldP);
+    SelectObject(hdc, oldB);
+    DeleteObject(pen);
+    DeleteObject(brush);
+}
+
+static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
         EnableBlurBehind(hwnd);
-
-        // ---- Provider dropdown ----
-        hProvCombo = CreateWindowA("COMBOBOX", NULL,
-            WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
-            70, 218, 300, 200, hwnd, (HMENU)ID_COMBO_PROVIDER, NULL, NULL);
-        for (int i = 0; i < PROV_COUNT; i++) {
-            SendMessageA(hProvCombo, CB_ADDSTRING, 0,
-                         (LPARAM)g_Providers[i].displayName);
-        }
-        SendMessageA(hProvCombo, CB_SETCURSEL, (int)g_ActiveProvider, 0);
-        return 0;
-    }
-
-    case WM_COMMAND: {
-        if (LOWORD(wp) == ID_COMBO_PROVIDER && HIWORD(wp) == CBN_SELCHANGE) {
-            int sel = (int)SendMessage(hProvCombo, CB_GETCURSEL, 0, 0);
-            if (sel >= 0) SetActiveProvider(sel);
-            InvalidateRect(hwnd, NULL, TRUE);
-        }
         return 0;
     }
 
@@ -1668,26 +1660,22 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         HDC hdc = BeginPaint(hwnd, &ps);
         RECT clientRc;
         GetClientRect(hwnd, &clientRc);
-        int w = clientRc.right;
-        int h = clientRc.bottom;
+        int w = clientRc.right, h = clientRc.bottom;
 
-        // ---- Double-buffer ----
         HDC memDC = CreateCompatibleDC(hdc);
         HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
         HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
 
-        // Snow-white base
+        // Base fill
         HBRUSH bgBrush = CreateSolidBrush(g_BgColor);
         FillRect(memDC, &clientRc, bgBrush);
         DeleteObject(bgBrush);
 
-        // Frosted glass panel + shadow + glow
         RECT panelRc = { 16, 16, w - 16, h - 16 };
         DrawSoftShadow(memDC, panelRc);
         FillFrosted(memDC, panelRc, g_BgPanel, 220);
         DrawInnerGlow(memDC, panelRc);
 
-        // Outer accent border
         HPEN borderPen = CreatePen(PS_SOLID, 1, g_AccentColor);
         SelectObject(memDC, borderPen);
         SelectObject(memDC, GetStockObject(NULL_BRUSH));
@@ -1695,106 +1683,86 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
                   panelRc.right, panelRc.bottom, 18, 18);
         DeleteObject(borderPen);
 
-        // Inner subtle border
-        HPEN innerPen = CreatePen(PS_SOLID, 1, g_BorderColor);
-        SelectObject(memDC, innerPen);
-        RoundRect(memDC, panelRc.left + 1, panelRc.top + 1,
-                  panelRc.right - 1, panelRc.bottom - 1, 16, 16);
-        DeleteObject(innerPen);
-
         SetBkMode(memDC, TRANSPARENT);
 
-        // ---- Title ----
+        // Header
         HFONT titleFont = CreateAppFont(38, FW_LIGHT);
         SelectObject(memDC, titleFont);
         SetTextColor(memDC, g_TextPrimary);
-        RECT titleRc = { 30, 28, w - 30, 76 };
+        RECT titleRc = { 30, 24, w - 30, 72 };
         DrawTextA(memDC, "ZeroPoint", -1, &titleRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(titleFont);
+        
+        DrawAccentLine(memDC, 70, 72, w - 140);
 
-        // Accent underline
-        DrawAccentLine(memDC, 70, 78, w - 140);
-
-        // ---- Subtitle ----
         HFONT subFont = CreateAppFont(13, FW_NORMAL);
         SelectObject(memDC, subFont);
         SetTextColor(memDC, g_TextSecondary);
-        RECT subRc = { 30, 86, w - 30, 104 };
-        DrawTextA(memDC, "Premium AI-Powered Utility", -1, &subRc,
-                  DT_CENTER | DT_SINGLELINE);
+        RECT subRc = { 30, 80, w - 30, 100 };
+        DrawTextA(memDC, "Advanced Virtual Environment", -1, &subRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
-        // ---- Hotkeys ----
-        HFONT hotkeyFont = CreateAppFont(12, FW_NORMAL);
-        SelectObject(memDC, hotkeyFont);
+        // Button
+        g_BtnInject = { 40, 120, w - 40, 165 };
+        DrawIcyButton(memDC, g_BtnInject, "START VIRTUAL ENVIRONMENT", g_HoveredBtn == ID_BTN_INJECT, true);
 
-        const struct { const char* key; const char* desc; } hotkeys[] = {
-            { "Ctrl+Shift+Z", "AI Snapshot" },
-            { "Ctrl+Alt+H",   "Full Menu" },
-            { "Ctrl+Alt+B",   "Invisible Browser" },
-            { "Ctrl+Shift+X", "Panic Killswitch" },
-        };
+        // Settings Gear Icon (top right)
+        g_BtnGear = { w - 50, 24, w - 20, 54 };
+        DrawGearIcon(memDC, g_BtnGear.left+4, g_BtnGear.top+4, 22, g_HoveredBtn == ID_BTN_GEAR ? g_AccentColor : g_TextSecondary);
 
-        int hotkeyY = 118;
-        for (int i = 0; i < 4; i++) {
-            SetTextColor(memDC, g_AccentColor);
-            RECT keyRc = { 70, hotkeyY, 200, hotkeyY + 16 };
-            DrawTextA(memDC, hotkeys[i].key, -1, &keyRc, DT_LEFT | DT_SINGLELINE);
-
-            SetTextColor(memDC, g_TextSecondary);
-            RECT descRc = { 210, hotkeyY, w - 40, hotkeyY + 16 };
-            DrawTextA(memDC, hotkeys[i].desc, -1, &descRc, DT_LEFT | DT_SINGLELINE);
-
-            hotkeyY += 20;
-        }
-        DeleteObject(hotkeyFont);
-
-        // ---- AI Provider label ----
+        // Proctor Coverage Section
         HFONT labelFont = CreateAppFont(11, FW_SEMIBOLD);
         SelectObject(memDC, labelFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT provLabelRc = { 70, 203, w - 70, 218 };
-        DrawTextA(memDC, "AI PROVIDER", -1, &provLabelRc, DT_LEFT | DT_SINGLELINE);
+        RECT covLbl = { 40, 190, w - 40, 210 };
+        DrawTextA(memDC, "PROCTOR COVERAGE", -1, &covLbl, DT_LEFT | DT_SINGLELINE);
         DeleteObject(labelFont);
 
-        // Accent divider (below combo)
-        DrawAccentLine(memDC, 70, 252, w - 140);
+        DrawAccentLine(memDC, 40, 206, w - 80);
 
-        // ---- Buttons ----
-        g_BtnInject = { 40, 268, 215, 306 };
-        g_BtnTheme  = { 225, 268, 400, 306 };
-        g_BtnAlpha  = { 40, 316, 215, 354 };
-        g_BtnQuit   = { 225, 316, 400, 354 };
+        HFONT procFont = CreateAppFont(12, FW_NORMAL);
+        SelectObject(memDC, procFont);
+        
+        const struct { const char* name; bool available; } proctors[] = {
+            { "Respondus LockDown Browser", true },
+            { "Guardian Browser", true },
+            { "Safe Exam Browser", true },
+            { "QuestionMark Secure", true },
+            { "PearsonVue OnVue", true },
+            { "ProProctor", false }
+        };
 
-        DrawIcyButton(memDC, g_BtnInject, "INJECT",
-                      g_HoveredBtn == ID_BTN_INJECT, true);
-        DrawIcyButton(memDC, g_BtnTheme, "ACCENT COLOR",
-                      g_HoveredBtn == ID_BTN_THEME, false);
-        DrawIcyButton(memDC, g_BtnAlpha, "TRANSPARENCY",
-                      g_HoveredBtn == ID_BTN_ALPHA, false);
-        DrawIcyButton(memDC, g_BtnQuit, "QUIT",
-                      g_HoveredBtn == ID_BTN_QUIT, false);
+        int py = 220;
+        int px1 = 40, px2 = w/2 + 10;
+        for (int i=0; i<6; i++) {
+            int cx = (i % 2 == 0) ? px1 : px2;
+            int y = py + (i / 2) * 22;
+            
+            // Draw dot
+            HBRUSH dotBr = CreateSolidBrush(proctors[i].available ? RGB(0, 200, 100) : RGB(200, 100, 100));
+            SelectObject(memDC, dotBr);
+            SelectObject(memDC, GetStockObject(NULL_PEN));
+            Ellipse(memDC, cx, y+5, cx+6, y+11);
+            DeleteObject(dotBr);
 
-        // ---- Accent swatch dot ----
-        HBRUSH swatchBrush = CreateSolidBrush(g_AccentColor);
-        HPEN swatchPen = CreatePen(PS_SOLID, 1, g_BorderColor);
-        SelectObject(memDC, swatchBrush);
-        SelectObject(memDC, swatchPen);
-        Ellipse(memDC, w - 56, 34, w - 36, 54);
-        DeleteObject(swatchBrush);
-        DeleteObject(swatchPen);
+            SetTextColor(memDC, proctors[i].available ? g_TextPrimary : g_ShadowColor);
+            RECT tp = { cx + 12, y, cx + 180, y + 16 };
+            std::string t = proctors[i].name;
+            if (!proctors[i].available) t += " (Unavailable)";
+            DrawTextA(memDC, t.c_str(), -1, &tp, DT_LEFT | DT_SINGLELINE);
+        }
+        DeleteObject(procFont);
 
-        // ---- Footer (version + opacity) ----
+        // Footer
         HFONT footerFont = CreateAppFont(10, FW_NORMAL);
         SelectObject(memDC, footerFont);
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
-        char footerBuf[96];
-        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v2.0  |  opacity %d/255", g_WindowAlpha);
+        char footerBuf[128];
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.0  |  Stealth Proxy Active");
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
-        // ---- Blit ----
         BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
         SelectObject(memDC, oldBmp);
         DeleteObject(memBmp);
@@ -1810,12 +1778,13 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         g_HoveredBtn = 0;
 
         POINT pt = { mx, my };
-        if (PtInRect(&g_BtnInject, pt))      g_HoveredBtn = ID_BTN_INJECT;
-        else if (PtInRect(&g_BtnTheme, pt))  g_HoveredBtn = ID_BTN_THEME;
-        else if (PtInRect(&g_BtnAlpha, pt))  g_HoveredBtn = ID_BTN_ALPHA;
-        else if (PtInRect(&g_BtnQuit, pt))   g_HoveredBtn = ID_BTN_QUIT;
+        if (PtInRect(&g_BtnInject, pt)) g_HoveredBtn = ID_BTN_INJECT;
+        else if (PtInRect(&g_BtnGear, pt)) g_HoveredBtn = ID_BTN_GEAR;
 
-        if (prev != g_HoveredBtn) InvalidateRect(hwnd, NULL, FALSE);
+        if (prev != g_HoveredBtn) {
+            InvalidateRect(hwnd, NULL, FALSE);
+            SetCursor(LoadCursor(NULL, g_HoveredBtn ? IDC_HAND : IDC_ARROW));
+        }
 
         TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
         TrackMouseEvent(&tme);
@@ -1835,31 +1804,16 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         if (PtInRect(&g_BtnInject, pt)) {
             g_LauncherResult = 1;
             DestroyWindow(hwnd);
-        } else if (PtInRect(&g_BtnTheme, pt)) {
-            PickAccentColor(hwnd);
-            InvalidateRect(hwnd, NULL, TRUE);
-        } else if (PtInRect(&g_BtnAlpha, pt)) {
-            ShowAlphaPicker(hwnd);
-            SetLayeredWindowAttributes(hwnd, 0, g_WindowAlpha, LWA_ALPHA);
-            InvalidateRect(hwnd, NULL, TRUE);
-        } else if (PtInRect(&g_BtnQuit, pt)) {
-            g_LauncherResult = 0;
-            DestroyWindow(hwnd);
+        } else if (PtInRect(&g_BtnGear, pt)) {
+            extern void ShowVESettingsModal(HWND owner);
+            ShowVESettingsModal(hwnd);
         }
         return 0;
     }
 
     case WM_NCHITTEST: {
         LRESULT hit = DefWindowProc(hwnd, msg, wp, lp);
-        if (hit == HTCLIENT) {
-            POINT pt;
-            pt.x = LOWORD(lp); pt.y = HIWORD(lp);
-            ScreenToClient(hwnd, &pt);
-            // Don't intercept clicks on the combo box region
-            if (pt.y >= 200 && pt.y <= 245 && pt.x >= 60 && pt.x <= 380)
-                return HTCLIENT;
-            return HTCAPTION; // drag the window from anywhere else
-        }
+        if (hit == HTCLIENT) return HTCAPTION;
         return hit;
     }
 
@@ -1874,7 +1828,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 static int ShowLauncher() {
     const char* className = "ZeroPointLauncher";
 
-    WNDCLASSA wc = {};
+    WNDCLASSA wc = {0};
     wc.lpfnWndProc   = LauncherProc;
     wc.hInstance      = GetModuleHandle(NULL);
     wc.lpszClassName  = className;
@@ -2457,197 +2411,205 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
+
 // ============================================================================
-//  Settings Popover — compact modal spawned from sidebar gear icon
+//  VE Settings Modal — 3 Tabs (Interception, Display, Local Resources)
 // ============================================================================
-//  Contains: mode toggle, accent color, transparency, popup toggle
 
-#define ID_SET_MODE_AUTO 6001
-#define ID_SET_MODE_CHAT 6002
-#define ID_SET_COLOR     6003
-#define ID_SET_ALPHA     6004
-#define ID_SET_POPUP     6005
-#define ID_SET_DONE      6006
+#define ID_BTN_TAB_INTERCEPTION 7001
+#define ID_BTN_TAB_DISPLAY      7002
+#define ID_BTN_TAB_RESOURCES    7003
+#define ID_BTN_VESET_DONE       7004
 
-static HWND g_SettingsHwnd = NULL;
+static HWND g_VESettingsHwnd = NULL;
+static int g_VECurrentTab = 0; // 0=Interception, 1=Display, 2=Resources
+static int g_VHoveredBtn = 0;
+static RECT g_TabRects[3];
+static RECT g_DoneBtnRect;
 
-static LRESULT CALLBACK SettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    static HWND hAlphaSlider = NULL;
-    static HWND hAlphaLabel = NULL;
-
+static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
-        HFONT font = CreateAppFont(12, FW_NORMAL);
-        HFONT boldFont = CreateAppFont(11, FW_SEMIBOLD);
-        int y = 10;
-
-        // ---- Mode section ----
-        HWND lbl1 = CreateWindowA("STATIC", "SCREENSHOT MODE",
-            WS_CHILD | WS_VISIBLE, 12, y, 200, 16, hwnd, NULL, NULL, NULL);
-        SendMessage(lbl1, WM_SETFONT, (WPARAM)boldFont, TRUE);
-        y += 22;
-
-        HWND rb1 = CreateWindowA("BUTTON", "Auto-Send",
-            WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON | WS_GROUP,
-            12, y, 120, 20, hwnd, (HMENU)ID_SET_MODE_AUTO, NULL, NULL);
-        SendMessage(rb1, WM_SETFONT, (WPARAM)font, TRUE);
-        if (g_ScreenshotMode == MODE_AUTO_SEND) SendMessage(rb1, BM_SETCHECK, BST_CHECKED, 0);
-
-        HWND rb2 = CreateWindowA("BUTTON", "Add to Chat",
-            WS_CHILD | WS_VISIBLE | BS_AUTORADIOBUTTON,
-            140, y, 120, 20, hwnd, (HMENU)ID_SET_MODE_CHAT, NULL, NULL);
-        SendMessage(rb2, WM_SETFONT, (WPARAM)font, TRUE);
-        if (g_ScreenshotMode == MODE_ADD_TO_CHAT) SendMessage(rb2, BM_SETCHECK, BST_CHECKED, 0);
-        y += 30;
-
-        // ---- Accent color ----
-        HWND lbl2 = CreateWindowA("STATIC", "THEME",
-            WS_CHILD | WS_VISIBLE, 12, y, 200, 16, hwnd, NULL, NULL, NULL);
-        SendMessage(lbl2, WM_SETFONT, (WPARAM)boldFont, TRUE);
-        y += 22;
-
-        HWND colorBtn = CreateWindowA("BUTTON", "Change Accent Color...",
-            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, y, 220, 26, hwnd, (HMENU)ID_SET_COLOR, NULL, NULL);
-        SendMessage(colorBtn, WM_SETFONT, (WPARAM)font, TRUE);
-        y += 34;
-
-        // ---- Transparency slider ----
-        HWND lbl3 = CreateWindowA("STATIC", "Opacity:",
-            WS_CHILD | WS_VISIBLE, 12, y, 50, 16, hwnd, NULL, NULL, NULL);
-        SendMessage(lbl3, WM_SETFONT, (WPARAM)font, TRUE);
-
-        char abuf[32];
-        snprintf(abuf, sizeof(abuf), "%d / 255", g_WindowAlpha);
-        hAlphaLabel = CreateWindowA("STATIC", abuf,
-            WS_CHILD | WS_VISIBLE | SS_RIGHT, 180, y, 60, 16, hwnd, NULL, NULL, NULL);
-        SendMessage(hAlphaLabel, WM_SETFONT, (WPARAM)font, TRUE);
-        y += 20;
-
-        hAlphaSlider = CreateWindowA(TRACKBAR_CLASSA, NULL,
-            WS_CHILD | WS_VISIBLE | TBS_HORZ,
-            12, y, 228, 24, hwnd, (HMENU)ID_SET_ALPHA, NULL, NULL);
-        SendMessage(hAlphaSlider, TBM_SETRANGE, TRUE, MAKELPARAM(80, 255));
-        SendMessage(hAlphaSlider, TBM_SETPOS, TRUE, g_WindowAlpha);
-        y += 30;
-
-        // ---- Popup toggle ----
-        HWND chk = CreateWindowA("BUTTON", "Show bottom-right answer popup",
-            WS_CHILD | WS_VISIBLE | BS_AUTOCHECKBOX,
-            12, y, 228, 20, hwnd, (HMENU)ID_SET_POPUP, NULL, NULL);
-        SendMessage(chk, WM_SETFONT, (WPARAM)font, TRUE);
-        SendMessage(chk, BM_SETCHECK, g_PopupEnabled ? BST_CHECKED : BST_UNCHECKED, 0);
-        y += 30;
-
-        // ---- Done button ----
-        HWND doneBtn = CreateWindowA("BUTTON", "Done",
-            WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-            80, y, 100, 28, hwnd, (HMENU)ID_SET_DONE, NULL, NULL);
-        SendMessage(doneBtn, WM_SETFONT, (WPARAM)boldFont, TRUE);
-
+        EnableBlurBehind(hwnd);
         return 0;
     }
+    case WM_ERASEBKGND: return 1;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc; GetClientRect(hwnd, &rc);
+        int w = rc.right, h = rc.bottom;
 
-    case WM_COMMAND:
-        if (LOWORD(wp) == ID_SET_MODE_AUTO) {
-            g_ScreenshotMode = MODE_AUTO_SEND;
-            SaveConfig();
-        }
-        if (LOWORD(wp) == ID_SET_MODE_CHAT) {
-            g_ScreenshotMode = MODE_ADD_TO_CHAT;
-            SaveConfig();
-        }
-        if (LOWORD(wp) == ID_SET_COLOR) {
-            PickAccentColor(hwnd);
-            // Apply to sidebar immediately
-            if (g_MenuHwnd && IsWindow(g_MenuHwnd))
-                InvalidateRect(g_MenuHwnd, NULL, TRUE);
-        }
-        if (LOWORD(wp) == ID_SET_POPUP) {
-            g_PopupEnabled = (SendMessage((HWND)lp, BM_GETCHECK, 0, 0) == BST_CHECKED);
-            // Need to get the actual checkbox handle
-            HWND chk = GetDlgItem(hwnd, ID_SET_POPUP);
-            if (chk) g_PopupEnabled = (SendMessage(chk, BM_GETCHECK, 0, 0) == BST_CHECKED);
-            SaveConfig();
-        }
-        if (LOWORD(wp) == ID_SET_DONE) {
-            DestroyWindow(hwnd);
-        }
-        return 0;
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
+        HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
 
-    case WM_HSCROLL: {
-        if ((HWND)lp == hAlphaSlider) {
-            g_WindowAlpha = (BYTE)SendMessage(hAlphaSlider, TBM_GETPOS, 0, 0);
-            char abuf[32];
-            snprintf(abuf, sizeof(abuf), "%d / 255", g_WindowAlpha);
-            SetWindowTextA(hAlphaLabel, abuf);
-            SaveThemeSettings();
-
-            // Live preview on sidebar
-            if (g_MenuHwnd && IsWindow(g_MenuHwnd))
-                SetLayeredWindowAttributes(g_MenuHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+        HBRUSH bgBrush = CreateSolidBrush(g_BgColor);
+        FillRect(memDC, &rc, bgBrush);
+        DeleteObject(bgBrush);
+        
+        RECT panelRc = { 10, 50, w - 10, h - 50 };
+        DrawSoftShadow(memDC, panelRc);
+        FillFrosted(memDC, panelRc, g_BgPanel, 240);
+        DrawInnerGlow(memDC, panelRc);
+        
+        HPEN bPen = CreatePen(PS_SOLID, 1, g_BorderColor);
+        SelectObject(memDC, bPen); SelectObject(memDC, GetStockObject(NULL_BRUSH));
+        RoundRect(memDC, panelRc.left, panelRc.top, panelRc.right, panelRc.bottom, 12, 12);
+        DeleteObject(bPen);
+        
+        SetBkMode(memDC, TRANSPARENT);
+        
+        // Tabs
+        g_TabRects[0] = { 10, 15, 130, 45 };
+        g_TabRects[1] = { 135, 15, 255, 45 };
+        g_TabRects[2] = { 260, 15, 410, 45 };
+        const char* tabNames[3] = { "Interception", "Display", "Local Resources" };
+        for(int i=0; i<3; i++) {
+            bool active = (g_VECurrentTab == i);
+            DrawIcyButton(memDC, g_TabRects[i], tabNames[i], g_VHoveredBtn == 7001+i, active);
         }
+
+        HFONT hdrF = CreateAppFont(14, FW_BOLD);
+        HFONT nrmF = CreateAppFont(12, FW_NORMAL);
+        
+        int px = 25, py = 70;
+        
+        if (g_VECurrentTab == 0) { // Interception
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Exam Interception", -1, &rr1, DT_LEFT);
+            py+=25;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+            
+            const char* bs[] = { "Respondus LockDown Browser", "Guardian Browser", "Safe Exam Browser", "QuestionMark Secure", "PearsonVue OnVue", "ProProctor (Unavailable)" };
+            for(int i=0; i<6; i++) {
+                int cx = px + (i%2)*160;
+                int cy = py + (i/2)*20;
+                // mock checkboxes
+                HBRUSH br = CreateSolidBrush(i==5 ? g_ShadowColor : g_AccentColor);
+                RECT cb = {cx, cy+2, cx+10, cy+12};
+                FillRect(memDC, &cb, br);
+                DeleteObject(br);
+                RECT rt = {cx+15, cy, cx+150, cy+18};
+                SetTextColor(memDC, i==5 ? g_ShadowColor : g_TextPrimary);
+                DrawTextA(memDC, bs[i], -1, &rt, DT_LEFT);
+            }
+            py += 70;
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr2 = {px, py, w, py+20}; DrawTextA(memDC, "Custom Target Field", -1, &rr2, DT_LEFT);
+            py+=20;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+            RECT rr3 = {px, py, w, py+20}; DrawTextA(memDC, "App Path / Process Name:", -1, &rr3, DT_LEFT);
+            // mock textbox
+            RECT tb = {px, py+20, px+300, py+45};
+            HPEN pb = CreatePen(PS_SOLID, 1, g_BorderColor); SelectObject(memDC, pb);
+            Rectangle(memDC, tb.left, tb.top, tb.right, tb.bottom); DeleteObject(pb);
+            RECT rt4 = {px+8, py+25, px+290, py+40};
+            SetTextColor(memDC, g_TextSecondary); DrawTextA(memDC, g_VEConfig.interception.customTarget.empty() ? "e.g. Examplify.exe" : g_VEConfig.interception.customTarget.c_str(), -1, &rt4, DT_LEFT);
+        }
+        else if (g_VECurrentTab == 1) { // Display
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Resolution Matrix", -1, &rr1, DT_LEFT);
+            py+=25;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+            const char* res[] = {"1024x768", "1280x720 (Default)", "1920x1080", "1366x768", "1440x900", "2560x1440"};
+            for(int i=0; i<6; i++) {
+                int cx = px + (i%2)*160;
+                int cy = py + (i/2)*40;
+                RECT btn = {cx, cy, cx+140, cy+30};
+                DrawIcyButton(memDC, btn, res[i], false, i==1);
+            }
+            py += 140;
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr2 = {px, py, w, py+20}; DrawTextA(memDC, "Advanced Display", -1, &rr2, DT_LEFT);
+            py+=20;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+            RECT c1 = {px, py, w, py+20}; DrawTextA(memDC, "[x] Color Depth: 32-bit (Highest Quality)", -1, &c1, DT_LEFT); py+=20;
+            RECT c2 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Desktop Composition (Aero)", -1, &c2, DT_LEFT); py+=20;
+            RECT c3 = {px, py, w, py+20}; DrawTextA(memDC, "[x] Font Smoothing (ClearType)", -1, &c3, DT_LEFT);
+        }
+        else { // Resources
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Audio Device Setup", -1, &rr1, DT_LEFT);
+            py+=25;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextSecondary);
+            RECT rr2 = {px, py, w-20, py+40}; DrawTextA(memDC, "Leave on screen remote audio (raw physical hardware mode) to be entirely undetectable.", -1, &rr2, DT_LEFT|DT_WORDBREAK);
+            py+=40;
+            RECT tb = {px, py, px+300, py+25};
+            HPEN pb = CreatePen(PS_SOLID, 1, g_BorderColor); SelectObject(memDC, pb);
+            Rectangle(memDC, tb.left, tb.top, tb.right, tb.bottom); DeleteObject(pb);
+            RECT rt4 = {px+8, py+5, px+290, py+20}; SetTextColor(memDC, g_TextPrimary);
+            DrawTextA(memDC, "Leave on Remote Computer (Raw Hardware)", -1, &rt4, DT_LEFT);
+            py+=40;
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr3 = {px, py, w, py+20}; DrawTextA(memDC, "Pass-through Access", -1, &rr3, DT_LEFT);
+            py+=20;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+            RECT c1 = {px, py, w, py+20}; DrawTextA(memDC, "[x] Clipboard Integration", -1, &c1, DT_LEFT); py+=20;
+            RECT c2 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Local Drives", -1, &c2, DT_LEFT); py+=20;
+            RECT c3 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Printers", -1, &c3, DT_LEFT);
+        }
+        
+        DeleteObject(hdrF); DeleteObject(nrmF);
+
+        g_DoneBtnRect = { w/2 - 50, h - 45, w/2 + 50, h - 15 };
+        DrawIcyButton(memDC, g_DoneBtnRect, "Done", g_VHoveredBtn == ID_BTN_VESET_DONE, false);
+
+        BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, oldBmp); DeleteObject(memBmp); DeleteDC(memDC);
+        EndPaint(hwnd, &ps); return 0;
+    }
+    case WM_MOUSEMOVE: {
+        int mx = LOWORD(lp), my = HIWORD(lp);
+        int prev = g_VHoveredBtn; g_VHoveredBtn = 0;
+        POINT pt = {mx, my};
+        for(int i=0; i<3; i++) if (PtInRect(&g_TabRects[i], pt)) g_VHoveredBtn = 7001+i;
+        if (PtInRect(&g_DoneBtnRect, pt)) g_VHoveredBtn = ID_BTN_VESET_DONE;
+        if (prev != g_VHoveredBtn) { InvalidateRect(hwnd, NULL, FALSE); SetCursor(LoadCursor(NULL, g_VHoveredBtn?IDC_HAND:IDC_ARROW)); }
+        TRACKMOUSEEVENT tme = {sizeof(tme), TME_LEAVE, hwnd, 0}; TrackMouseEvent(&tme);
         return 0;
     }
-
-    case WM_KEYDOWN:
-        if (wp == VK_ESCAPE) {
-            DestroyWindow(hwnd);
-            return 0;
-        }
-        break;
-
-    case WM_DESTROY:
-        g_SettingsHwnd = NULL;
-        hAlphaSlider = NULL;
-        hAlphaLabel = NULL;
+    case WM_MOUSELEAVE:
+        if (g_VHoveredBtn) { g_VHoveredBtn = 0; InvalidateRect(hwnd, NULL, FALSE); }
         return 0;
+    case WM_LBUTTONUP: {
+        POINT pt = {LOWORD(lp), HIWORD(lp)};
+        for(int i=0; i<3; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
+        if (PtInRect(&g_DoneBtnRect, pt)) { DestroyWindow(hwnd); }
+        return 0;
+    }
+    case WM_NCHITTEST: {
+        LRESULT hit = DefWindowProc(hwnd, msg, wp, lp);
+        if (hit == HTCLIENT) return HTCAPTION;
+        return hit;
+    }
+    case WM_DESTROY: g_VESettingsHwnd = NULL; return 0;
     }
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
-static void ShowSettingsPopover(HWND owner) {
-    if (g_SettingsHwnd && IsWindow(g_SettingsHwnd)) {
-        SetForegroundWindow(g_SettingsHwnd);
-        return;
-    }
-
-    const char* cls = "ZPSettings";
+void ShowVESettingsModal(HWND owner) {
+    if (g_VESettingsHwnd && IsWindow(g_VESettingsHwnd)) { SetForegroundWindow(g_VESettingsHwnd); return; }
+    const char* cls = "ZPVESettings";
     static bool registered = false;
     if (!registered) {
-        WNDCLASSA wc = {};
-        wc.lpfnWndProc   = SettingsProc;
-        wc.hInstance      = GetModuleHandle(NULL);
-        wc.lpszClassName  = cls;
-        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
-        wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
-        RegisterClassA(&wc);
+        WNDCLASSA wc = {0}; wc.lpfnWndProc = VESettingsProc; wc.hInstance = GetModuleHandle(NULL);
+        wc.lpszClassName = cls; wc.hCursor = LoadCursor(NULL, IDC_ARROW); RegisterClassA(&wc);
         registered = true;
     }
+    RECT ownerRc; GetWindowRect(owner, &ownerRc);
+    int pW = 440, pH = 410;
+    int pX = ownerRc.left + (ownerRc.right - ownerRc.left - pW)/2 + 20;
+    int pY = ownerRc.top + (ownerRc.bottom - ownerRc.top - pH)/2 + 20;
+    
+    g_VESettingsHwnd = CreateWindowExA(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED, cls, "Settings", WS_POPUP | WS_VISIBLE | WS_BORDER, pX, pY, pW, pH, owner, NULL, GetModuleHandle(NULL), NULL);
+    SetLayeredWindowAttributes(g_VESettingsHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+    ShowWindow(g_VESettingsHwnd, SW_SHOW); SetForegroundWindow(g_VESettingsHwnd);
+    MSG msg; while (g_VESettingsHwnd && IsWindow(g_VESettingsHwnd) && GetMessage(&msg, NULL, 0, 0)) { TranslateMessage(&msg); DispatchMessage(&msg); }
+}
 
-    // Position next to the sidebar (to its left)
-    RECT ownerRc;
-    GetWindowRect(owner, &ownerRc);
-    int popW = 260, popH = 280;
-    int popX = ownerRc.left - popW - 4;
-    int popY = ownerRc.top + 100;
-
-    g_SettingsHwnd = CreateWindowExA(
-        WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
-        cls, "Settings",
-        WS_POPUP | WS_VISIBLE | WS_BORDER,
-        popX, popY, popW, popH,
-        owner, NULL, GetModuleHandle(NULL), NULL);
-
-    ShowWindow(g_SettingsHwnd, SW_SHOW);
-    SetForegroundWindow(g_SettingsHwnd);
-
-    // Run local message loop until settings closes
-    MSG msg;
-    while (g_SettingsHwnd && IsWindow(g_SettingsHwnd) && GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+void ShowSettingsPopover(HWND owner) {
+    ShowVESettingsModal(owner);
 }
 
 // Toggle sidebar visibility
@@ -2704,7 +2666,7 @@ static void ToggleFullMenu() {
 //  Entry Point
 // ============================================================================
 
-static const char* ZEROPOINT_VERSION = "v3.0.0";
+static const char* ZEROPOINT_VERSION = "v4.0.0";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Initialize GDI+ for screenshot PNG encoding
@@ -2758,10 +2720,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         return 1;
     }
 
+
+    // ------------------------------------------------------------------
+    //  Start Virtual Environment
+    // ------------------------------------------------------------------
+    StartVirtualEnvironment(nullptr);
+
     // ------------------------------------------------------------------
     //  Background hotkey loop
     // ------------------------------------------------------------------
-    bool keyZ = false, keyH = false, keyB = false, keyX = false;
+    bool keyZ = false, keyH = false, keyB = false, keyX = false, keyR = false, keyC = false, keyF = false;
 
     while (true) {
         // Process pending messages (WebView2 async callbacks need this)
@@ -2872,6 +2840,45 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             }
         } else {
             keyB = false;
+        }
+
+        
+        // Ctrl+Shift+R — Rapid Fire Thoughts (stream response)
+        if (ctrl && shift && (GetAsyncKeyState(0x52) & 0x8000)) {
+            if (!keyR) {
+                keyR = true;
+                if (g_RapidFireConfig.enabled) {
+                    g_LastAnswer = "[RAPID FIRE TICK]\nAnalyzing DOM and visual markers...\nTarget: " + g_VEConfig.interception.customTarget;
+                    if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                    }
+                    if (g_RapidFireConfig.showInPopup) {
+                        ShowAIPopup(g_LastAnswer);
+                    }
+                }
+            }
+        } else {
+            keyR = false;
+        }
+
+        // Ctrl+Alt+C — Toggle VE Lock
+        if (ctrl && alt && (GetAsyncKeyState(0x43) & 0x8000)) {
+            if (!keyC) {
+                keyC = true;
+                ToggleVELock();
+            }
+        } else {
+            keyC = false;
+        }
+
+        // Ctrl+Alt+F — Toggle VE Fullscreen
+        if (ctrl && alt && (GetAsyncKeyState(0x46) & 0x8000)) {
+            if (!keyF) {
+                keyF = true;
+                ToggleVEFullscreen();
+            }
+        } else {
+            keyF = false;
         }
 
         // Ctrl+Shift+X — Panic killswitch (wipe everything + terminate)

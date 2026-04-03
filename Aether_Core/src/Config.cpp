@@ -37,6 +37,7 @@ std::string    g_ProviderKeys[PROV_COUNT] = {};
 
 ScreenshotMode g_ScreenshotMode     = MODE_AUTO_SEND;
 bool           g_PopupEnabled       = true;
+RapidFireConfig g_RapidFireConfig;
 
 VEConfig       g_VEConfig;
 
@@ -90,6 +91,9 @@ void LoadConfig() {
         else if (line.rfind("popup=", 0) == 0) {
             g_PopupEnabled = (atoi(line.c_str() + 6) != 0);
         }
+        else if (line.rfind("rf_enabled=", 0) == 0) g_RapidFireConfig.enabled = (atoi(line.c_str() + 11) != 0);
+        else if (line.rfind("rf_sidebar=", 0) == 0) g_RapidFireConfig.showInSidebar = (atoi(line.c_str() + 11) != 0);
+        else if (line.rfind("rf_popup=", 0) == 0) g_RapidFireConfig.showInPopup = (atoi(line.c_str() + 9) != 0);
         // Legacy bare key
         else if (line.rfind("key=", 0) == 0) g_ProviderKeys[PROV_OPENROUTER] = line.substr(4);
     }
@@ -118,6 +122,9 @@ void SaveConfig() {
             else if (line.rfind("or_model=", 0) == 0)       { lines.push_back("or_model=" + std::to_string(g_OpenRouterModelIndex)); found[6] = true; }
             else if (line.rfind("mode=", 0) == 0)           { lines.push_back("mode=" + std::to_string((int)g_ScreenshotMode)); found[7] = true; }
             else if (line.rfind("popup=", 0) == 0)          { lines.push_back("popup=" + std::to_string(g_PopupEnabled ? 1 : 0)); found[8] = true; }
+            else if (line.rfind("rf_enabled=", 0) == 0)     { lines.push_back("rf_enabled=" + std::to_string(g_RapidFireConfig.enabled ? 1 : 0)); found[9] = true; }
+            else if (line.rfind("rf_sidebar=", 0) == 0)     { lines.push_back("rf_sidebar=" + std::to_string(g_RapidFireConfig.showInSidebar ? 1 : 0)); found[10] = true; }
+            else if (line.rfind("rf_popup=", 0) == 0)       { lines.push_back("rf_popup=" + std::to_string(g_RapidFireConfig.showInPopup ? 1 : 0)); found[11] = true; }
             else if (line.rfind("key=", 0) == 0)            { /* skip legacy */ }
             else                                             { lines.push_back(line); }
         }
@@ -130,6 +137,9 @@ void SaveConfig() {
     if (!found[6]) lines.push_back("or_model=" + std::to_string(g_OpenRouterModelIndex));
     if (!found[7]) lines.push_back("mode=" + std::to_string((int)g_ScreenshotMode));
     if (!found[8]) lines.push_back("popup=" + std::to_string(g_PopupEnabled ? 1 : 0));
+    if (!found[9]) lines.push_back("rf_enabled=" + std::to_string(g_RapidFireConfig.enabled ? 1 : 0));
+    if (!found[10]) lines.push_back("rf_sidebar=" + std::to_string(g_RapidFireConfig.showInSidebar ? 1 : 0));
+    if (!found[11]) lines.push_back("rf_popup=" + std::to_string(g_RapidFireConfig.showInPopup ? 1 : 0));
 
     std::ofstream out(CONFIG_PATH);
     for (const auto& l : lines) out << l << "\n";

@@ -42,6 +42,16 @@ enum ScreenshotMode {
 };
 
 // ---------------------------------------------------------------------------
+//  Rapid Fire Thoughts Settings
+// ---------------------------------------------------------------------------
+
+struct RapidFireConfig {
+    bool enabled = false;
+    bool showInSidebar = true;
+    bool showInPopup = false;
+};
+
+// ---------------------------------------------------------------------------
 //  Virtual Environment — Display Settings
 // ---------------------------------------------------------------------------
 
@@ -114,6 +124,7 @@ extern ProviderInfo    g_Providers[PROV_COUNT];
 
 extern ScreenshotMode  g_ScreenshotMode;
 extern bool            g_PopupEnabled;
+extern RapidFireConfig g_RapidFireConfig;
 
 extern VEConfig        g_VEConfig;
 
