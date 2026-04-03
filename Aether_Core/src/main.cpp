@@ -907,50 +907,255 @@ static void PaintBrowserThumbnailPanel(HDC hdc, int panelX, int panelW, int pane
 
     // Hint at bottom
     SetTextColor(hdc, g_ShadowColor);
-    RECT hintRc = { panelX + 4, panelH - 24, panelX + panelW - 4, panelH - 4 };
-    DrawTextA(hdc, "Drag to upload to page", -1, &hintRc,
-              DT_CENTER | DT_SINGLELINE);
+    RECT hintRc = { panelX + 4, panelH - 36, panelX + panelW - 4, panelH - 4 };
+    DrawTextA(hdc, "Drag onto page to upload\nClick to copy to clipboard", -1, &hintRc,
+              DT_CENTER | DT_WORDBREAK);
     DeleteObject(smallFont);
 }
 
-// OLE drag-and-drop: initiate a file drop for a screenshot thumbnail
-static void InitiateDragDrop(const std::string& filePath) {
-    // Build DROPFILES structure for CF_HDROP
-    size_t fileLen = filePath.size() + 1;  // include null terminator
-    size_t totalSize = sizeof(DROPFILES) + fileLen + 1;  // double null at end
+// ============================================================================
+//  OLE Drag-and-Drop — native file drop from thumbnail panel to WebView2
+// ============================================================================
+//  Implements IDropSource and IDataObject COM interfaces so that dragging a
+//  screenshot thumbnail from the right sidebar onto the WebView2 page triggers
+//  a real file-drop event. ChatGPT, Gemini, Grok web — any page that accepts
+//  file drops will receive the PNG as a native file upload.
+//
+//  How it works:
+//    1. User presses LMB on a thumbnail in the panel
+//    2. On WM_MOUSEMOVE, if drag threshold is exceeded, we call DoDragDrop()
+//    3. DoDragDrop() enters a modal drag loop, painting a drag cursor
+//    4. When the user releases over the WebView2 area, IDropTarget on the
+//       WebView2 receives CF_HDROP data with the screenshot file path
+//    5. The web page's <input type="file"> or drop handler picks up the file
 
-    HGLOBAL hGlobal = GlobalAlloc(GHND, totalSize);
-    if (!hGlobal) return;
+// ---------------------------------------------------------------------------
+//  ZPDropSource — minimal IDropSource implementation
+//  Controls the drag cursor and decides when to cancel/complete the drag.
+// ---------------------------------------------------------------------------
 
-    DROPFILES* df = (DROPFILES*)GlobalLock(hGlobal);
-    df->pFiles = sizeof(DROPFILES);
-    df->fWide = FALSE;
-    char* dst = (char*)df + sizeof(DROPFILES);
-    memcpy(dst, filePath.c_str(), fileLen);
-    dst[fileLen] = 0;  // double null terminator
-    GlobalUnlock(hGlobal);
+class ZPDropSource : public IDropSource {
+    LONG m_refCount;
+public:
+    ZPDropSource() : m_refCount(1) {}
 
-    // Create IDataObject with CF_HDROP format
-    FORMATETC fmt = { CF_HDROP, NULL, DVASPECT_CONTENT, -1, TYMED_HGLOBAL };
-    STGMEDIUM stg = { TYMED_HGLOBAL, { 0 }, NULL };
-    stg.hGlobal = hGlobal;
-
-    // Use SHCreateDataObject for simplicity
-    IDataObject* pDataObj = NULL;
-    // Minimal IDataObject implementation via shell
-    // For production: implement IDataObject + IDropSource properly
-    // Simplified: use ReleaseStgMedium after drag completes
-
-    // Note: Full OLE drag-drop requires IDataObject + IDropSource implementation.
-    // As a pragmatic approach, we copy the file path to clipboard as CF_HDROP
-    // so the user can paste it, and show the file in the drag cursor.
-    if (OpenClipboard(g_BrowserHwnd)) {
-        EmptyClipboard();
-        SetClipboardData(CF_HDROP, hGlobal);
-        CloseClipboard();
-    } else {
-        GlobalFree(hGlobal);
+    // IUnknown
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+        if (riid == IID_IUnknown || riid == IID_IDropSource) {
+            *ppv = static_cast<IDropSource*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = NULL;
+        return E_NOINTERFACE;
     }
+    ULONG STDMETHODCALLTYPE AddRef() override  { return InterlockedIncrement(&m_refCount); }
+    ULONG STDMETHODCALLTYPE Release() override {
+        ULONG count = InterlockedDecrement(&m_refCount);
+        if (count == 0) delete this;
+        return count;
+    }
+
+    // IDropSource
+    HRESULT STDMETHODCALLTYPE QueryContinueDrag(BOOL fEscapePressed, DWORD grfKeyState) override {
+        // Cancel if Escape was pressed
+        if (fEscapePressed) return DRAGDROP_S_CANCEL;
+        // Drop if LMB was released
+        if (!(grfKeyState & MK_LBUTTON)) return DRAGDROP_S_DROP;
+        return S_OK;
+    }
+    HRESULT STDMETHODCALLTYPE GiveFeedback(DWORD) override {
+        // Use default cursor feedback
+        return DRAGDROP_S_USEDEFAULTCURSORS;
+    }
+};
+
+// ---------------------------------------------------------------------------
+//  ZPDataObject — minimal IDataObject providing CF_HDROP for one file
+//  This is the data payload that the drop target (WebView2) receives.
+//  It presents the screenshot file as a CF_HDROP (shell file list) so the
+//  browser interprets it the same way as a file dragged from Explorer.
+// ---------------------------------------------------------------------------
+
+class ZPDataObject : public IDataObject {
+    LONG        m_refCount;
+    FORMATETC   m_fmt;
+    STGMEDIUM   m_stg;
+    bool        m_hasData;
+
+public:
+    ZPDataObject(const std::string& filePath) : m_refCount(1), m_hasData(false) {
+        // Build a DROPFILES structure containing the file path
+        // DROPFILES is the standard shell format for drag-and-drop files
+        size_t pathBytes = filePath.size() + 1;          // path + null
+        size_t totalSize = sizeof(DROPFILES) + pathBytes + 1;  // + double-null terminator
+
+        HGLOBAL hGlobal = GlobalAlloc(GHND | GMEM_SHARE, totalSize);
+        if (!hGlobal) return;
+
+        DROPFILES* pDrop = (DROPFILES*)GlobalLock(hGlobal);
+        pDrop->pFiles = sizeof(DROPFILES);    // offset to file list
+        pDrop->fWide  = FALSE;                // ANSI paths
+        pDrop->pt     = { 0, 0 };
+        pDrop->fNC    = FALSE;
+
+        char* pFiles = (char*)pDrop + sizeof(DROPFILES);
+        memcpy(pFiles, filePath.c_str(), pathBytes);
+        pFiles[pathBytes] = '\0';             // double-null terminator
+        GlobalUnlock(hGlobal);
+
+        // Describe the format we provide: CF_HDROP in an HGLOBAL
+        m_fmt.cfFormat = CF_HDROP;
+        m_fmt.ptd      = NULL;
+        m_fmt.dwAspect = DVASPECT_CONTENT;
+        m_fmt.lindex   = -1;
+        m_fmt.tymed    = TYMED_HGLOBAL;
+
+        m_stg.tymed          = TYMED_HGLOBAL;
+        m_stg.hGlobal        = hGlobal;
+        m_stg.pUnkForRelease = NULL;
+
+        m_hasData = true;
+    }
+
+    ~ZPDataObject() {
+        if (m_hasData && m_stg.hGlobal) {
+            GlobalFree(m_stg.hGlobal);
+        }
+    }
+
+    // IUnknown
+    HRESULT STDMETHODCALLTYPE QueryInterface(REFIID riid, void** ppv) override {
+        if (riid == IID_IUnknown || riid == IID_IDataObject) {
+            *ppv = static_cast<IDataObject*>(this);
+            AddRef();
+            return S_OK;
+        }
+        *ppv = NULL;
+        return E_NOINTERFACE;
+    }
+    ULONG STDMETHODCALLTYPE AddRef() override  { return InterlockedIncrement(&m_refCount); }
+    ULONG STDMETHODCALLTYPE Release() override {
+        ULONG count = InterlockedDecrement(&m_refCount);
+        if (count == 0) delete this;
+        return count;
+    }
+
+    // IDataObject — GetData: return CF_HDROP data to the drop target
+    HRESULT STDMETHODCALLTYPE GetData(FORMATETC* pFmt, STGMEDIUM* pMedium) override {
+        if (!m_hasData) return DV_E_FORMATETC;
+        if (pFmt->cfFormat != CF_HDROP)   return DV_E_FORMATETC;
+        if (!(pFmt->tymed & TYMED_HGLOBAL)) return DV_E_TYMED;
+
+        // Duplicate the HGLOBAL so the caller can free it independently
+        SIZE_T size = GlobalSize(m_stg.hGlobal);
+        HGLOBAL hDup = GlobalAlloc(GHND | GMEM_SHARE, size);
+        if (!hDup) return E_OUTOFMEMORY;
+
+        void* src = GlobalLock(m_stg.hGlobal);
+        void* dst = GlobalLock(hDup);
+        memcpy(dst, src, size);
+        GlobalUnlock(m_stg.hGlobal);
+        GlobalUnlock(hDup);
+
+        pMedium->tymed          = TYMED_HGLOBAL;
+        pMedium->hGlobal        = hDup;
+        pMedium->pUnkForRelease = NULL;
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE GetDataHere(FORMATETC*, STGMEDIUM*) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE QueryGetData(FORMATETC* pFmt) override {
+        if (!m_hasData) return DV_E_FORMATETC;
+        if (pFmt->cfFormat == CF_HDROP && (pFmt->tymed & TYMED_HGLOBAL))
+            return S_OK;
+        return DV_E_FORMATETC;
+    }
+    HRESULT STDMETHODCALLTYPE GetCanonicalFormatEtc(FORMATETC*, FORMATETC* pOut) override {
+        pOut->ptd = NULL;
+        return DATA_S_SAMEFORMATETC;
+    }
+    HRESULT STDMETHODCALLTYPE SetData(FORMATETC*, STGMEDIUM*, BOOL) override { return E_NOTIMPL; }
+    HRESULT STDMETHODCALLTYPE EnumFormatEtc(DWORD dwDir, IEnumFORMATETC** ppEnum) override {
+        if (dwDir != DATADIR_GET) return E_NOTIMPL;
+        // Use SHCreateStdEnumFmtEtc from the shell — simple 1-format enumerator
+        return SHCreateStdEnumFmtEtc(1, &m_fmt, ppEnum);
+    }
+    HRESULT STDMETHODCALLTYPE DAdvise(FORMATETC*, DWORD, IAdviseSink*, DWORD*) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE DUnadvise(DWORD) override { return OLE_E_ADVISENOTSUPPORTED; }
+    HRESULT STDMETHODCALLTYPE EnumDAdvise(IEnumSTATDATA**) override { return OLE_E_ADVISENOTSUPPORTED; }
+};
+
+// ---------------------------------------------------------------------------
+//  BeginThumbnailDragDrop — creates COM objects and calls DoDragDrop()
+//  This enters a modal drag loop. The user sees a file cursor while dragging.
+//  When released over WebView2, the page receives a native HTML5 drop event.
+// ---------------------------------------------------------------------------
+
+static void BeginThumbnailDragDrop(const std::string& filePath) {
+    ZPDataObject* pDataObj = new ZPDataObject(filePath);
+    ZPDropSource* pDropSrc = new ZPDropSource();
+
+    DWORD dwEffect = 0;
+    // DoDragDrop is modal — it blocks until the user releases the mouse
+    HRESULT hr = DoDragDrop(
+        pDataObj,
+        pDropSrc,
+        DROPEFFECT_COPY,     // we only support copy (not move)
+        &dwEffect
+    );
+
+    // If drag was cancelled or drop target didn't accept,
+    // fall back to clipboard copy so the user can Ctrl+V
+    if (hr == DRAGDROP_S_CANCEL || dwEffect == DROPEFFECT_NONE) {
+        // Build CF_HDROP for clipboard as fallback
+        size_t pathBytes = filePath.size() + 1;
+        size_t totalSize = sizeof(DROPFILES) + pathBytes + 1;
+        HGLOBAL hClip = GlobalAlloc(GHND, totalSize);
+        if (hClip) {
+            DROPFILES* df = (DROPFILES*)GlobalLock(hClip);
+            df->pFiles = sizeof(DROPFILES);
+            df->fWide  = FALSE;
+            char* dst = (char*)df + sizeof(DROPFILES);
+            memcpy(dst, filePath.c_str(), pathBytes);
+            dst[pathBytes] = '\0';
+            GlobalUnlock(hClip);
+
+            if (OpenClipboard(g_BrowserHwnd)) {
+                EmptyClipboard();
+                SetClipboardData(CF_HDROP, hClip);
+                CloseClipboard();
+            } else {
+                GlobalFree(hClip);
+            }
+        }
+    }
+
+    pDropSrc->Release();
+    pDataObj->Release();
+}
+
+// ---------------------------------------------------------------------------
+//  Drag state tracking for the thumbnail panel
+//  We track the initial mousedown position and only start the drag after the
+//  mouse moves beyond the system drag threshold (SM_CXDRAG / SM_CYDRAG).
+//  This prevents accidental drags when the user just clicks.
+// ---------------------------------------------------------------------------
+
+static bool  g_DragPending   = false;    // LMB is down in thumbnail area
+static int   g_DragIndex     = -1;       // which screenshot index is being dragged
+static POINT g_DragStartPt   = { 0, 0 }; // mousedown position (client coords)
+
+// Helper: determine which thumbnail index is at a given Y position
+static int HitTestThumbnail(int mouseY) {
+    if (g_ScreenshotHistory.empty()) return -1;
+    int thumbH = 100;
+    int y = 36;  // first thumbnail Y offset in the panel
+    for (int i = (int)g_ScreenshotHistory.size() - 1; i >= 0; i--) {
+        if (mouseY >= y && mouseY < y + thumbH) return i;
+        y += thumbH + 6;
+    }
+    return -1;
 }
 
 static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -994,28 +1199,102 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         }
         return 0;
 
+    // ------------------------------------------------------------------
+    //  WM_LBUTTONDOWN — record mousedown in thumbnail area; set drag pending
+    // ------------------------------------------------------------------
     case WM_LBUTTONDOWN: {
-        // Check if click is in the thumbnail panel area
-        int mx = LOWORD(lp), my = HIWORD(lp);
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
         RECT rc;
         GetClientRect(hwnd, &rc);
         int panelX = rc.right - BROWSER_PANEL_W;
 
+        // Only intercept clicks inside the thumbnail column
         if (mx >= panelX + 8 && mx <= panelX + BROWSER_PANEL_W - 8 && my >= 36) {
-            // Determine which thumbnail was clicked
-            int thumbH = 100;
-            int y = 36;
-            for (int i = (int)g_ScreenshotHistory.size() - 1; i >= 0; i--) {
-                if (my >= y && my < y + thumbH) {
-                    // Copy to clipboard as CF_HDROP so user can paste into web apps
-                    InitiateDragDrop(g_ScreenshotHistory[i]);
-                    return 0;
-                }
-                y += thumbH + 6;
+            int idx = HitTestThumbnail(my);
+            if (idx >= 0) {
+                // Begin tracking — drag will start on WM_MOUSEMOVE
+                g_DragPending  = true;
+                g_DragIndex    = idx;
+                g_DragStartPt  = { mx, my };
+                SetCapture(hwnd);  // capture mouse so we detect moves outside window
+                return 0;
             }
         }
         break;
     }
+
+    // ------------------------------------------------------------------
+    //  WM_MOUSEMOVE — if drag pending and threshold exceeded, start OLE drag
+    // ------------------------------------------------------------------
+    case WM_MOUSEMOVE: {
+        if (!g_DragPending || g_DragIndex < 0) break;
+
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
+
+        // System drag threshold — prevents accidental drags on jittery clicks
+        int cxDrag = GetSystemMetrics(SM_CXDRAG);
+        int cyDrag = GetSystemMetrics(SM_CYDRAG);
+
+        if (abs(mx - g_DragStartPt.x) > cxDrag ||
+            abs(my - g_DragStartPt.y) > cyDrag) {
+            // Threshold exceeded — begin the OLE drag-and-drop operation
+            ReleaseCapture();
+            g_DragPending = false;
+
+            if (g_DragIndex >= 0 && g_DragIndex < (int)g_ScreenshotHistory.size()) {
+                // DoDragDrop is MODAL — it blocks until the user completes the drag.
+                // During this time, the user sees a file-drag cursor and can drop
+                // the screenshot onto the WebView2 page (or any other drop target).
+                BeginThumbnailDragDrop(g_ScreenshotHistory[g_DragIndex]);
+            }
+            g_DragIndex = -1;
+        }
+        return 0;
+    }
+
+    // ------------------------------------------------------------------
+    //  WM_LBUTTONUP — if drag didn't start (click without move), use clipboard fallback
+    // ------------------------------------------------------------------
+    case WM_LBUTTONUP: {
+        if (g_DragPending && g_DragIndex >= 0) {
+            ReleaseCapture();
+            g_DragPending = false;
+
+            // This was a click, not a drag — copy to clipboard as fallback
+            if (g_DragIndex >= 0 && g_DragIndex < (int)g_ScreenshotHistory.size()) {
+                const std::string& filePath = g_ScreenshotHistory[g_DragIndex];
+                size_t pathBytes = filePath.size() + 1;
+                size_t totalSize = sizeof(DROPFILES) + pathBytes + 1;
+                HGLOBAL hClip = GlobalAlloc(GHND, totalSize);
+                if (hClip) {
+                    DROPFILES* df = (DROPFILES*)GlobalLock(hClip);
+                    df->pFiles = sizeof(DROPFILES);
+                    df->fWide  = FALSE;
+                    char* dst = (char*)df + sizeof(DROPFILES);
+                    memcpy(dst, filePath.c_str(), pathBytes);
+                    dst[pathBytes] = '\0';
+                    GlobalUnlock(hClip);
+                    if (OpenClipboard(g_BrowserHwnd)) {
+                        EmptyClipboard();
+                        SetClipboardData(CF_HDROP, hClip);
+                        CloseClipboard();
+                    } else {
+                        GlobalFree(hClip);
+                    }
+                }
+            }
+            g_DragIndex = -1;
+        }
+        break;
+    }
+
+    // ------------------------------------------------------------------
+    //  WM_CAPTURECHANGED — cancel pending drag if we lost capture
+    // ------------------------------------------------------------------
+    case WM_CAPTURECHANGED:
+        g_DragPending = false;
+        g_DragIndex   = -1;
+        break;
 
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE) {
@@ -1030,6 +1309,8 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         break;
 
     case WM_DESTROY:
+        g_DragPending    = false;
+        g_DragIndex      = -1;
         g_WebController  = nullptr;
         g_WebView        = nullptr;
         g_BrowserHwnd    = NULL;
