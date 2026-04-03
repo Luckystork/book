@@ -26,7 +26,9 @@
 #include <functional>
 #include <cstdlib>
 #include <ctime>
-
+#include <vector>
+#include <sstream>
+#include <iomanip>
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -114,11 +116,52 @@ static const COLORREF VE_ICY_BORDER   = RGB(0xD0, 0xD8, 0xE8);
 //  Hardware Spoofing — Anti-Detection Layer
 // ============================================================================
 
+static void SetRegString(HKEY root, const char* path, const char* valName, const char* data) {
+    HKEY hKey;
+    if (RegCreateKeyExA(root, path, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL) == ERROR_SUCCESS) {
+        RegSetValueExA(hKey, valName, 0, REG_SZ, (const BYTE*)data, (DWORD)strlen(data) + 1);
+        RegCloseKey(hKey);
+    }
+}
+
+static std::string RandomString(int len, bool hex = false) {
+    const char* chars = hex ? "0123456789ABCDEF" : "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    std::string s = "";
+    for (int i = 0; i < len; i++) s += chars[rand() % (hex ? 16 : 36)];
+    return s;
+}
+
 static void ApplyHardwareSpoofing() {
-    // Randomized BIOS/UEFI + hardware IDs (simulated for final product)
-    // In real build this would patch RDP session parameters via registry or driver hooks
     srand((unsigned int)time(NULL));
-    // ... (full spoofing code would go here in production build)
+
+    // 1. BIOS / SMBIOS Spoofing
+    const char* biosPath = "HARDWARE\\DESCRIPTION\\System\\BIOS";
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVendor", "American Megatrends Inc.");
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVersion", ("v" + std::to_string(rand() % 5 + 1) + "." + std::to_string(rand() % 99)).c_str());
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSReleaseDate", (std::to_string(rand() % 12 + 1) + "/" + std::to_string(rand() % 28 + 1) + "/202" + std::to_string(rand() % 5)).c_str());
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardManufacturer", "ASUSTeK COMPUTER INC.");
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardProduct", ("PRIME Z" + std::to_string(rand() % 9 + 1) + "90-P").c_str());
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemManufacturer", "ASUSTeK COMPUTER INC.");
+    SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemProductName", "Desktop PC");
+
+    // 2. CPUID Spoofing
+    const char* cpuPath = "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0";
+    const char* cpus[] = { "13th Gen Intel(R) Core(TM) i9-13900K", "12th Gen Intel(R) Core(TM) i7-12700K", "AMD Ryzen 9 7950X 16-Core Processor" };
+    SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "ProcessorNameString", cpus[rand() % 3]);
+
+    // 3. GPU Spoofing
+    const char* gpuPath = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000";
+    const char* gpus[] = { "NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 3080 Ti", "AMD Radeon RX 7900 XTX" };
+    SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "DriverDesc", gpus[rand() % 3]);
+    SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "HardwareInformation.AdapterString", gpus[rand() % 3]);
+
+    // 4. Disk Serial Spoofing
+    SetRegString(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum", "0", ("SCSI\\Disk&Ven_NVMe&Prod_Samsung_SSD_980\\" + RandomString(12)).c_str());
+
+    // 5. MAC Address Simulation (Randomized NetworkAddress)
+    const char* netPath = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}\\0001";
+    std::string mac = "00" + RandomString(10, true);
+    SetRegString(HKEY_LOCAL_MACHINE, netPath, "NetworkAddress", mac.c_str());
 }
 
 // ============================================================================
@@ -862,37 +905,69 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
 // Real Auto-Typer - Human-like text injection into exam window
 // ============================================================================
 
+static std::wstring Utf8ToUtf16(const std::string& str) {
+    if (str.empty()) return L"";
+    int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    std::wstring wstr(size, 0);
+    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size);
+    return wstr;
+}
+
 void PerformAutoType(const std::string& text) {
     if (text.empty()) return;
+
+    std::wstring wText = Utf8ToUtf16(text);
 
     // Bring the exam window to foreground if possible
     HWND hwnd = GetForegroundWindow();
     if (!hwnd) return;
-
     SetForegroundWindow(hwnd);
 
-    for (char c : text) {
+    srand((unsigned int)time(NULL));
+
+    for (size_t i = 0; i < wText.size(); i++) {
+        wchar_t c = wText[i];
+
+        // 1. Natural error simulation (occasional typo)
+        if (rand() % 40 == 0) {
+            wchar_t typo = L'a' + (rand() % 26);
+            INPUT ipErr = {0};
+            ipErr.type = INPUT_KEYBOARD;
+            ipErr.ki.wScan = typo;
+            ipErr.ki.dwFlags = KEYEVENTF_UNICODE;
+            SendInput(1, &ipErr, sizeof(INPUT));
+            
+            Sleep(100 + (rand() % 100)); // processing time
+            
+            // Backspace it
+            INPUT ipBs = {0};
+            ipBs.type = INPUT_KEYBOARD;
+            ipBs.ki.wVk = VK_BACK;
+            SendInput(1, &ipBs, sizeof(INPUT));
+            ipBs.ki.dwFlags = KEYEVENTF_KEYUP;
+            SendInput(1, &ipBs, sizeof(INPUT));
+            
+            Sleep(150 + (rand() % 150)); // pause before re-typing
+        }
+
+        // 2. Type the correct character
         INPUT ip = {0};
         ip.type = INPUT_KEYBOARD;
-        ip.ki.wVk = 0;
         ip.ki.wScan = c;
         ip.ki.dwFlags = KEYEVENTF_UNICODE;
-
         SendInput(1, &ip, sizeof(INPUT));
-        Sleep(80 + (rand() % 100));  // human-like delay 80-180ms
 
-        // occasional small mistake + correction
-        if (rand() % 25 == 0) {
-            // backspace
-            ip.ki.wScan = VK_BACK;
-            ip.ki.dwFlags = 0;
-            SendInput(1, &ip, sizeof(INPUT));
-            Sleep(60);
-            // re-type correct char
-            ip.ki.wScan = c;
-            ip.ki.dwFlags = KEYEVENTF_UNICODE;
-            SendInput(1, &ip, sizeof(INPUT));
-            Sleep(90);
-        }
+        // Release (essential for some apps)
+        ip.ki.dwFlags |= KEYEVENTF_KEYUP;
+        SendInput(1, &ip, sizeof(INPUT));
+
+        // 3. Human-like delay (80-180ms)
+        int delay = 80 + (rand() % 100);
+        
+        // Punctuation takes longer to think about
+        if (c == L'.' || c == L'?' || c == L'!') delay += 200 + (rand() % 300);
+        else if (c == L' ' || c == L',') delay += 50 + (rand() % 100);
+
+        Sleep(delay);
     }
 }
