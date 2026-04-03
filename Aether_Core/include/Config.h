@@ -1,6 +1,6 @@
 // ============================================================================
 //  ZeroPoint — Config.h
-//  Configuration persistence, AI model management, and API key handling.
+//  5 AI providers, each a specific model. Per-provider API keys.
 // ============================================================================
 
 #pragma once
@@ -11,44 +11,73 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
+//  5 Providers — each mapped to one AI model + its direct API
+// ---------------------------------------------------------------------------
+
+enum Provider {
+    PROV_CLAUDE     = 0,   // Claude 4.6 Opus   → api.anthropic.com
+    PROV_GROK       = 1,   // Grok 4            → api.x.ai
+    PROV_GPT        = 2,   // GPT-5.2           → api.openai.com
+    PROV_DEEPSEEK   = 3,   // Deepseek V3.2 R1  → api.deepseek.com
+    PROV_OPENROUTER = 4,   // OpenRouter         → openrouter.ai (any model)
+    PROV_COUNT      = 5
+};
+
+struct ProviderInfo {
+    const char* displayName;   // "Claude 4.6 Opus"
+    const char* modelID;       // API model identifier
+    const char* configKey;     // "key_claude" in config.ini
+    const char* hostW;         // hostname for the API
+};
+
+// ---------------------------------------------------------------------------
 //  Globals (defined in Config.cpp)
 // ---------------------------------------------------------------------------
 
-extern std::string              g_OpenRouterKey;
-extern std::vector<std::string> g_AvailableModels;    // display names
-extern int                      g_ActiveModelIndex;
+extern Provider     g_ActiveProvider;
+extern std::string  g_ProviderKeys[PROV_COUNT];
+extern ProviderInfo g_Providers[PROV_COUNT];
+
+// For OpenRouter sub-model selection
+extern std::vector<std::string> g_OpenRouterModels;
+extern int g_OpenRouterModelIndex;
 
 // ---------------------------------------------------------------------------
 //  Config Persistence
 // ---------------------------------------------------------------------------
 
-// Load API key and active model index from config.ini.
 void LoadConfig();
-
-// Save current API key and active model index to config.ini.
 void SaveConfig();
 
 // ---------------------------------------------------------------------------
-//  API Key
+//  API Key — per-provider
 // ---------------------------------------------------------------------------
 
-// Set (and persist) the OpenRouter API key.
-bool SetOpenRouterKey(const std::string& key);
+bool        SetProviderKey(Provider prov, const std::string& key);
+std::string GetProviderKey(Provider prov);
 
-// Retrieve the current OpenRouter API key.
+// Legacy wrappers
+bool        SetOpenRouterKey(const std::string& key);
 std::string GetOpenRouterKey();
 
 // ---------------------------------------------------------------------------
-//  Model Selection
+//  Provider + Model
 // ---------------------------------------------------------------------------
 
-// Display name of the currently active model (e.g. "Claude 4.6 Opus").
-std::string GetActiveModel();
-
-// OpenRouter-compatible model ID (e.g. "anthropic/claude-opus-4").
+void        SetActiveProvider(int index);
+Provider    GetActiveProvider();
+std::string GetActiveProviderName();
 std::string GetActiveModelID();
 
-// Set active model by combo-box index.
-void SetActiveModel(int index);
+// OpenRouter sub-model
+void        SetOpenRouterModel(int index);
+
+// Back-compat
+std::string GetActiveModel();
+void        SetActiveModel(int index);
+
+// For old launcher combobox (kept for compat)
+extern std::vector<std::string> g_AvailableModels;
+extern int g_ActiveModelIndex;
 
 #endif // ZEROPOINT_CONFIG_H

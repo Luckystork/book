@@ -1,12 +1,24 @@
 // ============================================================================
 //  ZeroPoint — Config.cpp
-//  Configuration persistence: API key, model selection, and model ID mapping.
+//  5 AI providers, per-provider API keys, config persistence.
 //
-//  Config file format (C:\ProgramData\ZeroPoint\config.ini):
-//    key=sk-or-v1-xxxx...           (OpenRouter API key)
-//    model=0                        (active model index)
-//    accent=#00DDFF                 (accent color — handled in main.cpp)
-//    alpha=230                      (window opacity — handled in main.cpp)
+//  Providers:
+//    0. Claude 4.6 Opus   → Anthropic Messages API (api.anthropic.com)
+//    1. Grok 4            → xAI OpenAI-compat API  (api.x.ai)
+//    2. GPT-5.2           → OpenAI API             (api.openai.com)
+//    3. Deepseek V3.2 R1  → DeepSeek OpenAI-compat (api.deepseek.com)
+//    4. OpenRouter         → Unified gateway        (openrouter.ai)
+//
+//  Config format (C:\ProgramData\ZeroPoint\config.ini):
+//    provider=0
+//    key_claude=sk-ant-xxxx
+//    key_grok=xai-xxxx
+//    key_gpt=sk-xxxx
+//    key_deepseek=sk-xxxx
+//    key_openrouter=sk-or-v1-xxxx
+//    or_model=0
+//    accent=#00DDFF
+//    alpha=230
 // ============================================================================
 
 #include "Config.h"
@@ -14,42 +26,46 @@
 #include <fstream>
 #include <string>
 #include <vector>
-#include <map>
-#include <algorithm>
+
+// ============================================================================
+//  Provider Definitions
+// ============================================================================
+
+ProviderInfo g_Providers[PROV_COUNT] = {
+    // displayName            modelID                        configKey          host
+    { "Claude 4.6 Opus",     "claude-opus-4-20250514",      "key_claude",      "api.anthropic.com"      },
+    { "Grok 4",              "grok-4",                      "key_grok",        "api.x.ai"               },
+    { "GPT-5.2",             "gpt-5.2",                     "key_gpt",         "api.openai.com"          },
+    { "Deepseek V3.2 R1",   "deepseek-reasoner",           "key_deepseek",    "api.deepseek.com"        },
+    { "OpenRouter",          "anthropic/claude-opus-4",     "key_openrouter",  "openrouter.ai"           },
+};
 
 // ============================================================================
 //  Globals
 // ============================================================================
 
+Provider    g_ActiveProvider      = PROV_CLAUDE;
+std::string g_ProviderKeys[PROV_COUNT] = {};
+
+// OpenRouter sub-models (when using the unified gateway)
+std::vector<std::string> g_OpenRouterModels = {
+    "anthropic/claude-opus-4",
+    "openai/gpt-5.2",
+    "x-ai/grok-4",
+    "deepseek/deepseek-r1",
+    "google/gemini-2.5-pro",
+};
+int g_OpenRouterModelIndex = 0;
+
+// Legacy compat
 std::string g_OpenRouterKey;
-
-// Display names for the launcher combo box
-std::vector<std::string> g_AvailableModels = {
-    "Claude 4.6 Opus",
-    "Grok 4",
-    "GPT-5.2",
-    "Deepseek V3.2 R1"
-};
-
+std::vector<std::string> g_AvailableModels;
 int g_ActiveModelIndex = 0;
-
-// ============================================================================
-//  Model ID Mapping — display name → OpenRouter API model ID
-// ============================================================================
-//  OpenRouter expects model IDs like "anthropic/claude-opus-4".
-//  This map converts our friendly display names to the correct API IDs.
-
-static const std::map<std::string, std::string> g_ModelIDMap = {
-    { "Claude 4.6 Opus",    "anthropic/claude-opus-4" },
-    { "Grok 4",             "x-ai/grok-4"             },
-    { "GPT-5.2",            "openai/gpt-5.2"          },
-    { "Deepseek V3.2 R1",   "deepseek/deepseek-r1"    },
-};
 
 static const std::string CONFIG_PATH = "C:\\ProgramData\\ZeroPoint\\config.ini";
 
 // ============================================================================
-//  Load / Save — INI-style key=value parsing
+//  Load / Save
 // ============================================================================
 
 void LoadConfig() {
@@ -58,108 +74,108 @@ void LoadConfig() {
 
     std::string line;
     while (std::getline(file, line)) {
-        // Skip empty lines and comments
         if (line.empty() || line[0] == '#' || line[0] == ';') continue;
 
-        // Parse key=value
-        if (line.rfind("key=", 0) == 0) {
-            g_OpenRouterKey = line.substr(4);
+        if (line.rfind("provider=", 0) == 0) {
+            int idx = atoi(line.c_str() + 9);
+            if (idx >= 0 && idx < PROV_COUNT) g_ActiveProvider = (Provider)idx;
         }
-        else if (line.rfind("model=", 0) == 0) {
-            int idx = atoi(line.c_str() + 6);
-            if (idx >= 0 && idx < (int)g_AvailableModels.size()) {
-                g_ActiveModelIndex = idx;
-            }
+        else if (line.rfind("key_claude=", 0) == 0)     g_ProviderKeys[PROV_CLAUDE]     = line.substr(11);
+        else if (line.rfind("key_grok=", 0) == 0)       g_ProviderKeys[PROV_GROK]       = line.substr(9);
+        else if (line.rfind("key_gpt=", 0) == 0)        g_ProviderKeys[PROV_GPT]        = line.substr(8);
+        else if (line.rfind("key_deepseek=", 0) == 0)   g_ProviderKeys[PROV_DEEPSEEK]   = line.substr(13);
+        else if (line.rfind("key_openrouter=", 0) == 0) g_ProviderKeys[PROV_OPENROUTER] = line.substr(15);
+        else if (line.rfind("or_model=", 0) == 0) {
+            int idx = atoi(line.c_str() + 9);
+            if (idx >= 0 && idx < (int)g_OpenRouterModels.size()) g_OpenRouterModelIndex = idx;
         }
-        // accent= and alpha= are handled by LoadThemeSettings() in main.cpp
+        // Legacy bare key
+        else if (line.rfind("key=", 0) == 0)            g_ProviderKeys[PROV_OPENROUTER] = line.substr(4);
     }
 
-    // Legacy fallback: if no key= prefix found, treat entire first line as key
-    // (backwards compatibility with old single-line config format)
-    if (g_OpenRouterKey.empty()) {
-        file.clear();
-        file.seekg(0, std::ios::beg);
-        if (std::getline(file, line)) {
-            if (line.rfind("key=", 0) != 0 &&
-                line.rfind("model=", 0) != 0 &&
-                line.rfind("accent=", 0) != 0 &&
-                line.rfind("alpha=", 0) != 0 &&
-                !line.empty()) {
-                g_OpenRouterKey = line;  // treat raw line as the API key
-            }
-        }
-    }
+    g_OpenRouterKey = g_ProviderKeys[PROV_OPENROUTER];
 }
 
 void SaveConfig() {
     CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
 
-    // Read existing lines to preserve accent/alpha settings
+    // Read existing to preserve accent/alpha
     std::vector<std::string> lines;
-    bool foundKey = false, foundModel = false;
-
+    bool found[10] = {};
     {
         std::ifstream file(CONFIG_PATH);
         std::string line;
         while (std::getline(file, line)) {
-            if (line.rfind("key=", 0) == 0) {
-                lines.push_back("key=" + g_OpenRouterKey);
-                foundKey = true;
-            } else if (line.rfind("model=", 0) == 0) {
-                lines.push_back("model=" + std::to_string(g_ActiveModelIndex));
-                foundModel = true;
-            } else {
-                lines.push_back(line);
-            }
+            if      (line.rfind("provider=", 0) == 0)       { lines.push_back("provider=" + std::to_string((int)g_ActiveProvider)); found[0] = true; }
+            else if (line.rfind("key_claude=", 0) == 0)     { lines.push_back("key_claude=" + g_ProviderKeys[PROV_CLAUDE]); found[1] = true; }
+            else if (line.rfind("key_grok=", 0) == 0)       { lines.push_back("key_grok=" + g_ProviderKeys[PROV_GROK]); found[2] = true; }
+            else if (line.rfind("key_gpt=", 0) == 0)        { lines.push_back("key_gpt=" + g_ProviderKeys[PROV_GPT]); found[3] = true; }
+            else if (line.rfind("key_deepseek=", 0) == 0)   { lines.push_back("key_deepseek=" + g_ProviderKeys[PROV_DEEPSEEK]); found[4] = true; }
+            else if (line.rfind("key_openrouter=", 0) == 0) { lines.push_back("key_openrouter=" + g_ProviderKeys[PROV_OPENROUTER]); found[5] = true; }
+            else if (line.rfind("or_model=", 0) == 0)       { lines.push_back("or_model=" + std::to_string(g_OpenRouterModelIndex)); found[6] = true; }
+            else if (line.rfind("key=", 0) == 0)            { /* skip legacy */ }
+            else                                             { lines.push_back(line); }
         }
     }
-
-    if (!foundKey)   lines.insert(lines.begin(), "key=" + g_OpenRouterKey);
-    if (!foundModel) lines.push_back("model=" + std::to_string(g_ActiveModelIndex));
+    if (!found[0]) lines.insert(lines.begin(), "provider=" + std::to_string((int)g_ActiveProvider));
+    for (int i = 0; i < PROV_COUNT; i++) {
+        if (!found[i+1] && !g_ProviderKeys[i].empty())
+            lines.push_back(std::string(g_Providers[i].configKey) + "=" + g_ProviderKeys[i]);
+    }
+    if (!found[6]) lines.push_back("or_model=" + std::to_string(g_OpenRouterModelIndex));
 
     std::ofstream out(CONFIG_PATH);
     for (const auto& l : lines) out << l << "\n";
 }
 
 // ============================================================================
-//  API Key Accessors
+//  API Key
 // ============================================================================
 
-bool SetOpenRouterKey(const std::string& key) {
-    g_OpenRouterKey = key;
+bool SetProviderKey(Provider prov, const std::string& key) {
+    if (prov < 0 || prov >= PROV_COUNT) return false;
+    g_ProviderKeys[prov] = key;
     SaveConfig();
     return true;
 }
 
-std::string GetOpenRouterKey() {
-    return g_OpenRouterKey;
+std::string GetProviderKey(Provider prov) {
+    if (prov < 0 || prov >= PROV_COUNT) return "";
+    return g_ProviderKeys[prov];
 }
 
+bool SetOpenRouterKey(const std::string& key) { return SetProviderKey(PROV_OPENROUTER, key); }
+std::string GetOpenRouterKey() { return GetProviderKey(g_ActiveProvider); }
+
 // ============================================================================
-//  Model Selection
+//  Provider / Model Selection
 // ============================================================================
 
-std::string GetActiveModel() {
-    if (g_ActiveModelIndex < 0 ||
-        g_ActiveModelIndex >= (int)g_AvailableModels.size()) {
-        return g_AvailableModels[0];  // safe fallback
+void SetActiveProvider(int index) {
+    if (index >= 0 && index < PROV_COUNT) {
+        g_ActiveProvider = (Provider)index;
+        SaveConfig();
     }
-    return g_AvailableModels[g_ActiveModelIndex];
 }
+
+Provider    GetActiveProvider()     { return g_ActiveProvider; }
+std::string GetActiveProviderName() { return g_Providers[g_ActiveProvider].displayName; }
 
 std::string GetActiveModelID() {
-    std::string displayName = GetActiveModel();
-    auto it = g_ModelIDMap.find(displayName);
-    if (it != g_ModelIDMap.end()) {
-        return it->second;
+    if (g_ActiveProvider == PROV_OPENROUTER) {
+        if (g_OpenRouterModelIndex >= 0 && g_OpenRouterModelIndex < (int)g_OpenRouterModels.size())
+            return g_OpenRouterModels[g_OpenRouterModelIndex];
     }
-    // Fallback: return display name as-is (let OpenRouter handle it)
-    return displayName;
+    return g_Providers[g_ActiveProvider].modelID;
 }
 
-void SetActiveModel(int index) {
-    if (index >= 0 && index < (int)g_AvailableModels.size()) {
-        g_ActiveModelIndex = index;
-        SaveConfig();  // persist selection immediately
+std::string GetActiveModel() { return GetActiveProviderName(); }
+
+void SetActiveModel(int index) { SetActiveProvider(index); }
+
+void SetOpenRouterModel(int index) {
+    if (index >= 0 && index < (int)g_OpenRouterModels.size()) {
+        g_OpenRouterModelIndex = index;
+        SaveConfig();
     }
 }

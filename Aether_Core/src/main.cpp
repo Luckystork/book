@@ -250,19 +250,17 @@ static std::string EscapeJsonString(const std::string& s) {
     return out;
 }
 
-// Helper: extract "content":"..." from OpenRouter JSON response
+// Helper: extract "content":"..." from OpenAI-compatible JSON response
+// Works for OpenRouter, OpenAI, Grok (choices[0].message.content)
 static std::string ParseAIContent(const std::string& json) {
-    // Look for "content":" in the choices array
     size_t pos = json.find("\"content\":\"");
     if (pos == std::string::npos) {
-        // Try alternate format: "content": "
         pos = json.find("\"content\": \"");
         if (pos != std::string::npos) pos += 12;
-        else return json.substr(0, 500);  // fallback: raw response
+        else return json.substr(0, 500);
     } else {
-        pos += 11;  // skip past "content":"
+        pos += 11;
     }
-    // Find the closing quote (handle escaped quotes)
     std::string result;
     for (size_t i = pos; i < json.size(); i++) {
         if (json[i] == '\\' && i + 1 < json.size()) {
@@ -274,7 +272,7 @@ static std::string ParseAIContent(const std::string& json) {
             else if (next == '\\') { result += '\\'; i++; }
             else { result += json[i]; }
         } else if (json[i] == '"') {
-            break;  // end of content string
+            break;
         } else {
             result += json[i];
         }
@@ -282,46 +280,67 @@ static std::string ParseAIContent(const std::string& json) {
     return result;
 }
 
+// Helper: extract "text":"..." from Anthropic Messages API response
+// Response format: {"content":[{"type":"text","text":"..."}]}
+static std::string ParseAnthropicContent(const std::string& json) {
+    size_t pos = json.find("\"text\":\"");
+    if (pos == std::string::npos) {
+        pos = json.find("\"text\": \"");
+        if (pos != std::string::npos) pos += 9;
+        else return json.substr(0, 500);
+    } else {
+        pos += 8;
+    }
+    std::string result;
+    for (size_t i = pos; i < json.size(); i++) {
+        if (json[i] == '\\' && i + 1 < json.size()) {
+            char next = json[i + 1];
+            if (next == '"')       { result += '"'; i++; }
+            else if (next == 'n')  { result += '\n'; i++; }
+            else if (next == '\\') { result += '\\'; i++; }
+            else { result += json[i]; }
+        } else if (json[i] == '"') {
+            break;
+        } else {
+            result += json[i];
+        }
+    }
+    return result;
+}
+
+// Helper: extract text from Gemini generateContent response
+// Response: {"candidates":[{"content":{"parts":[{"text":"..."}]}}]}
+static std::string ParseGeminiContent(const std::string& json) {
+    return ParseAnthropicContent(json);  // same "text":"..." pattern
+}
+
 // ============================================================================
-//  CallAI — OpenRouter chat completion
+//  CallAI — Multi-Provider chat completion
 // ============================================================================
-//  Uses GetActiveModelID() for the correct API model identifier.
-//  Escapes the question text to prevent JSON injection.
-//  Parses the response to extract the actual answer content.
+//  Routes to the correct API based on GetActiveProvider():
+//    - OpenRouter, OpenAI, Grok  → OpenAI-compatible /v1/chat/completions
+//    - Anthropic                 → Messages API /v1/messages
+//    - Gemini                    → generateContent REST API
+//
+//  Each provider has different: host, path, headers, body, response format.
 
-std::string CallAI(const std::string& question) {
-    std::string key     = GetOpenRouterKey();
-    std::string modelID = GetActiveModelID();   // e.g. "anthropic/claude-opus-4"
-    std::string display = GetActiveModel();     // e.g. "Claude 4.6 Opus"
-
-    if (key.empty()) return "[ERROR] No OpenRouter API key configured.";
-
+// Internal helper: send an HTTPS POST and return the response body
+static std::string HttpsPost(const std::wstring& host, const std::wstring& path,
+                             const std::wstring& headers, const std::string& body) {
     HINTERNET hSession = WinHttpOpen(L"ZeroPoint/2.0",
         WINHTTP_ACCESS_TYPE_DEFAULT_PROXY, NULL, NULL, 0);
     if (!hSession) return "[ERROR] WinHttp session failed";
 
-    HINTERNET hConnect = WinHttpConnect(hSession, L"openrouter.ai",
+    HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(),
         INTERNET_DEFAULT_HTTPS_PORT, 0);
-    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST",
-        L"/api/v1/chat/completions",
+    HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
         NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
         WINHTTP_FLAG_SECURE);
 
-    // Build JSON payload with properly escaped question text
-    std::string escaped = EscapeJsonString(question);
-    std::string jsonPayload =
-        R"({"model":")" + modelID +
-        R"(","messages":[{"role":"user","content":")" + escaped +
-        R"("}],"max_tokens":1200})";
-
-    // Wide string headers for WinHttpSendRequest correctness
-    std::wstring wKey(key.begin(), key.end());
-    std::wstring headers = L"Content-Type: application/json\r\nAuthorization: Bearer " + wKey + L"\r\n";
-
     BOOL ok = WinHttpSendRequest(hRequest,
         headers.c_str(), (DWORD)headers.length(),
-        (LPVOID)jsonPayload.c_str(), (DWORD)jsonPayload.length(),
-        (DWORD)jsonPayload.length(), 0);
+        (LPVOID)body.c_str(), (DWORD)body.length(),
+        (DWORD)body.length(), 0);
 
     if (!ok) {
         WinHttpCloseHandle(hRequest);
@@ -332,7 +351,6 @@ std::string CallAI(const std::string& question) {
 
     WinHttpReceiveResponse(hRequest, NULL);
 
-    // Read the full response (may come in chunks)
     std::string resp;
     char buffer[8192];
     DWORD bytesRead = 0;
@@ -345,10 +363,80 @@ std::string CallAI(const std::string& question) {
     WinHttpCloseHandle(hRequest);
     WinHttpCloseHandle(hConnect);
     WinHttpCloseHandle(hSession);
+    return resp;
+}
 
-    // Parse the AI's answer from the JSON response
-    std::string content = ParseAIContent(resp);
-    return content;
+std::string CallAI(const std::string& question) {
+    Provider prov     = GetActiveProvider();
+    std::string key   = GetProviderKey(prov);
+    std::string model = GetActiveModelID();
+    std::string escaped = EscapeJsonString(question);
+
+    if (key.empty()) {
+        return "[ERROR] No API key set for " + GetActiveProviderName() +
+               ". Open settings to add your key.";
+    }
+
+    std::wstring wKey(key.begin(), key.end());
+    std::string resp;
+
+    switch (prov) {
+    // -----------------------------------------------------------------
+    //  OpenAI-compatible: Grok, GPT, Deepseek, OpenRouter
+    //  All use /v1/chat/completions with Bearer token
+    // -----------------------------------------------------------------
+    case PROV_GROK:
+    case PROV_GPT:
+    case PROV_DEEPSEEK:
+    case PROV_OPENROUTER: {
+        std::wstring host, path;
+        if (prov == PROV_OPENROUTER) {
+            host = L"openrouter.ai";
+            path = L"/api/v1/chat/completions";
+        } else if (prov == PROV_GPT) {
+            host = L"api.openai.com";
+            path = L"/v1/chat/completions";
+        } else if (prov == PROV_GROK) {
+            host = L"api.x.ai";
+            path = L"/v1/chat/completions";
+        } else {  // PROV_DEEPSEEK
+            host = L"api.deepseek.com";
+            path = L"/v1/chat/completions";
+        }
+
+        std::string body =
+            R"({"model":")" + model +
+            R"(","messages":[{"role":"user","content":")" + escaped +
+            R"("}],"max_tokens":1200})";
+
+        std::wstring headers =
+            L"Content-Type: application/json\r\nAuthorization: Bearer " + wKey + L"\r\n";
+
+        resp = HttpsPost(host, path, headers, body);
+        return ParseAIContent(resp);
+    }
+
+    // -----------------------------------------------------------------
+    //  Claude — Anthropic Messages API (different headers + body)
+    // -----------------------------------------------------------------
+    case PROV_CLAUDE: {
+        std::string body =
+            R"({"model":")" + model +
+            R"(","max_tokens":1200,"messages":[{"role":"user","content":")" + escaped +
+            R"("}]})";
+
+        std::wstring headers =
+            L"Content-Type: application/json\r\n"
+            L"x-api-key: " + wKey + L"\r\n"
+            L"anthropic-version: 2023-06-01\r\n";
+
+        resp = HttpsPost(L"api.anthropic.com", L"/v1/messages", headers, body);
+        return ParseAnthropicContent(resp);
+    }
+
+    default:
+        return "[ERROR] Unknown provider";
+    }
 }
 
 // ============================================================================
@@ -706,11 +794,11 @@ static void ShowAlphaPicker(HWND owner) {
 //  Launcher Window — icy frosted glass WNDPROC with full double-buffered paint
 // ============================================================================
 
-#define ID_BTN_INJECT   1001
-#define ID_BTN_THEME    1002
-#define ID_BTN_ALPHA    1003
-#define ID_BTN_QUIT     1004
-#define ID_COMBO_MODEL  1005
+#define ID_BTN_INJECT       1001
+#define ID_BTN_THEME        1002
+#define ID_BTN_ALPHA        1003
+#define ID_BTN_QUIT         1004
+#define ID_COMBO_PROVIDER   1005
 
 static int  g_LauncherResult = 0;
 static int  g_HoveredBtn     = 0;
@@ -730,28 +818,28 @@ static void EnableBlurBehind(HWND hwnd) {
 }
 
 static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
-    static HWND hCombo = NULL;
+    static HWND hProvCombo = NULL;
 
     switch (msg) {
     case WM_CREATE: {
         EnableBlurBehind(hwnd);
 
-        hCombo = CreateWindowA("COMBOBOX", NULL,
+        // ---- Provider dropdown ----
+        hProvCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
-            70, 218, 300, 200, hwnd, (HMENU)ID_COMBO_MODEL, NULL, NULL);
-
-        for (int i = 0; i < (int)g_AvailableModels.size(); i++) {
-            SendMessageA(hCombo, CB_ADDSTRING, 0,
-                         (LPARAM)g_AvailableModels[i].c_str());
+            70, 218, 300, 200, hwnd, (HMENU)ID_COMBO_PROVIDER, NULL, NULL);
+        for (int i = 0; i < PROV_COUNT; i++) {
+            SendMessageA(hProvCombo, CB_ADDSTRING, 0,
+                         (LPARAM)g_Providers[i].displayName);
         }
-        SendMessageA(hCombo, CB_SETCURSEL, g_ActiveModelIndex, 0);
+        SendMessageA(hProvCombo, CB_SETCURSEL, (int)g_ActiveProvider, 0);
         return 0;
     }
 
     case WM_COMMAND: {
-        if (LOWORD(wp) == ID_COMBO_MODEL && HIWORD(wp) == CBN_SELCHANGE) {
-            int sel = (int)SendMessage(hCombo, CB_GETCURSEL, 0, 0);
-            if (sel >= 0) SetActiveModel(sel);
+        if (LOWORD(wp) == ID_COMBO_PROVIDER && HIWORD(wp) == CBN_SELCHANGE) {
+            int sel = (int)SendMessage(hProvCombo, CB_GETCURSEL, 0, 0);
+            if (sel >= 0) SetActiveProvider(sel);
             InvalidateRect(hwnd, NULL, TRUE);
         }
         return 0;
@@ -846,15 +934,15 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         }
         DeleteObject(hotkeyFont);
 
-        // ---- Model selector label ----
+        // ---- AI Provider label ----
         HFONT labelFont = CreateAppFont(11, FW_SEMIBOLD);
         SelectObject(memDC, labelFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT modelLabelRc = { 70, 203, w - 70, 218 };
-        DrawTextA(memDC, "SELECT MODEL", -1, &modelLabelRc, DT_LEFT | DT_SINGLELINE);
+        RECT provLabelRc = { 70, 203, w - 70, 218 };
+        DrawTextA(memDC, "AI PROVIDER", -1, &provLabelRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(labelFont);
 
-        // Accent divider
+        // Accent divider (below combo)
         DrawAccentLine(memDC, 70, 252, w - 140);
 
         // ---- Buttons ----
@@ -953,7 +1041,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             pt.x = LOWORD(lp); pt.y = HIWORD(lp);
             ScreenToClient(hwnd, &pt);
             // Don't intercept clicks on the combo box region
-            if (pt.y >= 210 && pt.y <= 245 && pt.x >= 60 && pt.x <= 380)
+            if (pt.y >= 200 && pt.y <= 245 && pt.x >= 60 && pt.x <= 380)
                 return HTCLIENT;
             return HTCAPTION; // drag the window from anywhere else
         }
@@ -1188,24 +1276,26 @@ static bool g_KeyDialogOK = false;
 static LRESULT CALLBACK KeyDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
-        CreateWindowA("STATIC", "Enter your OpenRouter API key:",
+        // Dynamic label showing which provider we're entering a key for
+        std::string label = "Enter your " + GetActiveProviderName() + " API key:";
+        CreateWindowA("STATIC", label.c_str(),
             WS_CHILD | WS_VISIBLE | SS_LEFT,
-            20, 16, 340, 20, hwnd, NULL, NULL, NULL);
+            20, 16, 360, 20, hwnd, NULL, NULL, NULL);
 
         g_hKeyEdit = CreateWindowExA(WS_EX_CLIENTEDGE, "EDIT", "",
             WS_CHILD | WS_VISIBLE | ES_AUTOHSCROLL | ES_PASSWORD,
-            20, 42, 340, 24, hwnd, (HMENU)4001, NULL, NULL);
+            20, 42, 360, 24, hwnd, (HMENU)4001, NULL, NULL);
 
         HFONT f = CreateAppFont(13, FW_NORMAL);
         SendMessage(g_hKeyEdit, WM_SETFONT, (WPARAM)f, TRUE);
 
         CreateWindowA("BUTTON", "Save",
             WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
-            120, 80, 80, 28, hwnd, (HMENU)IDOK, NULL, NULL);
+            130, 80, 80, 28, hwnd, (HMENU)IDOK, NULL, NULL);
 
         CreateWindowA("BUTTON", "Cancel",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            210, 80, 80, 28, hwnd, (HMENU)IDCANCEL, NULL, NULL);
+            220, 80, 80, 28, hwnd, (HMENU)IDCANCEL, NULL, NULL);
 
         return 0;
     }
@@ -1215,7 +1305,8 @@ static LRESULT CALLBACK KeyDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             GetWindowTextA(g_hKeyEdit, buf, sizeof(buf) - 1);
             std::string key(buf);
             if (!key.empty()) {
-                SetOpenRouterKey(key);
+                // Save to the ACTIVE provider
+                SetProviderKey(GetActiveProvider(), key);
                 g_KeyDialogOK = true;
             }
             DestroyWindow(hwnd);
@@ -1231,7 +1322,7 @@ static LRESULT CALLBACK KeyDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
-static bool ShowKeyInputDialog() {
+bool ShowKeyInputDialog() {
     const char* cls = "ZPKeyDialog";
     WNDCLASSA wc = {};
     wc.lpfnWndProc   = KeyDialogProc;
@@ -1261,18 +1352,66 @@ static bool ShowKeyInputDialog() {
 }
 
 // ============================================================================
-//  Full Menu Overlay — frosted panel with last AI answer + controls
+//  Sidebar Menu — right-edge panel for live provider switching
 // ============================================================================
-//  Triggered by Ctrl+Alt+H. Shows a centered frosted panel with the
-//  last AI answer, model info, and quick-action buttons.
+//  Triggered by Ctrl+Alt+H. Frosted sidebar on the right edge with a
+//  dropdown to switch providers, key config, active provider + last answer.
+
+#define ID_SIDEBAR_COMBO  5001
+#define ID_SIDEBAR_KEYBTN 5002
 
 static std::string g_LastAnswer = "(no AI query yet)";
 static HWND        g_MenuHwnd   = NULL;
+static HWND        g_SidebarCombo = NULL;
+static HWND        g_SidebarKeyBtn = NULL;
 
-static LRESULT CALLBACK FullMenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
         EnableBlurBehind(hwnd);
+
+        // ---- Provider dropdown (native combobox) ----
+        g_SidebarCombo = CreateWindowA("COMBOBOX", NULL,
+            WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
+            12, 44, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
+
+        HFONT comboFont = CreateAppFont(13, FW_SEMIBOLD);
+        SendMessage(g_SidebarCombo, WM_SETFONT, (WPARAM)comboFont, TRUE);
+
+        for (int i = 0; i < PROV_COUNT; i++) {
+            SendMessageA(g_SidebarCombo, CB_ADDSTRING, 0,
+                         (LPARAM)g_Providers[i].displayName);
+        }
+        SendMessageA(g_SidebarCombo, CB_SETCURSEL, (int)g_ActiveProvider, 0);
+
+        // ---- "Set API Key" button ----
+        g_SidebarKeyBtn = CreateWindowA("BUTTON", "Set API Key...",
+            WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+            12, 78, 216, 28, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
+
+        HFONT btnFont = CreateAppFont(11, FW_NORMAL);
+        SendMessage(g_SidebarKeyBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
+
+        return 0;
+    }
+
+    case WM_COMMAND: {
+        // Provider dropdown changed
+        if (LOWORD(wp) == ID_SIDEBAR_COMBO && HIWORD(wp) == CBN_SELCHANGE) {
+            int sel = (int)SendMessage(g_SidebarCombo, CB_GETCURSEL, 0, 0);
+            if (sel >= 0) SetActiveProvider(sel);
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        // "Set API Key" button clicked
+        if (LOWORD(wp) == ID_SIDEBAR_KEYBTN) {
+            ShowWindow(hwnd, SW_HIDE);
+            extern bool ShowKeyInputDialog();
+            ShowKeyInputDialog();
+            // Refresh combo selection (provider may have been set via dialog)
+            SendMessageA(g_SidebarCombo, CB_SETCURSEL, (int)g_ActiveProvider, 0);
+            InvalidateRect(hwnd, NULL, TRUE);
+            ShowWindow(hwnd, SW_SHOW);
+        }
         return 0;
     }
 
@@ -1298,48 +1437,78 @@ static LRESULT CALLBACK FullMenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         FillFrosted(memDC, rc, g_BgPanel, 210);
         DrawInnerGlow(memDC, rc);
 
-        // Accent border
+        // Left accent border
         HPEN pen = CreatePen(PS_SOLID, 2, g_AccentColor);
-        SelectObject(memDC, pen);
-        SelectObject(memDC, GetStockObject(NULL_BRUSH));
-        RoundRect(memDC, 0, 0, w, h, 16, 16);
+        HPEN oldPen = (HPEN)SelectObject(memDC, pen);
+        MoveToEx(memDC, 0, 0, NULL);
+        LineTo(memDC, 0, h);
+        SelectObject(memDC, oldPen);
         DeleteObject(pen);
 
         SetBkMode(memDC, TRANSPARENT);
 
-        // Title
-        HFONT titleFont = CreateAppFont(22, FW_LIGHT);
+        // ---- Title ----
+        HFONT titleFont = CreateAppFont(16, FW_LIGHT);
         SelectObject(memDC, titleFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT titleRc = { 20, 12, w - 20, 42 };
-        DrawTextA(memDC, "ZeroPoint Menu", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
+        RECT titleRc = { 14, 10, w - 10, 34 };
+        DrawTextA(memDC, "AI PROVIDER", -1, &titleRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(titleFont);
 
-        DrawAccentLine(memDC, 20, 46, w - 40);
+        DrawAccentLine(memDC, 14, 36, w - 28);
 
-        // Model info
-        HFONT infoFont = CreateAppFont(12, FW_SEMIBOLD);
-        SelectObject(memDC, infoFont);
+        // (Combo box at y=44 and key button at y=78 are native controls,
+        //  drawn by Windows on top of our GDI paint — no need to paint them)
+
+        // ---- Divider below controls ----
+        DrawAccentLine(memDC, 14, 114, w - 28);
+
+        // ---- Key status indicator ----
+        HFONT statusFont = CreateAppFont(10, FW_SEMIBOLD);
+        SelectObject(memDC, statusFont);
+        bool hasKey = !GetProviderKey(GetActiveProvider()).empty();
+        SetTextColor(memDC, hasKey ? RGB(0x22, 0xDD, 0x66) : RGB(0xFF, 0x44, 0x44));
+        std::string keyStatus = hasKey ? "API Key: Configured" : "API Key: Not Set";
+        RECT keyRc = { 14, 120, w - 10, 134 };
+        DrawTextA(memDC, keyStatus.c_str(), -1, &keyRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(statusFont);
+
+        // ---- Active provider label ----
+        HFONT activeFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, activeFont);
         SetTextColor(memDC, g_TextSecondary);
-        std::string modelLine = "Model: " + GetActiveModel();
-        RECT modelRc = { 20, 54, w - 20, 72 };
-        DrawTextA(memDC, modelLine.c_str(), -1, &modelRc, DT_LEFT | DT_SINGLELINE);
-        DeleteObject(infoFont);
+        std::string activeLine = "Active: " + GetActiveProviderName();
+        RECT activeLblRc = { 14, 140, w - 10, 154 };
+        DrawTextA(memDC, activeLine.c_str(), -1, &activeLblRc,
+                  DT_LEFT | DT_SINGLELINE);
+        DeleteObject(activeFont);
 
-        // Last answer
-        HFONT textFont = CreateAppFont(13, FW_NORMAL);
+        // ---- Divider ----
+        DrawAccentLine(memDC, 14, 160, w - 28);
+
+        // ---- "Last Answer" header ----
+        HFONT answerHdrFont = CreateAppFont(10, FW_SEMIBOLD);
+        SelectObject(memDC, answerHdrFont);
+        SetTextColor(memDC, g_AccentColor);
+        RECT hdrRc = { 14, 166, w - 10, 180 };
+        DrawTextA(memDC, "LAST ANSWER", -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(answerHdrFont);
+
+        // ---- Last answer text ----
+        HFONT textFont = CreateAppFont(11, FW_NORMAL);
         SelectObject(memDC, textFont);
         SetTextColor(memDC, g_TextPrimary);
-        RECT textRc = { 20, 80, w - 20, h - 30 };
-        DrawTextA(memDC, g_LastAnswer.c_str(), -1, &textRc, DT_LEFT | DT_WORDBREAK);
+        RECT textRc = { 14, 184, w - 10, h - 24 };
+        DrawTextA(memDC, g_LastAnswer.c_str(), -1, &textRc,
+                  DT_LEFT | DT_WORDBREAK);
         DeleteObject(textFont);
 
-        // Dismiss hint
-        HFONT hintFont = CreateAppFont(10, FW_NORMAL);
+        // ---- Dismiss hint ----
+        HFONT hintFont = CreateAppFont(9, FW_NORMAL);
         SelectObject(memDC, hintFont);
         SetTextColor(memDC, g_ShadowColor);
-        RECT hintRc = { 20, h - 24, w - 20, h - 6 };
-        DrawTextA(memDC, "Ctrl+Alt+H or click to dismiss", -1, &hintRc,
+        RECT hintRc = { 10, h - 20, w - 10, h - 4 };
+        DrawTextA(memDC, "Ctrl+Alt+H or Esc to dismiss", -1, &hintRc,
                   DT_CENTER | DT_SINGLELINE);
         DeleteObject(hintFont);
 
@@ -1352,18 +1521,23 @@ static LRESULT CALLBACK FullMenuProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return 0;
     }
 
-    case WM_LBUTTONUP:
-        ShowWindow(hwnd, SW_HIDE);
-        return 0;
+    case WM_KEYDOWN:
+        if (wp == VK_ESCAPE) {
+            ShowWindow(hwnd, SW_HIDE);
+            return 0;
+        }
+        break;
 
     case WM_DESTROY:
         g_MenuHwnd = NULL;
+        g_SidebarCombo = NULL;
+        g_SidebarKeyBtn = NULL;
         return 0;
     }
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
-// Toggle full menu overlay
+// Toggle sidebar visibility
 static void ToggleFullMenu() {
     if (g_MenuHwnd && IsWindow(g_MenuHwnd) && IsWindowVisible(g_MenuHwnd)) {
         ShowWindow(g_MenuHwnd, SW_HIDE);
@@ -1371,11 +1545,11 @@ static void ToggleFullMenu() {
     }
 
     if (!g_MenuHwnd || !IsWindow(g_MenuHwnd)) {
-        const char* cls = "ZPFullMenu";
+        const char* cls = "ZPSidebar";
         static bool registered = false;
         if (!registered) {
             WNDCLASSA wc = {};
-            wc.lpfnWndProc   = FullMenuProc;
+            wc.lpfnWndProc   = SidebarProc;
             wc.hInstance      = GetModuleHandle(NULL);
             wc.lpszClassName  = cls;
             wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
@@ -1383,14 +1557,16 @@ static void ToggleFullMenu() {
             registered = true;
         }
 
-        int w = 500, h = 400;
+        // Sidebar: right edge, full height minus taskbar
+        int sideW = 240;
         int sx = GetSystemMetrics(SM_CXSCREEN);
         int sy = GetSystemMetrics(SM_CYSCREEN);
+        int barH = sy - 50;  // approximate taskbar height
 
         g_MenuHwnd = CreateWindowExA(
             WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
             cls, NULL, WS_POPUP,
-            (sx - w) / 2, (sy - h) / 2, w, h,
+            sx - sideW, 0, sideW, barH,
             NULL, NULL, GetModuleHandle(NULL), NULL);
 
         SetLayeredWindowAttributes(g_MenuHwnd, 0, g_WindowAlpha, LWA_ALPHA);
@@ -1402,6 +1578,9 @@ static void ToggleFullMenu() {
         if (pSWDA) pSWDA(g_MenuHwnd, 0x00000011);
     }
 
+    // Sync the dropdown with current provider when showing
+    if (g_SidebarCombo)
+        SendMessageA(g_SidebarCombo, CB_SETCURSEL, (int)g_ActiveProvider, 0);
     InvalidateRect(g_MenuHwnd, NULL, TRUE);
     ShowWindow(g_MenuHwnd, SW_SHOW);
     SetForegroundWindow(g_MenuHwnd);
@@ -1426,9 +1605,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     LoadThemeSettings();
 
     // ------------------------------------------------------------------
-    //  First-launch: inline API key input dialog
+    //  First-launch: prompt for API key if the active provider has none
     // ------------------------------------------------------------------
-    if (GetOpenRouterKey().empty()) {
+    if (GetProviderKey(GetActiveProvider()).empty()) {
         if (!ShowKeyInputDialog()) {
             CoUninitialize();
             return 0;   // user cancelled
