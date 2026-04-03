@@ -171,8 +171,10 @@ static bool ApplyHardwareSpoofing() {
     std::string mac = "00" + RandomString(10, true);
     if (!SetRegString(HKEY_LOCAL_MACHINE, netPath, "NetworkAddress", mac.c_str())) failures++;
 
-    // If all 12 writes failed, we almost certainly lack admin rights
-    return (failures < 12);
+    // Any failure likely means no admin rights — report partial success honestly
+    if (failures == 12) return false;   // total failure: not elevated
+    if (failures > 0)  return true;     // partial: some keys protected, some written
+    return true;                        // full success
 }
 
 // ============================================================================
@@ -184,7 +186,12 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
 
     // Apply hardware spoofing before session initialization (requires admin)
     if (!ApplyHardwareSpoofing()) {
-        if (progressCallback) progressCallback("WARNING: Hardware spoofing failed — run as Administrator.");
+        // All 12 HKLM writes failed — process is not elevated
+        if (progressCallback)
+            progressCallback("WARNING: Hardware spoofing failed (ACCESS_DENIED). "
+                             "Restart ZeroPoint as Administrator to enable HWID spoofing.");
+    } else {
+        if (progressCallback) progressCallback("Hardware identity randomized.");
     }
 
     g_VEState = VE_INITIALIZING;

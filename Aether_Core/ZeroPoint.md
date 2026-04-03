@@ -5,7 +5,7 @@
 - **Snip Region Tool**: AI sidebar features a dynamic rubber-band screen selection tool mapped to `SnipRegionCapture()` which extracts partial boundaries.
 - **Rapid Fire Streams**: `Ctrl+Shift+R` fires a multi-second simulated loop directly streaming "Thinking" markers seamlessly in the background and pop-up layers.
 - **Auto-Typer (Ctrl+Shift+T)**: Human-like text injection via `PerformAutoType()`. Types the last AI answer character-by-character with randomized delays (80-180ms base), punctuation pauses, and occasional typo+backspace simulation for natural cadence. Also available as the "Type Answer" button in the AI sidebar.
-- **Hardware Spoofing**: `ApplyHardwareSpoofing()` runs at VE startup to randomize BIOS/SMBIOS, CPU, GPU, disk serial, and MAC address registry values inside the loopback session. Requires administrator privileges; warns via progress callback if writes fail.
+- **Hardware Spoofing (Admin Required)**: `ApplyHardwareSpoofing()` runs at VE startup to randomize BIOS/SMBIOS, CPU, GPU, disk serial, and MAC address registry values inside the loopback session. All writes target `HKEY_LOCAL_MACHINE` and require the process to be elevated (Run as Administrator). If not elevated, all 12 registry writes fail with `ERROR_ACCESS_DENIED` and the progress callback displays: *"Restart ZeroPoint as Administrator to enable HWID spoofing."*
 - **Aesthetics & Installer**: Proctor dots strictly use `RGB(0, 200, 100)` and `RGB(240, 60, 60)`. Inno Setup script updated to natively implement `$00EBECE8`/cyan `$00DDFF` components matching ZeroPoint's identity perfectly.
 
 ## Keybinds

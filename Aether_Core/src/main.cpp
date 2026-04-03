@@ -2220,14 +2220,15 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SendMessage(g_SidebarSSBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         // ---- "Type Answer" auto-typer button (Ctrl+Shift+T equivalent) ----
-        CreateWindowA("BUTTON", "Type Answer",
+        HWND typeBtn = CreateWindowA("BUTTON", "Type Answer (Ctrl+Shift+T)",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, 78, 216, 32, hwnd, (HMENU)ID_SIDEBAR_TYPE, NULL, NULL);
+            12, 80, 216, 32, hwnd, (HMENU)ID_SIDEBAR_TYPE, NULL, NULL);
+        SendMessage(typeBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         // ---- Provider dropdown ----
         g_SidebarCombo = CreateWindowA("COMBOBOX", NULL,
             WS_CHILD | WS_VISIBLE | CBS_DROPDOWNLIST | WS_TABSTOP,
-            12, 134, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
+            12, 120, 216, 200, hwnd, (HMENU)ID_SIDEBAR_COMBO, NULL, NULL);
         SendMessage(g_SidebarCombo, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         for (int i = 0; i < PROV_COUNT; i++) {
@@ -2239,13 +2240,13 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // ---- "Set API Key" button ----
         g_SidebarKeyBtn = CreateWindowA("BUTTON", "Set API Key...",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, 164, 170, 26, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
+            12, 150, 170, 26, hwnd, (HMENU)ID_SIDEBAR_KEYBTN, NULL, NULL);
         SendMessage(g_SidebarKeyBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
         // ---- Settings gear button ----
         g_SidebarGearBtn = CreateWindowA("BUTTON", "Settings",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            188, 164, 54, 26, hwnd, (HMENU)ID_SIDEBAR_GEAR, NULL, NULL);
+            188, 150, 54, 26, hwnd, (HMENU)ID_SIDEBAR_GEAR, NULL, NULL);
         SendMessage(g_SidebarGearBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
         return 0;
