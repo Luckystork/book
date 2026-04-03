@@ -17,7 +17,7 @@ ArchitecturesInstallIn64BitMode=x64
 ; To replicate true frosted glass in Inno Setup, a third-party plugin is needed (e.g. Graphical Installer or ISSkin), 
 ; but this configuration ensures the icy/cyan color palette and texts match perfectly.
 WizardImageStretch=True
-WizardImageBackColor=$00EBECE8  ; very light icy gray/white
+WizardImageBackColor=$00FAF4F0  ; very light icy gray/white
 DisableWelcomePage=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
@@ -51,15 +51,24 @@ Filename: "{app}\ZeroPoint.exe"; Description: "Launch ZeroPoint Virtual Environm
 
 procedure InitializeWizard();
 begin
-  WizardForm.Color := $00EBECE8; // snow white background
-  WizardForm.MainPanel.Color := $00EBECE8;
+  // Background: RGB(240, 244, 250) -> BGR: $00FAF4F0 (Soft snow white)
+  WizardForm.Color := $00FAF4F0; 
+  WizardForm.MainPanel.Color := $00FAF4F0;
+  WizardForm.InnerPage.Color := $00FAF4F0;
   WizardForm.Caption := 'ZeroPoint Setup';
 
   WizardForm.WizardBitmapImage.Width := 164;
   WizardForm.WizardBitmapImage.Stretch := True;
   
-  WizardForm.PageNameLabel.Font.Color := $00DDFF; // Cyan hex: 00DDFF -> Inno BGR: FFDD00
-  WizardForm.PageDescriptionLabel.Font.Color := $2C1E1A; // Dark text
+  // Primary Text: RGB(26, 30, 44) -> BGR: $002C1E1A (Crisp dark text)
+  WizardForm.Font.Color := $002C1E1A;
+  
+  // Page Title: RGB(0, 221, 255) -> BGR: $00FFDD00 (Icy cyan accent)
+  WizardForm.PageNameLabel.Font.Color := $00FFDD00;
+  WizardForm.PageNameLabel.Font.Style := [fsBold];
+  
+  // Page Description: RGB(96, 106, 128) -> BGR: $00806A60 (Dimmed cool gray)
+  WizardForm.PageDescriptionLabel.Font.Color := $00806A60; 
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);

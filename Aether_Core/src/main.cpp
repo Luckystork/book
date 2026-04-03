@@ -1869,6 +1869,8 @@ static int ShowLauncher() {
 
 static std::string g_PopupText;
 
+static HWND g_PopupHwnd = NULL;
+
 static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
     case WM_CREATE: {
@@ -1987,7 +1989,7 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         return 0;
 
     case WM_DESTROY:
-        PostQuitMessage(0);
+        g_PopupHwnd = NULL;
         return 0;
     }
     return DefWindowProc(hwnd, msg, wp, lp);
@@ -1995,6 +1997,16 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
 static void ShowAIPopup(const std::string& text) {
     g_PopupText = text;
+
+    if (g_PopupHwnd && IsWindow(g_PopupHwnd)) {
+        InvalidateRect(g_PopupHwnd, NULL, TRUE);
+        UpdateWindow(g_PopupHwnd);
+        
+        // Reset the timer since there is new activity
+        KillTimer(g_PopupHwnd, 1);
+        SetTimer(g_PopupHwnd, 1, 15000, NULL);
+        return;
+    }
 
     const char* cls = "ZeroPointPopup";
     static bool registered = false;
@@ -2012,7 +2024,7 @@ static void ShowAIPopup(const std::string& text) {
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
 
-    HWND hwnd = CreateWindowExA(
+    g_PopupHwnd = CreateWindowExA(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         cls, NULL,
         WS_POPUP | WS_VISIBLE,
@@ -2020,19 +2032,13 @@ static void ShowAIPopup(const std::string& text) {
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
     // Use the user's saved transparency
-    SetLayeredWindowAttributes(hwnd, 0, g_WindowAlpha, LWA_ALPHA);
+    SetLayeredWindowAttributes(g_PopupHwnd, 0, g_WindowAlpha, LWA_ALPHA);
 
     // Auto-dismiss after 15 seconds
-    SetTimer(hwnd, 1, 15000, NULL);
+    SetTimer(g_PopupHwnd, 1, 15000, NULL);
 
-    ShowWindow(hwnd, SW_SHOW);
-    UpdateWindow(hwnd);
-
-    MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+    ShowWindow(g_PopupHwnd, SW_SHOW);
+    UpdateWindow(g_PopupHwnd);
 }
 
 // ============================================================================
@@ -2822,6 +2828,64 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             keyZ = false;
         }
 
+        // ==============================================================
+        //  Ctrl+Shift+S — Snip Region Tool
+        // ==============================================================
+        if (ctrl && shift && (GetAsyncKeyState(0x53) & 0x8000)) {
+            if (!keyS) {
+                keyS = true;
+
+                // Hide sidebar briefly to avoid capturing ourselves
+                if (g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                    ShowWindow(g_MenuHwnd, SW_HIDE);
+                    Sleep(100);
+                }
+
+                int ssX = 0, ssY = 0, ssW = 0, ssH = 0;
+                HBITMAP hBitmap = SnipRegionCapture(ssX, ssY, ssW, ssH);
+
+                if (hBitmap) {
+                    std::string ssPath = SaveScreenshotToFile(hBitmap);
+
+                    if (g_ScreenshotMode == MODE_AUTO_SEND) {
+                        if (GetProviderKey(GetActiveProvider()).empty()) {
+                            g_LastAnswer = "[Screenshot saved: " + ssPath + "]\n"
+                                           "No API key set — cannot auto-send.\n"
+                                           "Set your key in Settings, or switch to Add-to-Chat mode.";
+                            if (!g_KeyWarningShown) {
+                                g_KeyWarningShown = true;
+                                MessageBoxA(NULL,
+                                    "API key required for Auto-Send mode.\n\n"
+                                    "Please enter it in the sidebar settings (gear icon),\n"
+                                    "or switch to Add-to-Chat mode to use without a key.",
+                                    "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+                            }
+                        } else {
+                            std::string b64 = BitmapToBase64PNG(hBitmap);
+                            std::string answer = CallAIWithVision(b64, "");
+                            g_LastAnswer = answer;
+                            if (g_PopupEnabled) ShowAIPopup(answer);
+                        }
+                    } else {
+                        g_LastAnswer = "[Screenshot saved]\n" + ssPath +
+                                       "\nReady to send. Press Ctrl+Shift+Z to capture more.";
+                    }
+                    DeleteObject(hBitmap);
+                } else {
+                    g_LastAnswer = "[ERROR] Could not capture region.";
+                }
+
+                // Restore sidebar
+                if (g_MenuHwnd) {
+                    InvalidateRect(g_MenuHwnd, NULL, TRUE);
+                    ShowWindow(g_MenuHwnd, SW_SHOW);
+                    SetForegroundWindow(g_MenuHwnd);
+                }
+            }
+        } else {
+            keyS = false;
+        }
+
         // Ctrl+Alt+H — Sidebar (toggle)
         if (ctrl && alt && (GetAsyncKeyState(0x48) & 0x8000)) {
             if (!keyH) {
@@ -2869,7 +2933,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                         if (g_RapidFireConfig.showInPopup) {
                             ShowAIPopup(g_LastAnswer);
                         }
-                        Sleep(150); // Simulate streaming delay
+                        
+                        // Non-blocking wait to keep UI responsive
+                        DWORD start = GetTickCount();
+                        while (GetTickCount() - start < 150) {
+                            MSG msg;
+                            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
+                                TranslateMessage(&msg);
+                                DispatchMessage(&msg);
+                            }
+                            Sleep(10);
+                        }
                     }
                 }
             }

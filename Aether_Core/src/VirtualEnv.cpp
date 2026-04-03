@@ -497,24 +497,28 @@ static void CreateVELockOverlay() {
 
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
-    int overlayW = 520, overlayH = 220;
 
     g_VELockOverlay = CreateWindowExA(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
         cls, NULL,
         WS_POPUP,
-        (sx - overlayW) / 2, (sy - overlayH) / 2, overlayW, overlayH,
+        0, 0, sx, sy,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
-    SetLayeredWindowAttributes(g_VELockOverlay, 0, 200, LWA_ALPHA);
+    // High alpha transparency (245) combined with COLORKEY for the outside areas
+    SetLayeredWindowAttributes(g_VELockOverlay, RGB(255, 0, 255), 245, LWA_COLORKEY | LWA_ALPHA);
 
-    // Enable DWM blur for true frosted glass
+    // Enable DWM blur only for the centered box
+    int overlayW = 520, overlayH = 220;
+    RECT rcBox = { (sx - overlayW) / 2, (sy - overlayH) / 2, (sx + overlayW) / 2, (sy + overlayH) / 2 };
+    HRGN hrgnBox = CreateRectRgn(rcBox.left, rcBox.top, rcBox.right, rcBox.bottom);
+
     DWM_BLURBEHIND bb = {};
     bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
     bb.fEnable  = TRUE;
-    bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+    bb.hRgnBlur = hrgnBox;
     DwmEnableBlurBehindWindow(g_VELockOverlay, &bb);
-    DeleteObject(bb.hRgnBlur);
+    DeleteObject(hrgnBox);
 
     // Hide from screen recording
     typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
@@ -540,36 +544,50 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
         HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
 
-        // Frosted glass background
-        HBRUSH bg = CreateSolidBrush(VE_ICY_BG);
-        FillRect(memDC, &rc, bg);
-        DeleteObject(bg);
+        // Fill entire screen with Magenta (transparent colorkey)
+        HBRUSH bgTransparent = CreateSolidBrush(RGB(255, 0, 255));
+        FillRect(memDC, &rc, bgTransparent);
+        DeleteObject(bgTransparent);
 
-        VE_FillFrosted(memDC, rc, VE_ICY_PANEL, 180);
+        int overlayW = 520, overlayH = 220;
+        RECT boxRc = { (w - overlayW) / 2, (h - overlayH) / 2, (w + overlayW) / 2, (h + overlayH) / 2 };
+
+        // Frosted glass background for the centered box
+        HBRUSH bgBox = CreateSolidBrush(VE_ICY_BG);
+        FillRect(memDC, &boxRc, bgBox);
+        DeleteObject(bgBox);
+
+        VE_FillFrosted(memDC, boxRc, VE_ICY_PANEL, 180);
 
         // Accent border
         HPEN borderPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
         SelectObject(memDC, borderPen);
         SelectObject(memDC, GetStockObject(NULL_BRUSH));
-        RoundRect(memDC, 0, 0, w, h, 20, 20);
+        RoundRect(memDC, boxRc.left, boxRc.top, boxRc.right, boxRc.bottom, 20, 20);
         DeleteObject(borderPen);
 
         SetBkMode(memDC, TRANSPARENT);
 
-        // Big "CLICK TO LOCK" text with subtle teal glow
+        // Big "CLICK TO LOCK" text with soft teal glow
         HFONT bigFont = VE_CreateFont(42, FW_LIGHT);
         SelectObject(memDC, bigFont);
         
-        // Glow layer (draw slightly shifted/blurred in a softer accent color)
-        SetTextColor(memDC, RGB(0x60, 0xEE, 0xFF)); // Softer teal
-        RECT glowRc1 = { 19, 29, w - 21, 89 };
-        RECT glowRc2 = { 21, 31, w - 19, 91 };
+        // Multi-layered glow for a softer, more premium teal glow effect
+        SetTextColor(memDC, RGB(0x40, 0xDD, 0xFF)); // Deeper teal outer glow
+        RECT glowRc1 = { boxRc.left - 2, boxRc.top - 2, boxRc.right - 2, boxRc.bottom - 20 };
+        RECT glowRc2 = { boxRc.left + 2, boxRc.top + 2, boxRc.right + 2, boxRc.bottom - 20 };
         DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc1, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc2, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         
+        SetTextColor(memDC, RGB(0x80, 0xEE, 0xFF)); // Brighter inner glow
+        RECT glowRc3 = { boxRc.left - 1, boxRc.top - 1, boxRc.right - 1, boxRc.bottom - 20 };
+        RECT glowRc4 = { boxRc.left + 1, boxRc.top + 1, boxRc.right + 1, boxRc.bottom - 20 };
+        DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc3, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+        DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc4, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
+
         // Main text layer (icy white)
         SetTextColor(memDC, RGB(0xFF, 0xFF, 0xFF));
-        RECT bigRc = { 20, 30, w - 20, 90 };
+        RECT bigRc = { boxRc.left, boxRc.top, boxRc.right, boxRc.bottom - 20 };
         DrawTextA(memDC, "CLICK TO LOCK", -1, &bigRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         DeleteObject(bigFont);
 
@@ -578,10 +596,10 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SelectObject(memDC, subFont);
         SetTextColor(memDC, VE_ICY_DIM);
 
-        RECT line1 = { 20, 110, w - 20, 135 };
+        RECT line1 = { boxRc.left, boxRc.top + 110, boxRc.right, boxRc.top + 135 };
         DrawTextA(memDC, "(Ctrl+Alt+C to Unlock)", -1, &line1, DT_CENTER | DT_SINGLELINE);
 
-        RECT line2 = { 20, 140, w - 20, 165 };
+        RECT line2 = { boxRc.left, boxRc.top + 140, boxRc.right, boxRc.top + 165 };
         DrawTextA(memDC, "(Ctrl+Alt+F to Toggle Fullscreen)", -1, &line2, DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
@@ -589,7 +607,7 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         HFONT tinyFont = VE_CreateFont(10, FW_NORMAL);
         SelectObject(memDC, tinyFont);
         SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
-        RECT brandRc = { 20, h - 24, w - 20, h - 6 };
+        RECT brandRc = { boxRc.left, boxRc.bottom - 24, boxRc.right, boxRc.bottom - 6 };
         DrawTextA(memDC, "ZeroPoint Virtual Environment", -1, &brandRc,
                   DT_CENTER | DT_SINGLELINE);
         DeleteObject(tinyFont);
@@ -601,6 +619,23 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         EndPaint(hwnd, &ps);
         return 0;
+    }
+
+    case WM_NCHITTEST: {
+        // Proper hit-testing: centered overlay catches clicks, rest is click-through
+        int mx = (short)LOWORD(lp);
+        int my = (short)HIWORD(lp);
+        
+        int sx = GetSystemMetrics(SM_CXSCREEN);
+        int sy = GetSystemMetrics(SM_CYSCREEN);
+        int overlayW = 520, overlayH = 220;
+        RECT boxRc = { (sx - overlayW) / 2, (sy - overlayH) / 2, (sx + overlayW) / 2, (sy + overlayH) / 2 };
+        
+        POINT pt = { mx, my };
+        if (PtInRect(&boxRc, pt)) {
+            return HTCLIENT;
+        }
+        return HTTRANSPARENT;
     }
 
     case WM_LBUTTONUP:

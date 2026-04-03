@@ -42,12 +42,13 @@ ZeroPoint queries multi-provider Chat Completions and Vision models via direct A
 
 | Keybind | Function |
 | :--- | :--- |
-| **Ctrl+Shift+Z** | Take AI Snapshot / Add to Scratchpad |
+| **Ctrl+Shift+Z** | Take Full Screenshot / Add to Scratchpad |
+| **Ctrl+Shift+S** | Snip Region (Crosshair to capture custom area) |
 | **Ctrl+Alt+H** | Toggle Full Sidebar (Host) |
 | **Ctrl+Alt+C** | Lock/Unlock Virtual Environment (VE Lock feature with Mouse Teleport) |
 | **Ctrl+Alt+F** | Toggle Fullscreen VE |
 | **Ctrl+Alt+B** | Toggle Invisible WebView2 Browser |
-| **Ctrl+Shift+R** | Rapid Fire Thoughts overlay (Live AI thinking status) |
+| **Ctrl+Shift+R** | Rapid Fire Thoughts overlay (Live AI streaming status updates) |
 | **Ctrl+Shift+X** | Panic Killswitch (Wipes all traces in `ProgramData`) |
 
 ## Installer Flow 
