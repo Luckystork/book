@@ -46,14 +46,16 @@ Human-like text injection via `PerformAutoType()`. v4.1 features an advanced rhy
 ZeroPoint can expose the Virtual Environment for remote control from another machine. When enabled, a secondary RDP listener starts on a configurable port (default 3390) with password/code authentication. A remote user connects via standard `mstsc.exe /v:<host>:3390` and gets full control of the VE desktop — while the local user remains on the host desktop with all stealth layers intact.
 
 **Key points:**
-* Toggle with **Ctrl+Alt+R** or the frosted Remote Access panel (WiFi icon on launcher)
+* Toggle with **Ctrl+Alt+R** or the frosted Remote Access panel (WiFi icon with glowing green dot on launcher)
+* Modeless panel — launcher and all other windows stay responsive while the panel is open
 * Configurable port and password (6-digit code or custom password)
 * Creates a temporary local user (`ZP_Remote`) with scoped RDP permissions
+* Pre-flight checks: verifies Administrator elevation and TermService status before setup, with clear step-by-step fix instructions
 * Firewall rule added/removed automatically
 * All existing stealth layers, mouse teleport, and layered window behavior remain active
 * Remote connections are torn down cleanly on Panic Killswitch or shutdown
-* Crash-safe: orphaned `ZP_Remote` user is automatically removed on next VE startup via sentinel file detection
-* `atexit` handler provides last-resort cleanup if the process exits unexpectedly
+* Crash-safe: orphaned `ZP_Remote` user, firewall rule, and registry listener are automatically removed on next VE startup via sentinel file detection
+* `atexit` handler provides last-resort cleanup (user + firewall + registry) if the process exits unexpectedly
 * "Remote Access" tab in Settings modal and sidebar button for quick access
 
 ### Additional Tools

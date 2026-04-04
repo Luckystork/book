@@ -1783,14 +1783,25 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             SelectObject(memDC, oldF);
             DeleteObject(rmtFont);
 
-            // Green active indicator dot (top-right corner of button)
+            // Glowing green active indicator dot (top-right corner)
             if (IsRemoteAccessEnabled()) {
+                int dx = g_BtnRemote.right - 6;
+                int dy = g_BtnRemote.top + 6;
+
+                // Outer glow layer (soft, larger, translucent green)
+                RECT glowRc = { dx - 7, dy - 7, dx + 7, dy + 7 };
+                FillFrosted(memDC, glowRc, RGB(0x00, 0xDD, 0x66), 60);
+
+                // Mid glow layer
+                RECT midRc = { dx - 5, dy - 5, dx + 5, dy + 5 };
+                FillFrosted(memDC, midRc, RGB(0x00, 0xEE, 0x77), 90);
+
+                // Solid core dot with white border
                 HBRUSH activeDot = CreateSolidBrush(RGB(0x00, 0xC8, 0x64));
                 HPEN activePen = CreatePen(PS_SOLID, 1, RGB(0xFF, 0xFF, 0xFF));
                 SelectObject(memDC, activeDot);
                 SelectObject(memDC, activePen);
-                Ellipse(memDC, g_BtnRemote.right - 10, g_BtnRemote.top + 2,
-                               g_BtnRemote.right - 2,  g_BtnRemote.top + 10);
+                Ellipse(memDC, dx - 4, dy - 4, dx + 4, dy + 4);
                 DeleteObject(activeDot);
                 DeleteObject(activePen);
             }
