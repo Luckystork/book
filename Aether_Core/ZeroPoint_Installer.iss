@@ -12,9 +12,12 @@ OutputBaseFilename=ZeroPoint_Installer
 Compression=lzma2/ultra
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
-WizardImageBackColor=$F0F4FA      ; light icy white - BGR format (fixed)
-WizardSmallImageBackColor=$F0F4FA ; light icy white - BGR format (fixed)
+
+; Light icy white - BGR format (fixed)
+WizardImageBackColor=$F0F4FA
+WizardSmallImageBackColor=$F0F4FA
 WizardImageStretch=True
+
 DisableWelcomePage=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
