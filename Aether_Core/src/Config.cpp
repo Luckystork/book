@@ -1,7 +1,7 @@
 // ============================================================================
-//  ZeroPoint — Config.cpp  (v4.2)
-//  AI providers, per-provider API keys, screenshot mode, UI settings,
-//  and full Virtual Environment configuration persistence.
+//  ZeroPoint — Config.cpp  (v4.2.1)
+//  AI providers (incl. Auto Router), per-provider API keys, screenshot mode,
+//  UI settings, and full Virtual Environment configuration persistence.
 //
 //  Config files:
 //    C:\ProgramData\ZeroPoint\config.ini      — AI provider keys + UI prefs
@@ -26,6 +26,7 @@ ProviderInfo g_Providers[PROV_COUNT] = {
     { "GPT-5.2",             "gpt-5.2",                    "key_gpt",        "api.openai.com",          true  },
     { "Deepseek V3.2 R1",   "deepseek-reasoner",          "key_deepseek",   "api.deepseek.com",        false },
     { "OpenRouter",          "anthropic/claude-opus-4",    "key_openrouter", "openrouter.ai",           true  },
+    { "Auto Router",         "openrouter/auto",            "key_openrouter", "openrouter.ai",           true  },
 };
 
 // ============================================================================
@@ -139,6 +140,8 @@ void SaveConfig() {
     std::string tempPath = std::string(CONFIG_PATH) + ".tmp";
 
     std::vector<std::string> lines;
+    // Indices: 0=provider, 1-5=keys (claude..openrouter), 6=or_model,
+    //          7=mode, 8=popup, 9-11=rf_*, 12-13=remote_*, 14-16=typer+rec
     bool found[17] = {};
     {
         std::ifstream file(CONFIG_PATH);
@@ -167,7 +170,9 @@ void SaveConfig() {
     }
 
     if (!found[0]) lines.insert(lines.begin(), "provider=" + std::to_string((int)g_ActiveProvider));
+    // Write per-provider keys (skip Auto Router — it shares key_openrouter)
     for (int i = 0; i < PROV_COUNT; i++) {
+        if (i == PROV_AUTO_ROUTER) continue;
         if (!found[i + 1] && !g_ProviderKeys[i].empty())
             lines.push_back(std::string(g_Providers[i].configKey) + "=" + g_ProviderKeys[i]);
     }
@@ -276,6 +281,8 @@ void SaveVEConfig() {
 
 bool SetProviderKey(Provider prov, const std::string& key) {
     if (prov < 0 || prov >= PROV_COUNT) return false;
+    // Auto Router shares the OpenRouter API key
+    if (prov == PROV_AUTO_ROUTER) prov = PROV_OPENROUTER;
     g_ProviderKeys[prov] = key;
     SaveConfig();
     return true;
@@ -283,6 +290,8 @@ bool SetProviderKey(Provider prov, const std::string& key) {
 
 std::string GetProviderKey(Provider prov) {
     if (prov < 0 || prov >= PROV_COUNT) return "";
+    // Auto Router shares the OpenRouter API key
+    if (prov == PROV_AUTO_ROUTER) return g_ProviderKeys[PROV_OPENROUTER];
     return g_ProviderKeys[prov];
 }
 

@@ -1,8 +1,8 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility  (v4.2)
+//  ZeroPoint — Premium Windows Utility  (v4.2.1)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
 //             browser, screenshot + vision AI, sidebar with settings,
-//             browser thumbnail panel, multi-provider, custom themes
+//             browser thumbnail panel, multi-provider + Auto Router, custom themes
 // ============================================================================
 //
 //  BUILD REQUIREMENTS:
@@ -451,15 +451,16 @@ std::string CallAI(const std::string& question) {
 
     switch (prov) {
     // -----------------------------------------------------------------
-    //  OpenAI-compatible: Grok, GPT, Deepseek, OpenRouter
+    //  OpenAI-compatible: Grok, GPT, Deepseek, OpenRouter, Auto Router
     //  All use /v1/chat/completions with Bearer token
     // -----------------------------------------------------------------
     case PROV_GROK:
     case PROV_GPT:
     case PROV_DEEPSEEK:
-    case PROV_OPENROUTER: {
+    case PROV_OPENROUTER:
+    case PROV_AUTO_ROUTER: {
         std::wstring host, path;
-        if (prov == PROV_OPENROUTER) {
+        if (prov == PROV_OPENROUTER || prov == PROV_AUTO_ROUTER) {
             host = L"openrouter.ai";
             path = L"/api/v1/chat/completions";
         } else if (prov == PROV_GPT) {
@@ -686,14 +687,15 @@ std::string CallAIWithVision(const std::string& base64png,
 
     switch (prov) {
     // -----------------------------------------------------------------
-    //  OpenAI-compatible vision: GPT, Grok, OpenRouter
+    //  OpenAI-compatible vision: GPT, Grok, OpenRouter, Auto Router
     //  content is an array of [{type: text}, {type: image_url}]
     // -----------------------------------------------------------------
     case PROV_GPT:
     case PROV_GROK:
-    case PROV_OPENROUTER: {
+    case PROV_OPENROUTER:
+    case PROV_AUTO_ROUTER: {
         std::wstring host, path;
-        if (prov == PROV_OPENROUTER) {
+        if (prov == PROV_OPENROUTER || prov == PROV_AUTO_ROUTER) {
             host = L"openrouter.ai";
             path = L"/api/v1/chat/completions";
         } else if (prov == PROV_GPT) {
@@ -2000,7 +2002,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
         char footerBuf[128];
-        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.2  |  Stealth Proxy Active");
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.2.1  |  Stealth Proxy Active");
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
@@ -2397,7 +2399,7 @@ static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SelectObject(memDC, tagFont);
         SetTextColor(memDC, g_TextSecondary);
         RECT tagRc = { w - 120, 14, w - 16, 30 };
-        DrawTextA(memDC, "ZeroPoint v4.2", -1, &tagRc,
+        DrawTextA(memDC, "ZeroPoint v4.2.1", -1, &tagRc,
                   DT_RIGHT | DT_SINGLELINE);
         DeleteObject(tagFont);
 
@@ -3078,7 +3080,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             RECT c2 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Local Drives", -1, &c2, DT_LEFT); py+=20;
             RECT c3 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Printers", -1, &c3, DT_LEFT);
         }
-        else { // Remote Access tab (g_VECurrentTab == 3)
+        else if (g_VECurrentTab == 3) { // Remote Access tab
             SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
             RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Remote Access Configuration", -1, &rr1, DT_LEFT);
             py+=25;

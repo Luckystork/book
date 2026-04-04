@@ -93,6 +93,12 @@
 ### Settings Modal — 5th Tab
 - New **Typer** tab added: typing speed buttons, humanization level buttons, session recording blocker checkbox, exam mode checkbox, hotkey reminder display.
 
+### Auto Router (v4.2.1)
+- **OpenRouter Smart Routing**: New "Auto Router" provider option in both the sidebar dropdown and launcher settings. Uses model ID `openrouter/auto`, which lets OpenRouter automatically select the best model for each prompt based on cost, speed, reasoning, and vision capability.
+- **Shared API Key**: Auto Router shares the existing OpenRouter API key (`key_openrouter` in config.ini). No separate key entry needed.
+- **Full Feature Parity**: Works with all AI paths — text chat, vision/snip, Rapid Fire Thoughts, and auto-typer feed. Vision-capable (OpenRouter routes to a vision model when image content is detected).
+- **Config Persistence**: Selected provider (including Auto Router, index 5) saved as `provider=5` in config.ini and restored on startup.
+
 ## Keybinds
 | Shortcut | Action |
 |---|---|

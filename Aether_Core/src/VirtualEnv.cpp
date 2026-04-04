@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.cpp  (v4.2)
+//  ZeroPoint — VirtualEnv.cpp  (v4.2.1)
 //  Virtual Environment lifecycle: RDP session creation, frosted frame window,
 //  lock/unlock with mouse teleport, fullscreen toggle, "CLICK TO LOCK" overlay,
 //  AI chat sidebar panel, snip-region capture, human-like auto-typer,

@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.h  (v4.2)
+//  ZeroPoint — VirtualEnv.h  (v4.2.1)
 //  Virtual Environment lifecycle, window management, lock/unlock,
 //  mouse position teleport, fullscreen toggle, frosted overlays,
 //  global error popup system, and remote access.

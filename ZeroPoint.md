@@ -1,4 +1,4 @@
-# ZeroPoint v4.1
+# ZeroPoint v4.2.1
 
 ## Architecture
 **ZeroPoint** is a premium, stealth-oriented Windows utility that provides AI assistance over proctoring environments. v4.1 extends the core stealth engine with a fully isolated **Virtual Environment** running on loopback RDP, integrated directly into a DWM-frosted Windows host overlay.
@@ -28,12 +28,14 @@ By dynamically pulling and mutating an `rdpwrap.ini` for concurrent headless Ter
 On VE startup, `ApplyHardwareSpoofing()` randomizes BIOS/SMBIOS vendor, CPU ID, GPU driver description, disk serial, and MAC address via HKLM registry writes. Uses a pooled cryptographic RNG (`CryptGenRandom` with 256-byte buffer) for high-quality randomness. MAC addresses use the locally-administered bit (02:xx) for protocol compliance. Requires elevated (Run as Administrator) privileges; gracefully warns with a calm, helpful themed popup if writes fail.
 
 ### AI Engine Modes & Providers
-ZeroPoint queries multi-provider Chat Completions and Vision models via OpenRouter.  
-**Available Models** (via OpenRouter):
-* Claude 4.6 Opus
-* Grok 4
-* GPT-5.2
-* Deepseek V3.2 R1
+ZeroPoint queries multi-provider Chat Completions and Vision models via direct API or OpenRouter.  
+**Available Providers:**
+* Claude 4.6 Opus (direct Anthropic API)
+* Grok 4 (direct xAI API)
+* GPT-5.2 (direct OpenAI API)
+* Deepseek V3.2 R1 (direct Deepseek API, text-only)
+* OpenRouter (user-selected sub-model via openrouter.ai)
+* **Auto Router** (OpenRouter smart routing — automatically selects the best model for each prompt based on cost, speed, reasoning, and vision capability. Uses model ID `openrouter/auto`.)
 
 **Modes**:
 1. **Auto-Send Mode**: Instantly captures the screenshot and fires a multi-modal payload. Automatically detects vision support and falls back to CDP DOM extraction.

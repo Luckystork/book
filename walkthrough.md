@@ -1,4 +1,4 @@
-# ZeroPoint v4.2 User Walkthrough
+# ZeroPoint v4.2.1 User Walkthrough
 
 ## 1. Installation
 1. Run `ZeroPoint_Installer.exe`. The installer features an icy cyan and white color palette to match the application.
@@ -25,13 +25,24 @@
 - **Snip Region (Ctrl+Shift+S):** Brings up a dark, frosted screen overlay with a crosshair. Click and drag to create a precise bounding box around a specific question or diagram. When you release the mouse, only that specific region is captured and sent to the thumbnail panel.
 - **Thumbnails & Drag-and-Drop:** Open the Invisible Browser (`Ctrl+Alt+B`). You can click and drag any screenshot thumbnail directly from the right-hand panel onto a webpage (e.g., ChatGPT or Claude) as a native file upload.
 
-## 5. Live AI Assistance
+## 5. Choosing an AI Provider
+Open the AI Sidebar (Ctrl+Alt+H) and use the **Provider dropdown** to select your model:
+- **Claude 4.6 Opus** — Direct Anthropic API. Vision-capable.
+- **Grok 4** — Direct xAI API. Vision-capable.
+- **GPT-5.2** — Direct OpenAI API. Vision-capable.
+- **Deepseek V3.2 R1** — Direct Deepseek API. Text-only (falls back to CDP DOM extraction for screenshots).
+- **OpenRouter** — Routes through openrouter.ai with a user-selected sub-model. Vision-capable.
+- **Auto Router** — OpenRouter smart routing. Sends `openrouter/auto` as the model ID, letting OpenRouter automatically choose the best model for each prompt (optimizing for cost, speed, reasoning, and vision capability). Uses the same OpenRouter API key. Vision-capable.
+
+Enter your API key via the **"Set API Key..."** button in the sidebar. Auto Router and OpenRouter share the same key — entering it for either one sets it for both.
+
+## 6. Live AI Assistance
 - **Auto-Typer (Ctrl+Shift+T):** Types the last AI answer directly into the active exam window with human-like timing. Keystroke delays, typo rates, and pause behavior are controlled by the **Typing Speed** (Slow/Medium/Fast) and **Humanization Level** (Low/Medium/High) settings in Settings → Typer tab. Also available as the **"Type Answer"** button in the sidebar.
 - **Rapid Fire Thoughts (Ctrl+Shift+R):** Activates a live, non-blocking streaming simulation. ZeroPoint will sequentially display its "thinking process" (e.g., parsing DOM, extracting boundaries, running inference) directly in the frosted AI popup toast and the sidebar. This allows you to track the AI's logic in real-time.
 - **Invisible Browser (Ctrl+Alt+B):** Need to do manual research? Toggle the fully functional, hardware-accelerated WebView2 browser. Because it uses `WDA_EXCLUDEFROMCAPTURE`, it cannot be seen by screen recording software.
 - **Image Copy/Save:** Right-click any screenshot thumbnail in the browser panel to **Copy to Clipboard** or **Save as PNG** via a native file dialog.
 
-## 6. Hardware Spoofing (Automatic)
+## 7. Hardware Spoofing (Automatic)
 On VE startup, ZeroPoint randomizes the following identifiers via HKLM registry writes to prevent host/VE fingerprint correlation:
 - BIOS vendor, version, and release date (from realistic OEM pools — 4 vendors, 7 manufacturers)
 - UEFI strings: SystemBiosVersion and ECFirmwareRelease
@@ -45,7 +56,7 @@ Total: 18 registry values randomized per VE launch. All randomization uses a poo
 
 **Note:** Requires ZeroPoint to be **Run as Administrator**. If not elevated, a progress warning is displayed and spoofing is skipped — the VE still launches normally.
 
-## 7. Remote Access — Controlling the VE from Another PC
+## 8. Remote Access — Controlling the VE from Another PC
 
 ZeroPoint allows a second user on a different computer to remotely view and control the Virtual Environment while the local user stays on the host desktop.
 
@@ -128,7 +139,7 @@ ZeroPoint allows a second user on a different computer to remotely view and cont
 - When you disable remote access (toggle OFF, Ctrl+Alt+R, or close ZeroPoint), the temporary user and firewall rule are cleaned up automatically.
 - All new UI elements (copy button, mic button, connected counter, timeout field) are modeless and non-blocking.
 
-## 8. Exam Mode (One-Click Max Stealth)
+## 9. Exam Mode (One-Click Max Stealth)
 
 1. **From the Launcher:** Click the **"EXAM MODE"** button below "START VIRTUAL ENVIRONMENT".
 2. **From Settings:** Open Settings (gear icon) → **Typer** tab → check **"Exam Mode"**.
@@ -139,7 +150,7 @@ ZeroPoint allows a second user on a different computer to remotely view and cont
    - Saves state to config.ini
 4. Deactivate by clicking the button again or unchecking in Settings.
 
-## 9. Auto-Typer Configuration
+## 10. Auto-Typer Configuration
 
 1. Open **Settings** (gear icon) → **Typer** tab.
 2. **Typing Speed**: Choose Slow (deliberate, 120ms base), Medium (natural, 70ms), or Fast (rapid, 30ms).
@@ -147,10 +158,10 @@ ZeroPoint allows a second user on a different computer to remotely view and cont
 4. **Session Recording Blocker**: Independently toggleable checkbox — applies `WDA_EXCLUDEFROMCAPTURE` to all ZeroPoint windows.
 5. Settings are saved automatically and persist across restarts.
 
-## 10. Emergency Evasion
+## 11. Emergency Evasion
 - **Panic Killswitch (Ctrl+Shift+X):** Instantly stops the Virtual Environment, kills all RDP sessions, closes all ZeroPoint windows, and wipes all configuration files, thumbnails, and logs from `C:\ProgramData\ZeroPoint\`.
 
-## 11. Build Instructions
+## 12. Build Instructions
 
 ### Prerequisites
 - Visual Studio 2022 with C++ Desktop workload
@@ -170,7 +181,7 @@ The build system automatically:
 - Enables MSVC link-time code generation for Release builds
 - Suppresses legacy Win32 API warnings
 
-## 12. v4.1.2 Final Polish Pass
+## 13. v4.1.2 Final Polish Pass
 This release focuses exclusively on bulletproofing the engine and polishing the UI.
 * **Thread Safety**: Fixed a critical UI freeze where low-level hooks or AI calls blocked the main message loop. Replaced `Sleep()` calls in the proxy engine with detached threads. Migrated state variables (`g_Processing`, `g_VoiceActive`, `g_InactivityTimeoutTriggered`) to `std::atomic<bool>`.
 * **Icy UI Aesthetic Consistency**: Updated the fallback Direct2D overlay renderers to correctly utilize the icy snowy frosted-glass aesthetic (dark text on translucent white backgrounds with correct blur).

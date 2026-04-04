@@ -1,7 +1,7 @@
 // ============================================================================
-//  ZeroPoint — Config.h  (v4.2)
-//  AI providers, per-provider API keys, screenshot modes, UI settings,
-//  Virtual Environment display/audio/interception/resource configuration.
+//  ZeroPoint — Config.h  (v4.2.1)
+//  AI providers (incl. Auto Router), per-provider API keys, screenshot modes,
+//  UI settings, Virtual Environment display/audio/interception/resource config.
 // ============================================================================
 
 #pragma once
@@ -12,16 +12,18 @@
 #include <vector>
 
 // ---------------------------------------------------------------------------
-//  5 Providers — each mapped to one AI model + its direct API
+//  6 Providers — each mapped to one AI model + its direct API
+//  Auto Router uses OpenRouter's smart routing (model "openrouter/auto")
 // ---------------------------------------------------------------------------
 
 enum Provider {
-    PROV_CLAUDE     = 0,   // Claude 4.6 Opus   -> api.anthropic.com
-    PROV_GROK       = 1,   // Grok 4            -> api.x.ai
-    PROV_GPT        = 2,   // GPT-5.2           -> api.openai.com
-    PROV_DEEPSEEK   = 3,   // Deepseek V3.2 R1  -> api.deepseek.com (text-only)
-    PROV_OPENROUTER = 4,   // OpenRouter         -> openrouter.ai (any model)
-    PROV_COUNT      = 5
+    PROV_CLAUDE      = 0,   // Claude 4.6 Opus   -> api.anthropic.com
+    PROV_GROK        = 1,   // Grok 4            -> api.x.ai
+    PROV_GPT         = 2,   // GPT-5.2           -> api.openai.com
+    PROV_DEEPSEEK    = 3,   // Deepseek V3.2 R1  -> api.deepseek.com (text-only)
+    PROV_OPENROUTER  = 4,   // OpenRouter         -> openrouter.ai (any model)
+    PROV_AUTO_ROUTER = 5,   // Auto Router        -> openrouter.ai/auto (smart routing)
+    PROV_COUNT       = 6
 };
 
 struct ProviderInfo {
