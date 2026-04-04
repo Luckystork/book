@@ -3236,7 +3236,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         // This flag is set from the timer thread to avoid a deadlock — the actual
         // DisableRemoteAccess() call must happen on the main thread.
         {
-            extern volatile bool g_InactivityTimeoutTriggered;
             if (g_InactivityTimeoutTriggered) {
                 g_InactivityTimeoutTriggered = false;
                 DisableRemoteAccess();
@@ -3536,6 +3535,12 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Clean shutdown
     DisableRemoteAccess();
     StopVirtualEnvironment();
+    ShutdownCDPNetworking();
+    Gdiplus::GdiplusShutdown(g_GdiplusToken);
+    OleUninitialize();
+    return 0;
+}
+pVirtualEnvironment();
     ShutdownCDPNetworking();
     Gdiplus::GdiplusShutdown(g_GdiplusToken);
     OleUninitialize();

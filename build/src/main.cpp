@@ -7,15 +7,17 @@
 #include "Config.h"
 #include <iostream>
 #include <windows.h>
+#include <thread>
+#include <atomic>
 
 // Globals
-extern bool g_Processing;
+extern std::atomic<bool> g_Processing;
 
 // Configs (These would be set in Layer 2 by Ivan)
 bool g_UseCDPMode = false;  // False = Respondus/OCR mode, True = Bluebook/CDP mode
 std::string g_AnthropicKey = "sk-ant-..."; // Placeholder
 
-void ExecuteSwiftCapture() {
+void ExecuteSwiftCaptureTask() {
     g_Processing = true;
     if (UI::g_Overlay) UI::g_Overlay->UpdateLayer1("[...]");
 
@@ -27,6 +29,10 @@ void ExecuteSwiftCapture() {
     
     if (UI::g_Overlay) UI::g_Overlay->UpdateLayer1(mockAIResponse);
     g_Processing = false;
+}
+
+void ExecuteSwiftCapture() {
+    std::thread(ExecuteSwiftCaptureTask).detach();
 }
 
 void ToggleEvadusMenu() {

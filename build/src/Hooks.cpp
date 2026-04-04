@@ -1,8 +1,9 @@
 #include "Hooks.h"
 #include <iostream>
+#include <atomic>
 
 HHOOK g_KeyboardHook = NULL;
-bool g_Processing = false;
+std::atomic<bool> g_Processing{false};
 
 // Forward declarations of engine commands (resolved in engine modules)
 extern void ExecuteSwiftCapture();    // Ctrl+Shift+Z

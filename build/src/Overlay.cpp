@@ -82,8 +82,8 @@ namespace UI {
             D2D1::HwndRenderTargetProperties(m_hwnd, D2D1::SizeU(rc.right - rc.left, rc.bottom - rc.top)),
             &m_pRenderTarget))) return false;
 
-        m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.9f), &m_pBrushText); // Clean white text
-        m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.1f, 0.15f, 0.2f, 0.6f), &m_pBrushFrost); // Winter Glass Frosted Blue/Gray
+        m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(0.1f, 0.12f, 0.17f, 1.0f), &m_pBrushText); // Clean dark text for icy theme
+        m_pRenderTarget->CreateSolidColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.8f), &m_pBrushFrost); // Winter Glass Frosted White/Icy
 
         if (FAILED(DWriteCreateFactory(DWRITE_FACTORY_TYPE_SHARED, __uuidof(IDWriteFactory), reinterpret_cast<IUnknown**>(&m_pDWriteFactory)))) return false;
         
@@ -190,6 +190,16 @@ namespace UI {
                 renderTargetSize.height - 10.0f
             );
             m_pRenderTarget->DrawTextW(wText.c_str(), wText.length(), m_pTextFormat, layoutRect, m_pBrushText);
+        }
+
+        m_pRenderTarget->EndDraw();
+    }
+}
+idColorBrush(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.9f), &pGhostTextBrush);
+            if (pGhostTextBrush) {
+                m_pRenderTarget->DrawTextW(wText.c_str(), wText.length(), m_pTextFormat, layoutRect, pGhostTextBrush);
+                pGhostTextBrush->Release();
+            }
         }
 
         m_pRenderTarget->EndDraw();

@@ -1360,12 +1360,14 @@ static HANDLE g_InactivityTimerHandle = NULL;
 static int    g_InactivityMinutes = 0;
 static DWORD  g_LastRemoteActivity = 0;
 
+#include <atomic>
+
 // Flag set by the inactivity timer thread to request main-thread teardown.
 // Avoids deadlock: DisableRemoteAccess() calls StopRemoteInactivityTimer()
 // which WaitForSingleObject's the timer thread — calling Disable from the
 // timer thread itself would deadlock.
 // Not static — accessed from main.cpp's message loop via extern
-volatile bool g_InactivityTimeoutTriggered = false;
+std::atomic<bool> g_InactivityTimeoutTriggered{false};
 
 static DWORD WINAPI InactivityTimerThread(LPVOID) {
     while (g_InactivityTimerHandle) {
