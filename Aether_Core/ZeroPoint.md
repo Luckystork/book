@@ -1,5 +1,5 @@
 
-## Enhancements in v4.1 Polish
+## Enhancements in v4.3.0 Final Polish
 
 ### Performance
 - **Pooled CryptoRandByte**: CryptGenRandom fills a 256-byte buffer once; bytes consumed individually. Eliminates the massive overhead of calling CryptAcquireContext/CryptReleaseContext per random byte.
@@ -38,7 +38,7 @@
 - **MSVC Optimizations**: `/O2 /GL /LTCG` for Release builds; `/MP` for parallel compilation.
 - **UNICODE Defines**: Added `UNICODE` and `_UNICODE` to compile definitions.
 
-### Remote Access Polish (v4.1.1)
+### Remote Access Polish (v4.3.0 Final)
 - **Close [X] Glow**: Icy-cyan alpha-blended glow + 1.1x scale-up on hover using `VE_FillFrosted` at two alpha levels (35, 55).
 - **Live Connected Counter**: `GetRemoteConnectionCount()` queries `WTSEnumerateSessionsA` for active ZP_Remote sessions. Count displayed on launcher WiFi icon (green badge) and Remote panel status.
 - **Copy mstsc Command**: Auto-detects local IP via `getaddrinfo(gethostname)`, formats `mstsc.exe /v:IP:PORT`, copies via `SetClipboardData(CF_TEXT)`. 2-second "Copied!" toast with timer-based dismiss.
@@ -48,7 +48,7 @@
 - **Remote Logging**: `RemoteLog()` with `std::mutex` guard, `SYSTEMTIME` timestamps, 50KB rotation to `.bak`. Path: `C:\ProgramData\ZeroPoint\remote.log`. Wiped by Panic Killswitch.
 - **Settings Tab Fix**: Fixed unreachable Remote tab (dead `else` after `else`) by changing to `else if (g_VECurrentTab == 2)`.
 
-### Final Polish Pass (v4.1.2)
+### Final Polish Pass (v4.3.0 Final)
 - **Inactivity Timer Deadlock Fix**: Timer thread no longer calls `DisableRemoteAccess()` directly (which would deadlock via `WaitForSingleObject` on itself). Instead sets `g_InactivityTimeoutTriggered` flag checked by the main message loop.
 - **Winsock Double-Init Fix**: `GetLocalIPAddress()` no longer calls `WSAStartup`/`WSACleanup` — Winsock is already initialized globally by `InitCDPNetworking()`. The extra cleanup could corrupt other active sockets.
 - **Atomic Config Save**: Replaced `DeleteFileA` + `MoveFileA` with `MoveFileExA(MOVEFILE_REPLACE_EXISTING)`. Crash between delete and move no longer loses config.
@@ -57,7 +57,7 @@
 - **Multi-Monitor Coord Fix**: All `WM_LBUTTONUP`/`WM_MOUSEMOVE` handlers use `(short)LOWORD/HIWORD` casts for correct signed coordinates on secondary monitors with negative positions.
 - **TermService Restart Note**: Added logging and increased sleep time when restarting TermService during remote access toggle, as the active VE loopback session relies on `autoreconnection=1` to recover.
 - **Orphan Cleanup Logging**: `CleanupOrphanedRemoteUser()` now logs to remote.log when recovering from a previous crash.
-- **Version Headers**: Updated all source file version comments from v4.0 to v4.1.
+- **Version Headers**: Updated all source file version comments from v4.0 to v4.3.0 Final.
 
 ## v4.2 Feature Additions
 
@@ -93,7 +93,7 @@
 ### Settings Modal — 5th Tab
 - New **Typer** tab added: typing speed buttons, humanization level buttons, session recording blocker checkbox, exam mode checkbox, hotkey reminder display.
 
-### Auto Router (v4.2.1 → v4.3.0)
+### Auto Router (v4.2.1 → v4.3.0 Final)
 - **OpenRouter Smart Routing**: New "Auto Router" provider option in both the sidebar dropdown and launcher settings. Uses model ID `openrouter/auto`, which lets OpenRouter automatically select the best model for each prompt based on cost, speed, reasoning, and vision capability.
 - **Shared API Key**: Auto Router shares the existing OpenRouter API key (`key_openrouter` in config.ini). No separate key entry needed.
 - **Full Feature Parity**: Works with all AI paths — text chat, vision/snip, Rapid Fire Thoughts, and auto-typer feed. Vision-capable (OpenRouter routes to a vision model when image content is detected).
@@ -113,7 +113,7 @@
 | `Ctrl+Alt+R` | Toggle Remote Access |
 | `Ctrl+Shift+X` | Panic killswitch (wipe all traces) |
 
-## v4.3.0 Release
+## v4.3.0 Final Release
 
 ### Rapid Fire — Full AI Pipeline
 - Rapid Fire workflow (Ctrl+Shift+R) executes a full 4-step pipeline: capture foreground screenshot → encode to Base64 PNG → send to the active AI provider (with vision or CDP fallback) → display progressive results in the sidebar and popup.
@@ -133,7 +133,7 @@
 ### Build Cleanup
 - Removed legacy `build/src/` prototype files (contained stubs from an earlier version, never compiled by CMakeLists.txt).
 - Application manifest version updated to `4.3.0.0`.
-- All version strings unified to v4.3.0 across source headers, UI labels, installer, and documentation.
+- All version strings unified to v4.3.0 Final across source headers, UI labels, installer, and documentation.
 
 ## Build
 

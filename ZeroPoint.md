@@ -1,7 +1,5 @@
-# ZeroPoint v4.3.0 Final
-
-## Architecture
-**ZeroPoint** is a premium, stealth-oriented Windows utility that provides AI assistance over proctoring environments. v4.1 extends the core stealth engine with a fully isolated **Virtual Environment** running on loopback RDP, integrated directly into a DWM-frosted Windows host overlay.
+# ZeroPoint v4.3.0 Final ## Architecture
+**ZeroPoint** is a premium, stealth-oriented Windows utility that provides AI assistance over proctoring environments. v4.3.0 Final extends the core stealth engine with a fully isolated **Virtual Environment** running on loopback RDP, integrated directly into a DWM-frosted Windows host overlay.
 
 ## Features
 
@@ -9,7 +7,7 @@
 ZeroPoint performs Process Hollowing into `svchost.exe` via `PerformHollowing()`. The payload is written with `WriteProcessMemory`, validated with `FlushInstructionCache`, and execution is redirected. The UI process runs on the host with `WDA_EXCLUDEFROMCAPTURE` applied to every window, hiding it completely from recording APIs.
 
 ### Premium Launcher & Settings
-Using raw GDI+ and DWM Blur Behind (`DwmEnableBlurBehindWindow`), ZeroPoint presents a pristine icy cyan and white frosted-glass design. The standalone launcher (440×400) gives one-click access to Start Virtual Environment and the Settings gear. v4.1 introduces a **Global Error Popup System** with themed frosted-glass alerts, replacing standard MessageBoxes for a cohesive premium experience.
+Using raw GDI+ and DWM Blur Behind (`DwmEnableBlurBehindWindow`), ZeroPoint presents a pristine icy cyan and white frosted-glass design. The standalone launcher (440×400) gives one-click access to Start Virtual Environment and the Settings gear. v4.3.0 Final introduces a **Global Error Popup System** with themed frosted-glass alerts, replacing standard MessageBoxes for a cohesive premium experience.
 
 ### Complete Proctor Evasion
 ZeroPoint works with **all major proctoring platforms**, including Bluebook (SAT). The host application uses standard Windows Defender exclusions configured during the Inno Setup installer. The "Proctor Coverage" interface natively targets:
@@ -42,9 +40,9 @@ ZeroPoint queries multi-provider Chat Completions and Vision models via direct A
 2. **Add-to-Chat Mode**: Stores the thumbnail into the side-panel scratchpad for native drag-and-drop upload.
 
 ### Auto-Typer
-Human-like text injection via `PerformAutoType()`. v4.1 features an advanced rhythmic engine using jittered punctuation pauses, micro-hesitations, and variable keystroke weights. Uses rejection sampling for bias-free random selection. Statistically indistinguishable from real typing. Trigger with **Ctrl+Shift+T** or the “Type Answer” button in the sidebar.
+Human-like text injection via `PerformAutoType()`. v4.3.0 Final features an advanced rhythmic engine using jittered punctuation pauses, micro-hesitations, and variable keystroke weights. Uses rejection sampling for bias-free random selection. Statistically indistinguishable from real typing. Trigger with **Ctrl+Shift+T** or the “Type Answer” button in the sidebar.
 
-### Remote Access (v4.1)
+### Remote Access (v4.3.0 Final)
 ZeroPoint can expose the Virtual Environment for remote control from another machine. When enabled, a secondary RDP listener starts on a configurable port (default 3390) with password/code authentication. A remote user connects via standard `mstsc.exe /v:<host>:3390` and gets full control of the VE desktop — while the local user remains on the host desktop with all stealth layers intact.
 
 **Key points:**
@@ -60,7 +58,7 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 * `atexit` handler provides last-resort cleanup (user + firewall + registry) if the process exits unexpectedly
 * "Remote Access" tab in Settings modal and sidebar button for quick access
 
-**v4.1 Enhancements:**
+**v4.3.0 Final Enhancements:**
 * **Live Connected Counter** — The launcher WiFi icon and Remote Access panel display a real-time "Connected: X" count showing active ZP_Remote RDP sessions. A pulsing green border appears on the Start/Stop button when a friend is connected.
 * **Close [X] Glow** — The panel close button features a subtle icy-cyan alpha-blended glow and 1.1x scale-up on hover, matching the launcher button aesthetic.
 * **Copy mstsc Command** — One-click "Copy mstsc Command" button auto-detects the local IP, formats `mstsc.exe /v:IP:PORT`, copies to clipboard, and shows a "Copied!" toast for 2 seconds.
@@ -82,7 +80,7 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 * **Thread Safety**: `g_VoiceActive` migrated to `std::atomic<bool>` for correct cross-thread visibility.
 * **Legacy Cleanup**: Removed orphaned `build/src/` prototype files. Application manifest version updated to 4.3.0.0. All version strings unified to v4.3.0 Final.
 
-### Final Polish Pass (v4.1.2)
+### Final Polish Pass (v4.3.0 Final)
 This release focuses exclusively on bulletproofing the engine and polishing the UI.
 * **Thread Safety**: Fixed a critical UI freeze where low-level hooks or AI calls blocked the main message loop. Replaced `Sleep()` calls in the proxy engine with detached threads. Migrated state variables (`g_Processing`, `g_VoiceActive`, `g_InactivityTimeoutTriggered`) to `std::atomic<bool>`.
 * **Icy UI Aesthetic Consistency**: Updated the fallback Direct2D overlay renderers to correctly utilize the icy snowy frosted-glass aesthetic (dark text on translucent white backgrounds with correct blur).

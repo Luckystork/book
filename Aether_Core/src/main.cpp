@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility  (v4.3.0)
+//  ZeroPoint — Premium Windows Utility  (v4.3.0 Final)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
 //             browser, screenshot + vision AI, sidebar with settings,
 //             browser thumbnail panel, multi-provider + Auto Router, custom themes
@@ -2002,7 +2002,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
         char footerBuf[128];
-        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.3.0  |  Stealth Proxy Active");
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.3.0 Final  |  Stealth Proxy Active");
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
@@ -3426,7 +3426,7 @@ static void ToggleFullMenu() {
 //  Entry Point
 // ============================================================================
 
-static const char* ZEROPOINT_VERSION = "v4.3.0";
+static const char* ZEROPOINT_VERSION = "v4.3.0 Final";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Initialize GDI+ for screenshot PNG encoding

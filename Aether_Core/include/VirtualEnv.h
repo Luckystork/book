@@ -109,6 +109,7 @@ bool IsExamModeActive();
 // Session Recording Blocker — extra WDA_EXCLUDEFROMCAPTURE layer
 void ApplyRecordingBlocker(HWND hwnd);
 void RefreshRecordingBlocker();
+bool ApplyHardwareSpoofing();
 
 // ---------------------------------------------------------------------------
 //  Frosted Popups — AI answers and status notifications
