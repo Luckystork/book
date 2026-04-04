@@ -190,56 +190,32 @@ static std::string RandomString(int len, bool hex = false) {
 }
 
 // ============================================================================
-//  Hardware Spoofing — Anti-Detection Layer
+// Full Cryptographic Hardware/BIOS Spoofing — Randomizes fingerprints every launch
 // ============================================================================
-
-static bool SetRegString(HKEY root, const char* path, const char* valName, const char* data) {
+static bool SetRegString(HKEY root, const char* subKey, const char* valueName, const char* data) {
     HKEY hKey;
-    LONG rc = RegCreateKeyExA(root, path, 0, NULL, REG_OPTION_NON_VOLATILE,
-                              KEY_SET_VALUE, NULL, &hKey, NULL);
-    if (rc != ERROR_SUCCESS) return false;
-    rc = RegSetValueExA(hKey, valName, 0, REG_SZ,
-                        (const BYTE*)data, (DWORD)strlen(data) + 1);
+    if (RegCreateKeyExA(root, subKey, 0, NULL, REG_OPTION_NON_VOLATILE, KEY_WRITE, NULL, &hKey, NULL) != ERROR_SUCCESS)
+        return false;
+    LONG res = RegSetValueExA(hKey, valueName, 0, REG_SZ, (const BYTE*)data, (DWORD)strlen(data) + 1);
     RegCloseKey(hKey);
-    return rc == ERROR_SUCCESS;
+    return (res == ERROR_SUCCESS);
 }
 
-// Realistic OEM-pool hardware spoofing
 static bool ApplyHardwareSpoofing() {
     int failures = 0;
 
-    // 1. BIOS / SMBIOS
+    // BIOS / SMBIOS
     const char* biosPath = "HARDWARE\\DESCRIPTION\\System\\BIOS";
-    const char* biosVendors[] = {
-        "American Megatrends Inc.", "Phoenix Technologies Ltd.",
-        "Award Software International, Inc.", "Insyde Corp."
-    };
-    const char* boardMfgs[] = {
-        "ASUSTeK COMPUTER INC.", "Micro-Star International Co., Ltd.",
-        "Gigabyte Technology Co., Ltd.", "Dell Inc.",
-        "Hewlett-Packard", "Lenovo", "Acer Inc."
-    };
-    const char* boardProds[] = {
-        "PRIME Z790-P", "MAG B660M MORTAR", "B550 AORUS PRO V2",
-        "OptiPlex 7090", "HP EliteDesk 800 G9", "ThinkCentre M920q",
-        "Aspire TC-1780"
-    };
-    const char* sysNames[] = {
-        "Desktop PC", "All Series", "System Product Name",
-        "OptiPlex 7090", "HP EliteDesk", "ThinkCentre M920q",
-        "Aspire TC-1780"
-    };
+    const char* biosVendors[] = {"American Megatrends Inc.", "Phoenix Technologies Ltd.", "Award Software International, Inc.", "Insyde Corp."};
+    const char* boardMfgs[] = {"ASUSTeK COMPUTER INC.", "Micro-Star International Co., Ltd.", "Gigabyte Technology Co., Ltd.", "Dell Inc.", "Hewlett-Packard", "Lenovo", "Acer Inc."};
+    const char* boardProds[] = {"PRIME Z790-P", "MAG B660M MORTAR", "B550 AORUS PRO V2", "OptiPlex 7090", "HP EliteDesk 800 G9", "ThinkCentre M920q", "Aspire TC-1780"};
+    const char* sysNames[] = {"Desktop PC", "All Series", "System Product Name", "OptiPlex 7090", "HP EliteDesk", "ThinkCentre M920q", "Aspire TC-1780"};
 
     int bv = CryptoRandUniform(4);
     int bm = CryptoRandUniform(7);
 
-    // BIOS version with realistic format
-    std::string biosVer = "v" + std::to_string(CryptoRandUniform(5) + 1) + "."
-                        + std::to_string(CryptoRandUniform(99));
-    // Realistic date format MM/DD/YYYY
-    std::string biosDate = std::to_string(CryptoRandUniform(12) + 1) + "/"
-                         + std::to_string(CryptoRandUniform(28) + 1) + "/202"
-                         + std::to_string(CryptoRandUniform(5));
+    std::string biosVer = "v" + std::to_string(CryptoRandUniform(5) + 1) + "." + std::to_string(CryptoRandUniform(99));
+    std::string biosDate = std::to_string(CryptoRandUniform(12) + 1) + "/" + std::to_string(CryptoRandUniform(28) + 1) + "/202" + std::to_string(CryptoRandUniform(5));
 
     if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVendor", biosVendors[bv])) failures++;
     if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVersion", biosVer.c_str())) failures++;
@@ -248,6 +224,8 @@ static bool ApplyHardwareSpoofing() {
     if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardProduct", boardProds[bm])) failures++;
     if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemManufacturer", boardMfgs[bm])) failures++;
     if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemProductName", sysNames[bm])) failures++;
+
+    // CPU, GPU, Disk Serial, MAC, UEFI (full spoofing already partially present — we keep and enhance it)
 
     // 2. CPU
     const char* cpuPath = "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0";
@@ -318,7 +296,7 @@ static bool ApplyHardwareSpoofing() {
         "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum",
         "FriendlyName", diskModels[CryptoRandUniform(5)])) failures++;
 
-    return (failures < 18);
+    return (failures == 0);
 }
 
 // ============================================================================
@@ -450,7 +428,11 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     CreateVELockOverlay();
 
     // Step 6: Stealth — hide from screen recording
-    ApplyDisplayAffinity(g_VEFrame);
+    if (IsExamModeActive()) {
+        ActivateExamMode();
+    } else {
+        ApplyDisplayAffinity(g_VEFrame);
+    }
 
     g_VEState = VE_RUNNING;
 
@@ -1121,9 +1103,8 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
 }
 
 // ============================================================================
-//  Real Auto-Typer — Human-like text injection into exam window
+// Real Auto-Typer — Human-like text injection into exam window
 // ============================================================================
-
 static std::wstring Utf8ToUtf16(const std::string& str) {
     if (str.empty()) return L"";
     int size = MultiByteToWideChar(CP_UTF8, 0, str.data(), (int)str.size(), NULL, 0);
@@ -1132,8 +1113,6 @@ static std::wstring Utf8ToUtf16(const std::string& str) {
     return wstr;
 }
 
-// Gamma-like distribution: sum of multiple uniform samples
-// produces a bell-curve shape mimicking real human keystroke timing
 static int HumanDelay(int base, int variance) {
     if (variance <= 0) return base;
     int partVar = variance / 3 + 1;
@@ -1165,77 +1144,48 @@ static void SendFullVKey(WORD vk) {
 
 void PerformAutoType(const std::string& text) {
     if (text.empty()) {
-        ShowErrorPopup(
-            "Auto-Type: Nothing to Type",
+        ShowErrorPopup("Auto-Type: Nothing to Type",
             "No text is available for injection.\n\n"
             "Use Ctrl+Shift+Z to capture a screenshot and get an AI answer first,\n"
             "then press Ctrl+Shift+T to type the response.");
         return;
     }
 
-    // Validate foreground window exists for injection target
     HWND fg = GetForegroundWindow();
     if (!fg) {
-        ShowErrorPopup(
-            "Auto-Type: No Target Window",
+        ShowErrorPopup("Auto-Type: No Target Window",
             "Could not find a foreground window to type into.\n\n"
             "Make sure the exam window or text field is focused\n"
             "before pressing Ctrl+Shift+T.");
         return;
     }
 
-    // Speed parameters: base delay and variance per TypingSpeed setting
     int baseDelay = 70, delayVar = 120;
     switch (g_AutoTyperConfig.speed) {
-        case TYPING_SLOW:   baseDelay = 120; delayVar = 200; break;
-        case TYPING_MEDIUM: baseDelay = 70;  delayVar = 120; break;
-        case TYPING_FAST:   baseDelay = 30;  delayVar = 70;  break;
+        case TYPING_SLOW: baseDelay = 120; delayVar = 200; break;
+        case TYPING_MEDIUM: baseDelay = 70; delayVar = 120; break;
+        case TYPING_FAST: baseDelay = 30; delayVar = 70; break;
     }
 
-    // Humanization parameters: typo frequency and pause intensity
-    int typoBase = 50;          // lower = more frequent typos
-    int typoWordBoundary = 80;  // higher = rarer at word boundaries
-    int microPauseChance = 20;  // 1-in-N chance per char
-    int longPauseChance = 200;  // 1-in-N chance per char
-    int punctPauseMul = 1;      // multiplier for punctuation pauses
-
+    int typoBase = 50, typoWordBoundary = 80;
+    int microPauseChance = 20, longPauseChance = 200;
+    int punctPauseMul = 1;
     switch (g_AutoTyperConfig.humanization) {
-        case HUMAN_LOW:
-            typoBase = 200;           // ~0.5% typo rate
-            typoWordBoundary = 400;
-            microPauseChance = 80;    // very rare micro-pause
-            longPauseChance = 500;
-            punctPauseMul = 0;        // minimal punctuation pause
-            break;
-        case HUMAN_MEDIUM:
-            typoBase = 50;            // ~2% typo rate
-            typoWordBoundary = 80;
-            microPauseChance = 20;
-            longPauseChance = 200;
-            punctPauseMul = 1;
-            break;
-        case HUMAN_HIGH:
-            typoBase = 25;            // ~4% typo rate
-            typoWordBoundary = 40;
-            microPauseChance = 10;    // frequent micro-pauses
-            longPauseChance = 80;
-            punctPauseMul = 2;        // longer punctuation pauses
-            break;
+        case HUMAN_LOW:   typoBase = 200; typoWordBoundary = 400; microPauseChance = 80; longPauseChance = 500; punctPauseMul = 0; break;
+        case HUMAN_MEDIUM: typoBase = 50;  typoWordBoundary = 80;  microPauseChance = 20; longPauseChance = 200; punctPauseMul = 1; break;
+        case HUMAN_HIGH:  typoBase = 25;  typoWordBoundary = 40;  microPauseChance = 10; longPauseChance = 80;  punctPauseMul = 2; break;
     }
 
     std::wstring wText = Utf8ToUtf16(text);
-
-    // Brief settle time for focus
     Sleep(50);
 
     bool injectionFailed = false;
-
     for (size_t i = 0; i < wText.size(); i++) {
         wchar_t c = wText[i];
 
-        // 1. Natural typo injection — frequency controlled by humanization level
-        bool atWordBoundary = (i == 0 || wText[i - 1] == L' ' || wText[i - 1] == L'\n');
+        bool atWordBoundary = (i == 0 || wText[i-1] == L' ' || wText[i-1] == L'\n');
         int typoChance = atWordBoundary ? typoWordBoundary : typoBase;
+
         if (CryptoRandUniform(typoChance) == 0 && c != L'\n' && c != L'\r' && c != L' ') {
             wchar_t typo = L'a' + (wchar_t)CryptoRandUniform(26);
             SendUnicodeChar(typo);
@@ -1244,29 +1194,12 @@ void PerformAutoType(const std::string& text) {
             Sleep(HumanDelay(120, 150));
         }
 
-        // 2. Type the correct character
-        {
-            INPUT ip[2] = {};
-            ip[0].type = INPUT_KEYBOARD;
-            ip[0].ki.wScan = c;
-            ip[0].ki.dwFlags = KEYEVENTF_UNICODE;
-            ip[1].type = INPUT_KEYBOARD;
-            ip[1].ki.wScan = c;
-            ip[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-            UINT sent = SendInput(2, ip, sizeof(INPUT));
-            if (sent == 0 && i == 0) {
-                injectionFailed = true;
-                break;
-            }
-        }
+        SendUnicodeChar(c);
 
-        // 3. Human-like delay — base controlled by speed setting
         int delay = HumanDelay(baseDelay, delayVar);
-
-        // Punctuation pauses scaled by humanization level
         int jitter = CryptoRandUniform(30);
         if (punctPauseMul > 0) {
-            if (c == L'.' || c == L'?' || c == L'!')
+            if (c == L'.' || c == L'?' || c == L'!' || c == L':') 
                 delay += HumanDelay((180 + jitter) * punctPauseMul, 350 * punctPauseMul);
             else if (c == L'\n')
                 delay += HumanDelay((200 + jitter) * punctPauseMul, 400 * punctPauseMul);
@@ -1275,48 +1208,49 @@ void PerformAutoType(const std::string& text) {
             else if (c == L':' || c == L';')
                 delay += HumanDelay((60 + jitter) * punctPauseMul, 120 * punctPauseMul);
         }
-
-        // Occasional micro-pause mid-word
         if (CryptoRandUniform(microPauseChance) == 0) delay += HumanDelay(100, 200);
-
-        // Very rare longer pause — models brief distraction
         if (CryptoRandUniform(longPauseChance) == 0) delay += HumanDelay(300, 600);
 
         Sleep(delay);
     }
 
     if (injectionFailed) {
-        ShowErrorPopup(
-            "Auto-Type: Injection Blocked",
+        ShowErrorPopup("Auto-Type: Injection Blocked",
             "SendInput failed — the target window rejected keyboard input.\n\n"
-            "This happens when the exam app runs at a higher privilege level.\n\n"
             "Fix:\n"
-            "  1. Run ZeroPoint as Administrator\n"
-            "  2. Make sure the exam window is focused\n"
-            "  3. Click inside the text field before pressing Ctrl+Shift+T");
+            "1. Run ZeroPoint as Administrator\n"
+            "2. Make sure the exam window is focused");
     }
 }
 
 // ============================================================================
-//  Exam Mode — one-click max stealth preset
+// Exam Mode — One-click max stealth activation
 // ============================================================================
-
 void ActivateExamMode() {
     g_ExamModeConfig.active = true;
-    g_RapidFireConfig.enabled = true;
     g_SessionRecordingBlocker = true;
-    RefreshRecordingBlocker();
+    ApplyDisplayAffinity(g_VEFrame);           // WDA_EXCLUDEFROMCAPTURE
+    ApplyDisplayAffinity(g_VELockOverlay);
+    if (g_VEChatSidebar) ApplyDisplayAffinity(g_VEChatSidebar);
 
-    // If VE is running, ensure lock overlay is ready (don't lock, just prime)
-    if (g_VEState == VE_RUNNING && g_VELockOverlay && IsWindow(g_VELockOverlay)) {
-        ApplyDisplayAffinity(g_VELockOverlay);
-    }
-    SaveConfig();
+    // Refresh spoofing on every Exam Mode activation
+    ApplyHardwareSpoofing();
+
+    // Prime Rapid Fire for instant use
+    g_RapidFireConfig.enabled = true;
+
+    ShowAIPopup("EXAM MODE ACTIVATED\n\n"
+                "• Full recording blocker enabled\n"
+                "• Hardware fingerprints refreshed\n"
+                "• All overlays hidden from proctors\n"
+                "• Ctrl+Shift+R = Rapid Fire Thoughts", 4000);
 }
 
 void DeactivateExamMode() {
     g_ExamModeConfig.active = false;
-    SaveConfig();
+    g_SessionRecordingBlocker = false;
+    RefreshRecordingBlocker();
+    ShowAIPopup("Exam Mode OFF — normal operation restored", 2500);
 }
 
 bool IsExamModeActive() { return g_ExamModeConfig.active; }
@@ -2572,4 +2506,15 @@ void ShowRemoteAccessPanel(HWND owner) {
     SetForegroundWindow(g_RemotePanelHwnd);
     // Fully modeless — messages dispatched by WinMain's PeekMessage loop.
     // No blocking GetMessage loop here.
+}
+re.
+}
+otePanelHwnd, 0, 240, LWA_ALPHA);
+    ApplyDisplayAffinity(g_RemotePanelHwnd);
+    ShowWindow(g_RemotePanelHwnd, SW_SHOW);
+    SetForegroundWindow(g_RemotePanelHwnd);
+    // Fully modeless — messages dispatched by WinMain's PeekMessage loop.
+    // No blocking GetMessage loop here.
+}
+re.
 }

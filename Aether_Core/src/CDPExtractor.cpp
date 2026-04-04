@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — CDPExtractor.cpp  (v4.3.0)
+//  ZeroPoint — CDPExtractor.cpp  (v4.3.0 Final)
 //  Chrome DevTools Protocol (CDP) content extraction from Bluebook / any
 //  Chromium-based browser running with --remote-debugging-port=9222.
 //

@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.h  (v4.3.0)
+//  ZeroPoint — VirtualEnv.h  (v4.3.0 Final)
 //  Virtual Environment lifecycle, window management, lock/unlock,
 //  mouse position teleport, fullscreen toggle, frosted overlays,
 //  global error popup system, and remote access.
@@ -109,6 +109,13 @@ bool IsExamModeActive();
 // Session Recording Blocker — extra WDA_EXCLUDEFROMCAPTURE layer
 void ApplyRecordingBlocker(HWND hwnd);
 void RefreshRecordingBlocker();
+
+// ---------------------------------------------------------------------------
+//  Frosted Popups — AI answers and status notifications
+// ---------------------------------------------------------------------------
+
+// Show a frosted AI answer or status notification in the bottom-right.
+void ShowAIPopup(const std::string& text, int durationMs = 15000);
 
 // ---------------------------------------------------------------------------
 //  Global Error Popup — icy frosted style (defined in main.cpp)

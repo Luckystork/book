@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Config.h  (v4.3.0)
+//  ZeroPoint — Config.h  (v4.3.0 Final)
 //  AI providers (incl. Auto Router), per-provider API keys, screenshot modes,
 //  UI settings, Virtual Environment display/audio/interception/resource config.
 // ============================================================================

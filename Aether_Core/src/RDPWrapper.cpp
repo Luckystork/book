@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — RDPWrapper.cpp  (v4.3.0)
+//  ZeroPoint — RDPWrapper.cpp  (v4.3.0 Final)
 //  RDP Wrapper auto-download, install, configure, and session management.
 //
 //  Flow:

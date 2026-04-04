@@ -2250,7 +2250,7 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
-static void ShowAIPopup(const std::string& text) {
+void ShowAIPopup(const std::string& text, int durationMs = 15000) {
     g_PopupText = text;
 
     if (g_PopupHwnd && IsWindow(g_PopupHwnd)) {
@@ -2259,7 +2259,7 @@ static void ShowAIPopup(const std::string& text) {
         
         // Reset the timer since there is new activity
         KillTimer(g_PopupHwnd, 1);
-        SetTimer(g_PopupHwnd, 1, 15000, NULL);
+        SetTimer(g_PopupHwnd, 1, durationMs, NULL);
         return;
     }
 
@@ -2289,8 +2289,8 @@ static void ShowAIPopup(const std::string& text) {
     // Use the user's saved transparency
     SetLayeredWindowAttributes(g_PopupHwnd, 0, g_WindowAlpha, LWA_ALPHA);
 
-    // Auto-dismiss after 15 seconds
-    SetTimer(g_PopupHwnd, 1, 15000, NULL);
+    // Auto-dismiss after the requested duration
+    SetTimer(g_PopupHwnd, 1, durationMs, NULL);
 
     ShowWindow(g_PopupHwnd, SW_SHOW);
     UpdateWindow(g_PopupHwnd);
@@ -2399,7 +2399,7 @@ static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SelectObject(memDC, tagFont);
         SetTextColor(memDC, g_TextSecondary);
         RECT tagRc = { w - 120, 14, w - 16, 30 };
-        DrawTextA(memDC, "ZeroPoint v4.3.0", -1, &tagRc,
+        DrawTextA(memDC, "ZeroPoint v4.3.0 Final", -1, &tagRc,
                   DT_RIGHT | DT_SINGLELINE);
         DeleteObject(tagFont);
 

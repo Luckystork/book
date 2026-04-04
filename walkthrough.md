@@ -1,4 +1,4 @@
-# ZeroPoint v4.3.0 User Walkthrough
+# ZeroPoint v4.3.0 Final User Walkthrough
 
 ## 1. Installation
 1. Run `ZeroPoint_Installer.exe`. The installer features an icy cyan and white color palette to match the application.
@@ -182,7 +182,7 @@ The build system automatically:
 - Enables MSVC link-time code generation for Release builds
 - Suppresses legacy Win32 API warnings
 
-## 13. v4.3.0 Production Hardening
+## 13. v4.3.0 Final Production Hardening
 * **CDP WebSocket Rewrite**: `CDPExtractor.cpp` upgraded from raw TCP to proper RFC 6455 WebSocket protocol — HTTP `/json` discovery, upgrade handshake, masked frame send, unmasked frame receive. Reliable communication with Chromium debug ports.
 * **Thread Safety**: All cross-thread state variables (`g_VoiceActive`, `g_InactivityTimeoutTriggered`) use `std::atomic<bool>`. `#include <atomic>` consolidated to file-level includes.
 * **Legacy Cleanup**: Removed orphaned `build/src/` prototype files (stubs from an earlier version, never compiled by CMakeLists.txt). Application manifest version updated to 4.3.0.0.

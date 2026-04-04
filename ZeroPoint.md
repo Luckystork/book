@@ -1,4 +1,4 @@
-# ZeroPoint v4.3.0
+# ZeroPoint v4.3.0 Final
 
 ## Architecture
 **ZeroPoint** is a premium, stealth-oriented Windows utility that provides AI assistance over proctoring environments. v4.1 extends the core stealth engine with a fully isolated **Virtual Environment** running on loopback RDP, integrated directly into a DWM-frosted Windows host overlay.
@@ -75,12 +75,12 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 * **Invisible Browser** (Ctrl+Alt+B) — WebView2 with drag-and-drop thumbnails
 * **Panic Killswitch** (Ctrl+Shift+X) — instantly stops VE, kills RDP sessions, and wipes all traces
 
-### v4.3.0 — Production Hardening
+### v4.3.0 Final — Production Hardening
 * **Full Rapid Fire Pipeline**: Ctrl+Shift+R executes a full capture → encode → AI inference → display workflow using the active provider with vision support or CDP fallback.
 * **CDP WebSocket Rewrite**: `CDPExtractor.cpp` now performs proper RFC 6455 WebSocket communication — HTTP discovery of `webSocketDebuggerUrl`, upgrade handshake, masked frame send, unmasked frame receive.
 * **Sidebar Exam Mode**: One-click "Exam Mode" / "Exam Mode: ON" toggle button added to the AI sidebar for instant stealth activation without opening Settings or the launcher.
 * **Thread Safety**: `g_VoiceActive` migrated to `std::atomic<bool>` for correct cross-thread visibility.
-* **Legacy Cleanup**: Removed orphaned `build/src/` prototype files. Application manifest version updated to 4.3.0.0. All version strings unified to v4.3.0.
+* **Legacy Cleanup**: Removed orphaned `build/src/` prototype files. Application manifest version updated to 4.3.0.0. All version strings unified to v4.3.0 Final.
 
 ### Final Polish Pass (v4.1.2)
 This release focuses exclusively on bulletproofing the engine and polishing the UI.
