@@ -59,7 +59,7 @@ static ULONG_PTR g_GdiplusToken = 0;
 
 // Hotkey toggle states
 static bool keyZ = false, keyH = false, keyB = false, keyX = false, keyR = false;
-static bool keyC = false, keyF = false, keyS = false, keyT = false;
+static bool keyC = false, keyF = false, keyS = false, keyT = false, keyRemote = false;
 
 // ============================================================================
 //  Theme Configuration
@@ -1644,10 +1644,11 @@ static void ShowAlphaPicker(HWND owner) {
 
 #define ID_BTN_INJECT       1001
 #define ID_BTN_GEAR         1002
+#define ID_BTN_REMOTE       1003
 
 static int  g_LauncherResult = 0;
 static int  g_HoveredBtn     = 0;
-static RECT g_BtnInject, g_BtnGear;
+static RECT g_BtnInject, g_BtnGear, g_BtnRemote;
 
 static void EnableBlurBehind(HWND hwnd) {
     DWM_BLURBEHIND bb = {0};
@@ -1734,8 +1735,54 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         DeleteObject(subFont);
 
         // Button
-        g_BtnInject = { 40, 120, w - 40, 165 };
+        g_BtnInject = { 40, 120, w - 80, 165 };
         DrawIcyButton(memDC, g_BtnInject, "START VIRTUAL ENVIRONMENT", g_HoveredBtn == ID_BTN_INJECT, true);
+
+        // Remote Access button (small icy-teal icon next to Start VE)
+        g_BtnRemote = { w - 72, 120, w - 40, 165 };
+        {
+            COLORREF rmtBg = (g_HoveredBtn == ID_BTN_REMOTE) ? g_BtnHover : g_BtnNormal;
+            COLORREF rmtBrd = g_AccentColor;
+            HBRUSH rmtBr = CreateSolidBrush(rmtBg);
+            HPEN rmtPen = CreatePen(PS_SOLID, 2, rmtBrd);
+            HGDIOBJ oldB = SelectObject(memDC, rmtBr);
+            HGDIOBJ oldP = SelectObject(memDC, rmtPen);
+            RoundRect(memDC, g_BtnRemote.left, g_BtnRemote.top,
+                      g_BtnRemote.right, g_BtnRemote.bottom, 10, 10);
+            SelectObject(memDC, oldB);
+            SelectObject(memDC, oldP);
+            DeleteObject(rmtBr);
+            DeleteObject(rmtPen);
+
+            // WiFi/signal icon (3 arcs + dot) — icy teal
+            int cx = (g_BtnRemote.left + g_BtnRemote.right) / 2;
+            int cy = g_BtnRemote.top + 14;
+            COLORREF iconColor = (g_HoveredBtn == ID_BTN_REMOTE) ? g_AccentColor : RGB(0x00, 0xBB, 0xDD);
+            HPEN arcPen = CreatePen(PS_SOLID, 2, iconColor);
+            SelectObject(memDC, arcPen);
+            SelectObject(memDC, GetStockObject(NULL_BRUSH));
+            // Outer arc
+            Arc(memDC, cx - 12, cy - 10, cx + 12, cy + 14, cx + 12, cy, cx - 12, cy);
+            // Middle arc
+            Arc(memDC, cx - 8, cy - 4, cx + 8, cy + 12, cx + 8, cy + 2, cx - 8, cy + 2);
+            // Inner arc
+            Arc(memDC, cx - 4, cy + 1, cx + 4, cy + 9, cx + 4, cy + 4, cx - 4, cy + 4);
+            DeleteObject(arcPen);
+            // Center dot
+            HBRUSH dotBr = CreateSolidBrush(iconColor);
+            SelectObject(memDC, dotBr);
+            Ellipse(memDC, cx - 2, cy + 8, cx + 3, cy + 13);
+            DeleteObject(dotBr);
+
+            // "R" label under icon
+            HFONT rmtFont = CreateAppFont(9, FW_BOLD);
+            HGDIOBJ oldF = SelectObject(memDC, rmtFont);
+            SetTextColor(memDC, iconColor);
+            RECT rmtLbl = { g_BtnRemote.left, g_BtnRemote.top + 28, g_BtnRemote.right, g_BtnRemote.bottom };
+            DrawTextA(memDC, "REM", -1, &rmtLbl, DT_CENTER | DT_SINGLELINE);
+            SelectObject(memDC, oldF);
+            DeleteObject(rmtFont);
+        }
 
         // Settings Gear Icon (top right)
         g_BtnGear = { w - 50, 24, w - 20, 54 };
@@ -1810,6 +1857,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 
         POINT pt = { mx, my };
         if (PtInRect(&g_BtnInject, pt)) g_HoveredBtn = ID_BTN_INJECT;
+        else if (PtInRect(&g_BtnRemote, pt)) g_HoveredBtn = ID_BTN_REMOTE;
         else if (PtInRect(&g_BtnGear, pt)) g_HoveredBtn = ID_BTN_GEAR;
 
         if (prev != g_HoveredBtn) {
@@ -1835,6 +1883,8 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         if (PtInRect(&g_BtnInject, pt)) {
             g_LauncherResult = 1;
             DestroyWindow(hwnd);
+        } else if (PtInRect(&g_BtnRemote, pt)) {
+            ShowRemoteAccessPanel(hwnd);
         } else if (PtInRect(&g_BtnGear, pt)) {
             extern void ShowVESettingsModal(HWND owner);
             ShowVESettingsModal(hwnd);
@@ -2384,11 +2434,12 @@ bool ShowKeyInputDialog() {
 //    - Last answer / scratchpad
 //    - Settings gear → settings popover
 
-#define ID_SIDEBAR_COMBO  5001
-#define ID_SIDEBAR_KEYBTN 5002
-#define ID_SIDEBAR_SSBTN  5003
-#define ID_SIDEBAR_GEAR   5004
-#define ID_SIDEBAR_TYPE   5005  // "Type Answer" auto-typer button
+#define ID_SIDEBAR_COMBO   5001
+#define ID_SIDEBAR_KEYBTN  5002
+#define ID_SIDEBAR_SSBTN   5003
+#define ID_SIDEBAR_GEAR    5004
+#define ID_SIDEBAR_TYPE    5005  // "Type Answer" auto-typer button
+#define ID_SIDEBAR_REMOTE  5006  // "Remote Access" button
 
 static std::string g_LastAnswer = "(no AI query yet)";
 static bool        g_KeyWarningShown = false;   // one-time "no API key" warning flag
@@ -2498,6 +2549,14 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             188, 150, 54, 26, hwnd, (HMENU)ID_SIDEBAR_GEAR, NULL, NULL);
         SendMessage(g_SidebarGearBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
 
+        // ---- Remote Access button ----
+        {
+            HWND remoteBtn = CreateWindowA("BUTTON", "Remote Access",
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                12, 182, 226, 26, hwnd, (HMENU)ID_SIDEBAR_REMOTE, NULL, NULL);
+            SendMessage(remoteBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
+        }
+
         return 0;
     }
 
@@ -2530,6 +2589,11 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // Settings gear
         if (LOWORD(wp) == ID_SIDEBAR_GEAR) {
             ShowSettingsPopover(hwnd);
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        // Remote Access
+        if (LOWORD(wp) == ID_SIDEBAR_REMOTE) {
+            ShowRemoteAccessPanel(hwnd);
             InvalidateRect(hwnd, NULL, TRUE);
         }
         return 0;
@@ -2652,6 +2716,18 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SelectObject(memDC, oldTxtF);
         DeleteObject(textFont);
 
+        // ---- Remote Access status indicator ----
+        {
+            HFONT remFont = CreateAppFont(10, FW_SEMIBOLD);
+            SelectObject(memDC, remFont);
+            bool remActive = IsRemoteAccessEnabled();
+            SetTextColor(memDC, remActive ? RGB(0x00, 0xAA, 0x55) : g_TextSecondary);
+            RECT remRc = { 14, h - 40, w - 10, h - 24 };
+            const char* remText = remActive ? "REMOTE: ACTIVE" : "REMOTE: OFF";
+            DrawTextA(memDC, remText, -1, &remRc, DT_LEFT | DT_SINGLELINE);
+            DeleteObject(remFont);
+        }
+
         // ---- Dismiss hint ----
         HFONT hintFont = CreateAppFont(9, FW_NORMAL);
         SelectObject(memDC, hintFont);
@@ -2697,11 +2773,12 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 #define ID_BTN_TAB_DISPLAY      7002
 #define ID_BTN_TAB_RESOURCES    7003
 #define ID_BTN_VESET_DONE       7004
+#define ID_BTN_TAB_REMOTE       7005
 
 static HWND g_VESettingsHwnd = NULL;
-static int g_VECurrentTab = 0; // 0=Interception, 1=Display, 2=Resources
+static int g_VECurrentTab = 0; // 0=Interception, 1=Display, 2=Resources, 3=Remote
 static int g_VHoveredBtn = 0;
-static RECT g_TabRects[3];
+static RECT g_TabRects[4];
 static RECT g_DoneBtnRect;
 
 static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -2738,11 +2815,12 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SetBkMode(memDC, TRANSPARENT);
         
         // Tabs
-        g_TabRects[0] = { 10, 15, 130, 45 };
-        g_TabRects[1] = { 135, 15, 255, 45 };
-        g_TabRects[2] = { 260, 15, 410, 45 };
-        const char* tabNames[3] = { "Interception", "Display", "Local Resources" };
-        for(int i=0; i<3; i++) {
+        g_TabRects[0] = { 10, 15, 110, 45 };
+        g_TabRects[1] = { 115, 15, 215, 45 };
+        g_TabRects[2] = { 220, 15, 330, 45 };
+        g_TabRects[3] = { 335, 15, 430, 45 };
+        const char* tabNames[4] = { "Interception", "Display", "Resources", "Remote" };
+        for(int i=0; i<4; i++) {
             bool active = (g_VECurrentTab == i);
             DrawIcyButton(memDC, g_TabRects[i], tabNames[i], g_VHoveredBtn == 7001+i, active);
         }
@@ -2826,7 +2904,51 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             RECT c2 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Local Drives", -1, &c2, DT_LEFT); py+=20;
             RECT c3 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Printers", -1, &c3, DT_LEFT);
         }
-        
+        else { // Remote Access tab
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Remote Access Configuration", -1, &rr1, DT_LEFT);
+            py+=25;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+
+            bool remActive = IsRemoteAccessEnabled();
+            RemoteAccessConfig remCfg = GetRemoteAccessConfig();
+
+            // Status
+            RECT st1 = {px, py, w, py+20};
+            SetTextColor(memDC, remActive ? RGB(0x00, 0xAA, 0x55) : g_TextSecondary);
+            DrawTextA(memDC, remActive ? "Status: ACTIVE" : "Status: Disabled", -1, &st1, DT_LEFT);
+            py+=25;
+
+            SetTextColor(memDC, g_TextPrimary);
+            // Port
+            char portStr[64];
+            snprintf(portStr, sizeof(portStr), "Listening Port: %d", remCfg.port);
+            RECT pt1 = {px, py, w, py+20}; DrawTextA(memDC, portStr, -1, &pt1, DT_LEFT);
+            py+=22;
+
+            // Auth method
+            RECT am1 = {px, py, w, py+20}; DrawTextA(memDC, "Auth: Password / 6-digit code", -1, &am1, DT_LEFT);
+            py+=30;
+
+            // Instructions
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr2 = {px, py, w, py+20}; DrawTextA(memDC, "How to Connect", -1, &rr2, DT_LEFT);
+            py+=22;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextSecondary);
+            RECT ins = {px, py, w-20, py+80};
+            DrawTextA(memDC,
+                "1. Enable Remote Access (toggle or Ctrl+Alt+R)\n"
+                "2. From another PC, open mstsc.exe\n"
+                "3. Connect to <this-pc-ip>:3390\n"
+                "4. Enter the password/code you set",
+                -1, &ins, DT_LEFT | DT_WORDBREAK);
+            py+=90;
+
+            // Hotkey reminder
+            SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
+            RECT hk = {px, py, w, py+20}; DrawTextA(memDC, "Hotkey: Ctrl+Alt+R to toggle", -1, &hk, DT_LEFT);
+        }
+
         DeleteObject(hdrF); DeleteObject(nrmF);
 
         g_DoneBtnRect = { w/2 - 50, h - 45, w/2 + 50, h - 15 };
@@ -2840,7 +2962,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         int mx = LOWORD(lp), my = HIWORD(lp);
         int prev = g_VHoveredBtn; g_VHoveredBtn = 0;
         POINT pt = {mx, my};
-        for(int i=0; i<3; i++) if (PtInRect(&g_TabRects[i], pt)) g_VHoveredBtn = 7001+i;
+        for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) g_VHoveredBtn = 7001+i;
         if (PtInRect(&g_DoneBtnRect, pt)) g_VHoveredBtn = ID_BTN_VESET_DONE;
         if (prev != g_VHoveredBtn) { InvalidateRect(hwnd, NULL, FALSE); SetCursor(LoadCursor(NULL, g_VHoveredBtn?IDC_HAND:IDC_ARROW)); }
         TRACKMOUSEEVENT tme = {sizeof(tme), TME_LEAVE, hwnd, 0}; TrackMouseEvent(&tme);
@@ -2851,7 +2973,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         return 0;
     case WM_LBUTTONUP: {
         POINT pt = {LOWORD(lp), HIWORD(lp)};
-        for(int i=0; i<3; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
+        for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
         if (PtInRect(&g_DoneBtnRect, pt)) { DestroyWindow(hwnd); }
         return 0;
     }
@@ -3266,6 +3388,16 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             keyF = false;
         }
 
+        // Ctrl+Alt+R — Toggle Remote Access
+        if (ctrl && alt && (GetAsyncKeyState(0x52) & 0x8000)) {
+            if (!keyRemote) {
+                keyRemote = true;
+                ToggleRemoteAccess();
+            }
+        } else {
+            keyRemote = false;
+        }
+
         // Ctrl+Shift+X — Panic killswitch (wipe everything + terminate)
         if (ctrl && shift && (GetAsyncKeyState(0x58) & 0x8000)) {
             if (!keyX) {
@@ -3275,6 +3407,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                     DestroyWindow(g_BrowserHwnd);
                 if (g_MenuHwnd && IsWindow(g_MenuHwnd))
                     DestroyWindow(g_MenuHwnd);
+
+                // Disable remote access before panic
+                DisableRemoteAccess();
 
                 // Wipe screenshot directory before panic
                 try {
@@ -3293,6 +3428,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     }
 
     // Clean shutdown
+    DisableRemoteAccess();
     StopVirtualEnvironment();
     ShutdownCDPNetworking();
     Gdiplus::GdiplusShutdown(g_GdiplusToken);

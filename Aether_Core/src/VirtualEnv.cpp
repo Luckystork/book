@@ -30,6 +30,7 @@
 #include <vector>
 #include <sstream>
 #include <iomanip>
+#include <fstream>
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -1182,5 +1183,547 @@ void PerformAutoType(const std::string& text) {
             "  1. Run ZeroPoint as Administrator\n"
             "  2. Make sure the exam window is focused\n"
             "  3. Click inside the text field before pressing Ctrl+Shift+T");
+    }
+}
+
+// ============================================================================
+//  Remote Access — Secondary RDP listener for remote VE control
+// ============================================================================
+//
+//  When enabled, configures the Windows RDP service to accept connections
+//  on a secondary port (default 3390). The remote user connects via
+//  mstsc.exe /v:<host>:3390 and authenticates with the configured password.
+//  The session targets the same loopback VE session, so the remote user
+//  controls the VE while the local user remains on the host desktop.
+//
+//  Implementation:
+//    1. Create a local Windows user "ZP_Remote" with the configured password
+//    2. Add RDP listener on the configured port via registry
+//    3. Open Windows Firewall rule for the port
+//    4. Restart TermService to pick up the new listener
+//
+//  All stealth layers (WDA_EXCLUDEFROMCAPTURE, layered windows) remain active.
+// ============================================================================
+
+static RemoteAccessConfig g_RemoteConfig = { false, 3390, "000000" };
+static bool g_RemoteAccessActive = false;
+
+static const char* REMOTE_USER = "ZP_Remote";
+
+// Registry path for secondary RDP listener
+static const char* RDP_LISTENER_PATH =
+    "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\ZeroPoint-RDP";
+
+static bool CreateRemoteUser(const char* password) {
+    // Create local user for remote RDP authentication
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+        "net user %s %s /add /expires:never /passwordchg:no >nul 2>&1",
+        REMOTE_USER, password);
+    int rc = system(cmd);
+
+    // Add to Remote Desktop Users group
+    snprintf(cmd, sizeof(cmd),
+        "net localgroup \"Remote Desktop Users\" %s /add >nul 2>&1", REMOTE_USER);
+    system(cmd);
+
+    return (rc == 0);
+}
+
+static void RemoveRemoteUser() {
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "net user %s /delete >nul 2>&1", REMOTE_USER);
+    system(cmd);
+}
+
+static bool ConfigureRDPListener(int port) {
+    HKEY hKey;
+    LONG rc = RegCreateKeyExA(HKEY_LOCAL_MACHINE, RDP_LISTENER_PATH,
+        0, NULL, REG_OPTION_NON_VOLATILE, KEY_SET_VALUE, NULL, &hKey, NULL);
+    if (rc != ERROR_SUCCESS) return false;
+
+    // Port number
+    DWORD portVal = (DWORD)port;
+    RegSetValueExA(hKey, "PortNumber", 0, REG_DWORD, (BYTE*)&portVal, sizeof(DWORD));
+
+    // Enable encryption
+    DWORD minEnc = 1;
+    RegSetValueExA(hKey, "MinEncryptionLevel", 0, REG_DWORD, (BYTE*)&minEnc, sizeof(DWORD));
+
+    // Security layer (TLS)
+    DWORD secLayer = 2;
+    RegSetValueExA(hKey, "SecurityLayer", 0, REG_DWORD, (BYTE*)&secLayer, sizeof(DWORD));
+
+    // User authentication required
+    DWORD userAuth = 1;
+    RegSetValueExA(hKey, "UserAuthentication", 0, REG_DWORD, (BYTE*)&userAuth, sizeof(DWORD));
+
+    RegCloseKey(hKey);
+    return true;
+}
+
+static void RemoveRDPListener() {
+    RegDeleteKeyA(HKEY_LOCAL_MACHINE, RDP_LISTENER_PATH);
+}
+
+static bool OpenFirewallPort(int port) {
+    char cmd[512];
+    snprintf(cmd, sizeof(cmd),
+        "netsh advfirewall firewall add rule name=\"ZeroPoint Remote Access\" "
+        "dir=in action=allow protocol=tcp localport=%d >nul 2>&1", port);
+    return (system(cmd) == 0);
+}
+
+static void CloseFirewallPort() {
+    system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
+}
+
+bool EnableRemoteAccess(const RemoteAccessConfig& cfg) {
+    if (g_RemoteAccessActive) return true;
+    if (GetVEState() != VE_RUNNING && GetVEState() != VE_LOCKED) {
+        ShowErrorPopup(
+            "Remote Access: VE Not Running",
+            "The Virtual Environment must be running before\n"
+            "you can enable Remote Access.\n\n"
+            "Start the VE first, then enable Remote Access.");
+        return false;
+    }
+
+    g_RemoteConfig = cfg;
+    g_RemoteConfig.enabled = true;
+
+    // Step 1: Create remote user with password
+    if (!CreateRemoteUser(cfg.password)) {
+        ShowErrorPopup(
+            "Remote Access: User Creation Failed",
+            "Could not create the remote access user account.\n\n"
+            "Make sure ZeroPoint is running as Administrator.\n"
+            "The 'net user' command requires elevated privileges.");
+        return false;
+    }
+
+    // Step 2: Configure RDP listener on custom port
+    if (!ConfigureRDPListener(cfg.port)) {
+        RemoveRemoteUser();
+        ShowErrorPopup(
+            "Remote Access: Listener Setup Failed",
+            "Could not configure the RDP listener in the registry.\n\n"
+            "Make sure ZeroPoint is running as Administrator.\n"
+            "Check that Terminal Services is not locked by Group Policy.");
+        return false;
+    }
+
+    // Step 3: Open firewall
+    OpenFirewallPort(cfg.port);
+
+    // Step 4: Restart TermService to apply new listener
+    system("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1");
+    Sleep(1000);
+
+    g_RemoteAccessActive = true;
+    return true;
+}
+
+void DisableRemoteAccess() {
+    if (!g_RemoteAccessActive) return;
+
+    RemoveRDPListener();
+    CloseFirewallPort();
+    RemoveRemoteUser();
+
+    // Restart TermService to drop remote connections
+    system("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1");
+
+    g_RemoteAccessActive = false;
+    g_RemoteConfig.enabled = false;
+}
+
+void ToggleRemoteAccess() {
+    if (g_RemoteAccessActive)
+        DisableRemoteAccess();
+    else
+        EnableRemoteAccess(g_RemoteConfig);
+}
+
+bool IsRemoteAccessEnabled() { return g_RemoteAccessActive; }
+
+RemoteAccessConfig GetRemoteAccessConfig() { return g_RemoteConfig; }
+
+void SetRemoteAccessConfig(const RemoteAccessConfig& cfg) {
+    bool wasActive = g_RemoteAccessActive;
+    if (wasActive) DisableRemoteAccess();
+    g_RemoteConfig = cfg;
+    // Persist to config.ini
+    std::vector<std::string> lines;
+    bool foundPort = false, foundPass = false, foundRemote = false;
+    {
+        std::ifstream f("C:\\ProgramData\\ZeroPoint\\config.ini");
+        std::string line;
+        while (std::getline(f, line)) {
+            if (line.rfind("remote_port=", 0) == 0) {
+                lines.push_back("remote_port=" + std::to_string(cfg.port));
+                foundPort = true;
+            } else if (line.rfind("remote_pass=", 0) == 0) {
+                lines.push_back(std::string("remote_pass=") + cfg.password);
+                foundPass = true;
+            } else if (line.rfind("remote_enabled=", 0) == 0) {
+                lines.push_back(std::string("remote_enabled=") + (cfg.enabled ? "1" : "0"));
+                foundRemote = true;
+            } else {
+                lines.push_back(line);
+            }
+        }
+    }
+    if (!foundPort)   lines.push_back("remote_port=" + std::to_string(cfg.port));
+    if (!foundPass)   lines.push_back(std::string("remote_pass=") + cfg.password);
+    if (!foundRemote) lines.push_back(std::string("remote_enabled=") + (cfg.enabled ? "1" : "0"));
+
+    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+    std::ofstream out("C:\\ProgramData\\ZeroPoint\\config.ini");
+    for (auto& l : lines) out << l << "\n";
+
+    if (wasActive && cfg.enabled) EnableRemoteAccess(cfg);
+}
+
+// ============================================================================
+//  Remote Access Panel — Frosted glass modal
+// ============================================================================
+
+static HWND g_RemotePanelHwnd = NULL;
+static bool g_RemoteToggleState = false;
+static char g_RemotePassBuf[64] = "000000";
+static char g_RemotePortBuf[8]  = "3390";
+static int  g_RemotePanelHover  = 0;
+
+#define ID_REMOTE_TOGGLE  8001
+#define ID_REMOTE_START   8002
+#define ID_REMOTE_CLOSE   8003
+#define ID_REMOTE_PASS    8004
+#define ID_REMOTE_PORT    8005
+
+static HWND g_RemotePassEdit = NULL;
+static HWND g_RemotePortEdit = NULL;
+
+static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_CREATE: {
+        // DWM blur behind
+        DWM_BLURBEHIND bb = {};
+        bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable  = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        DeleteObject(bb.hRgnBlur);
+
+        HFONT editFont = VE_CreateFont(14, FW_NORMAL);
+
+        // Password field
+        g_RemotePassEdit = CreateWindowExA(
+            WS_EX_CLIENTEDGE, "EDIT", g_RemotePassBuf,
+            WS_CHILD | WS_VISIBLE | ES_CENTER | ES_PASSWORD | ES_AUTOHSCROLL,
+            90, 105, 180, 26,
+            hwnd, (HMENU)ID_REMOTE_PASS, GetModuleHandle(NULL), NULL);
+        SendMessage(g_RemotePassEdit, WM_SETFONT, (WPARAM)editFont, TRUE);
+        SendMessage(g_RemotePassEdit, EM_SETLIMITTEXT, 63, 0);
+
+        // Port field
+        g_RemotePortEdit = CreateWindowExA(
+            WS_EX_CLIENTEDGE, "EDIT", g_RemotePortBuf,
+            WS_CHILD | WS_VISIBLE | ES_CENTER | ES_NUMBER | ES_AUTOHSCROLL,
+            90, 145, 80, 26,
+            hwnd, (HMENU)ID_REMOTE_PORT, GetModuleHandle(NULL), NULL);
+        SendMessage(g_RemotePortEdit, WM_SETFONT, (WPARAM)editFont, TRUE);
+        SendMessage(g_RemotePortEdit, EM_SETLIMITTEXT, 5, 0);
+
+        g_RemoteToggleState = IsRemoteAccessEnabled();
+        return 0;
+    }
+
+    case WM_ERASEBKGND: return 1;
+
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int w = rc.right, h = rc.bottom;
+
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
+        HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
+
+        // Frosted background
+        HBRUSH bgBrush = CreateSolidBrush(VE_ICY_BG);
+        FillRect(memDC, &rc, bgBrush);
+        DeleteObject(bgBrush);
+        VE_FillFrosted(memDC, rc, VE_ICY_PANEL, 220);
+
+        // Accent border
+        HPEN borderPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
+        HGDIOBJ oldPen = SelectObject(memDC, borderPen);
+        SelectObject(memDC, GetStockObject(NULL_BRUSH));
+        RoundRect(memDC, 0, 0, w, h, 16, 16);
+        SelectObject(memDC, oldPen);
+        DeleteObject(borderPen);
+
+        SetBkMode(memDC, TRANSPARENT);
+
+        // Title with WiFi/remote icon glyph
+        HFONT titleFont = VE_CreateFont(20, FW_SEMIBOLD);
+        HGDIOBJ oldFont = SelectObject(memDC, titleFont);
+        SetTextColor(memDC, VE_ICY_ACCENT);
+        RECT titleRc = { 0, 12, w, 42 };
+        DrawTextA(memDC, "Remote Access", -1, &titleRc, DT_CENTER | DT_SINGLELINE);
+        DeleteObject(titleFont);
+
+        // Accent line under title
+        HPEN accPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
+        SelectObject(memDC, accPen);
+        MoveToEx(memDC, 30, 46, NULL);
+        LineTo(memDC, w - 30, 46);
+        SelectObject(memDC, oldPen);
+        DeleteObject(accPen);
+
+        // Toggle label + visual toggle
+        HFONT labelFont = VE_CreateFont(13, FW_NORMAL);
+        SelectObject(memDC, labelFont);
+        SetTextColor(memDC, VE_ICY_TEXT);
+        RECT toggleLabel = { 20, 58, 180, 78 };
+        DrawTextA(memDC, "Enable Remote Access", -1, &toggleLabel, DT_LEFT | DT_SINGLELINE);
+
+        // Toggle switch (pill shape)
+        int togX = w - 70, togY = 58;
+        RECT togRc = { togX, togY, togX + 50, togY + 24 };
+        COLORREF togBg = g_RemoteToggleState ? VE_ICY_ACCENT : RGB(0xC0, 0xCC, 0xDD);
+        HBRUSH togBr = CreateSolidBrush(togBg);
+        HPEN togPen = CreatePen(PS_SOLID, 1, togBg);
+        SelectObject(memDC, togBr);
+        SelectObject(memDC, togPen);
+        RoundRect(memDC, togRc.left, togRc.top, togRc.right, togRc.bottom, 12, 12);
+        DeleteObject(togBr);
+        DeleteObject(togPen);
+
+        // Toggle knob
+        int knobX = g_RemoteToggleState ? togRc.right - 22 : togRc.left + 2;
+        HBRUSH knobBr = CreateSolidBrush(RGB(0xFF, 0xFF, 0xFF));
+        SelectObject(memDC, knobBr);
+        SelectObject(memDC, GetStockObject(NULL_PEN));
+        Ellipse(memDC, knobX, togY + 2, knobX + 20, togY + 22);
+        DeleteObject(knobBr);
+
+        // Status text
+        HFONT statusFont = VE_CreateFont(11, FW_NORMAL);
+        SelectObject(memDC, statusFont);
+        SetTextColor(memDC, g_RemoteToggleState ? RGB(0x00, 0xAA, 0x55) : VE_ICY_DIM);
+        RECT statusRc = { 20, 82, w - 20, 100 };
+        const char* statusText = g_RemoteToggleState ? "ACTIVE — Listening for connections" : "Disabled";
+        DrawTextA(memDC, statusText, -1, &statusRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(statusFont);
+
+        // Password label
+        SetTextColor(memDC, VE_ICY_TEXT);
+        SelectObject(memDC, labelFont);
+        RECT passLabel = { 20, 108, 88, 128 };
+        DrawTextA(memDC, "Password:", -1, &passLabel, DT_LEFT | DT_SINGLELINE);
+
+        // Port label
+        RECT portLabel = { 20, 148, 88, 168 };
+        DrawTextA(memDC, "Port:", -1, &portLabel, DT_LEFT | DT_SINGLELINE);
+
+        // Connection info
+        HFONT infoFont = VE_CreateFont(11, FW_NORMAL);
+        SelectObject(memDC, infoFont);
+        SetTextColor(memDC, VE_ICY_DIM);
+        RECT infoRc = { 20, 185, w - 20, 215 };
+        DrawTextA(memDC, "Connect from another PC:\n  mstsc.exe /v:<this-pc-ip>:3390", -1,
+                  &infoRc, DT_LEFT | DT_WORDBREAK);
+        DeleteObject(infoFont);
+
+        // Start/Stop button
+        RECT startBtn = { w/2 - 80, h - 70, w/2 + 80, h - 40 };
+        COLORREF btnBg = g_RemotePanelHover == ID_REMOTE_START
+            ? RGB(0xE0, 0xEA, 0xF8) : RGB(0xF5, 0xF8, 0xFF);
+        HBRUSH btnBr = CreateSolidBrush(btnBg);
+        HPEN btnPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
+        SelectObject(memDC, btnBr);
+        SelectObject(memDC, btnPen);
+        RoundRect(memDC, startBtn.left, startBtn.top, startBtn.right, startBtn.bottom, 10, 10);
+        DeleteObject(btnBr);
+        DeleteObject(btnPen);
+
+        HFONT btnFont = VE_CreateFont(14, FW_SEMIBOLD);
+        SelectObject(memDC, btnFont);
+        SetTextColor(memDC, VE_ICY_ACCENT);
+        const char* btnText = g_RemoteToggleState ? "Stop Remote Session" : "Start Remote Session";
+        DrawTextA(memDC, btnText, -1, &startBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DeleteObject(btnFont);
+
+        // Close button
+        RECT closeBtn = { w - 30, 5, w - 8, 22 };
+        HFONT closeFont = VE_CreateFont(14, FW_BOLD);
+        SelectObject(memDC, closeFont);
+        SetTextColor(memDC, g_RemotePanelHover == ID_REMOTE_CLOSE ? RGB(0xFF, 0x44, 0x44) : VE_ICY_DIM);
+        DrawTextA(memDC, "X", -1, &closeBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DeleteObject(closeFont);
+
+        // Hotkey hint
+        HFONT hintFont = VE_CreateFont(10, FW_NORMAL);
+        SelectObject(memDC, hintFont);
+        SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
+        RECT hintRc = { 0, h - 25, w, h - 8 };
+        DrawTextA(memDC, "Ctrl+Alt+R to toggle  |  ZeroPoint Remote", -1, &hintRc,
+                  DT_CENTER | DT_SINGLELINE);
+        SelectObject(memDC, oldFont);
+        DeleteObject(hintFont);
+        DeleteObject(labelFont);
+
+        BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, oldBmp);
+        DeleteObject(memBmp);
+        DeleteDC(memDC);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+
+    case WM_MOUSEMOVE: {
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
+        RECT rc; GetClientRect(hwnd, &rc);
+        int w = rc.right;
+        int prev = g_RemotePanelHover;
+        g_RemotePanelHover = 0;
+
+        RECT startBtn = { w/2 - 80, rc.bottom - 70, w/2 + 80, rc.bottom - 40 };
+        RECT closeBtn = { w - 30, 5, w - 8, 22 };
+        RECT togRc = { w - 70, 58, w - 20, 82 };
+        POINT pt = { mx, my };
+
+        if (PtInRect(&startBtn, pt)) g_RemotePanelHover = ID_REMOTE_START;
+        else if (PtInRect(&closeBtn, pt)) g_RemotePanelHover = ID_REMOTE_CLOSE;
+        else if (PtInRect(&togRc, pt)) g_RemotePanelHover = ID_REMOTE_TOGGLE;
+
+        if (prev != g_RemotePanelHover) {
+            InvalidateRect(hwnd, NULL, FALSE);
+            SetCursor(LoadCursor(NULL, g_RemotePanelHover ? IDC_HAND : IDC_ARROW));
+        }
+
+        TRACKMOUSEEVENT tme = { sizeof(tme), TME_LEAVE, hwnd, 0 };
+        TrackMouseEvent(&tme);
+        return 0;
+    }
+
+    case WM_MOUSELEAVE:
+        if (g_RemotePanelHover) { g_RemotePanelHover = 0; InvalidateRect(hwnd, NULL, FALSE); }
+        return 0;
+
+    case WM_LBUTTONUP: {
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
+        RECT rc; GetClientRect(hwnd, &rc);
+        int w = rc.right;
+        POINT pt = { mx, my };
+
+        RECT startBtn = { w/2 - 80, rc.bottom - 70, w/2 + 80, rc.bottom - 40 };
+        RECT closeBtn = { w - 30, 5, w - 8, 22 };
+        RECT togRc = { w - 70, 58, w - 20, 82 };
+
+        if (PtInRect(&togRc, pt)) {
+            g_RemoteToggleState = !g_RemoteToggleState;
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        else if (PtInRect(&startBtn, pt)) {
+            // Read current values from edit controls
+            GetWindowTextA(g_RemotePassEdit, g_RemotePassBuf, sizeof(g_RemotePassBuf));
+            GetWindowTextA(g_RemotePortEdit, g_RemotePortBuf, sizeof(g_RemotePortBuf));
+
+            if (g_RemoteToggleState && !g_RemoteAccessActive) {
+                RemoteAccessConfig cfg;
+                cfg.enabled = true;
+                cfg.port = atoi(g_RemotePortBuf);
+                if (cfg.port < 1 || cfg.port > 65535) cfg.port = 3390;
+                strncpy(cfg.password, g_RemotePassBuf, sizeof(cfg.password) - 1);
+                cfg.password[sizeof(cfg.password) - 1] = '\0';
+
+                if (strlen(cfg.password) == 0) {
+                    ShowErrorPopup("Remote Access", "Please enter a password or access code.");
+                } else {
+                    EnableRemoteAccess(cfg);
+                }
+            } else if (g_RemoteAccessActive) {
+                DisableRemoteAccess();
+                g_RemoteToggleState = false;
+            }
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        else if (PtInRect(&closeBtn, pt)) {
+            DestroyWindow(hwnd);
+        }
+        return 0;
+    }
+
+    case WM_NCHITTEST: {
+        LRESULT hit = DefWindowProc(hwnd, msg, wp, lp);
+        if (hit == HTCLIENT) {
+            POINT pt;
+            pt.x = (short)LOWORD(lp);
+            pt.y = (short)HIWORD(lp);
+            ScreenToClient(hwnd, &pt);
+            if (pt.y < 46 && pt.x < 260) return HTCAPTION;
+        }
+        return hit;
+    }
+
+    case WM_DESTROY:
+        g_RemotePanelHwnd = NULL;
+        g_RemotePassEdit = NULL;
+        g_RemotePortEdit = NULL;
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+void ShowRemoteAccessPanel(HWND owner) {
+    if (g_RemotePanelHwnd && IsWindow(g_RemotePanelHwnd)) {
+        SetForegroundWindow(g_RemotePanelHwnd);
+        return;
+    }
+
+    // Load current config into buffers
+    RemoteAccessConfig cfg = GetRemoteAccessConfig();
+    g_RemoteToggleState = cfg.enabled;
+    strncpy(g_RemotePassBuf, cfg.password, sizeof(g_RemotePassBuf) - 1);
+    snprintf(g_RemotePortBuf, sizeof(g_RemotePortBuf), "%d", cfg.port);
+
+    const char* cls = "ZPRemotePanel";
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = RemotePanelProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = cls;
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassA(&wc);
+        registered = true;
+    }
+
+    int panelW = 320, panelH = 280;
+    int sx = GetSystemMetrics(SM_CXSCREEN);
+    int sy = GetSystemMetrics(SM_CYSCREEN);
+
+    g_RemotePanelHwnd = CreateWindowExA(
+        WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_LAYERED,
+        cls, "Remote Access",
+        WS_POPUP | WS_VISIBLE,
+        (sx - panelW) / 2, (sy - panelH) / 2, panelW, panelH,
+        NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    SetLayeredWindowAttributes(g_RemotePanelHwnd, 0, 240, LWA_ALPHA);
+    ApplyDisplayAffinity(g_RemotePanelHwnd);
+    ShowWindow(g_RemotePanelHwnd, SW_SHOW);
+    SetForegroundWindow(g_RemotePanelHwnd);
+
+    MSG msg;
+    while (g_RemotePanelHwnd && IsWindow(g_RemotePanelHwnd) && GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
 }

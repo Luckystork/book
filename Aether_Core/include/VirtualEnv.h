@@ -110,4 +110,39 @@ void PerformAutoType(const std::string& text);
 // Safe to call from any thread/module — creates its own top-level window.
 void ShowErrorPopup(const std::string& title, const std::string& message);
 
+// ---------------------------------------------------------------------------
+//  Remote Access — Ctrl+Alt+R
+// ---------------------------------------------------------------------------
+//  Enables remote control of the Virtual Environment from another machine
+//  via standard RDP (mstsc.exe). The remote user sees and controls the VE
+//  session while the local user stays on the host desktop.
+
+struct RemoteAccessConfig {
+    bool     enabled;       // master toggle
+    int      port;          // listening port (default 3390)
+    char     password[64];  // 6-digit code or password for auth
+};
+
+// Enable remote access listener on the configured port.
+// Creates a secondary RDP listener bound to 0.0.0.0:<port>.
+bool EnableRemoteAccess(const RemoteAccessConfig& cfg);
+
+// Disable remote access and tear down the listener.
+void DisableRemoteAccess();
+
+// Toggle remote access on/off using current config
+void ToggleRemoteAccess();
+
+// Check if remote access is currently active
+bool IsRemoteAccessEnabled();
+
+// Get the current remote access configuration
+RemoteAccessConfig GetRemoteAccessConfig();
+
+// Set remote access configuration (persisted to config.ini)
+void SetRemoteAccessConfig(const RemoteAccessConfig& cfg);
+
+// Show the frosted Remote Access panel (centered modal)
+void ShowRemoteAccessPanel(HWND owner);
+
 #endif // ZEROPOINT_VIRTUALENV_H

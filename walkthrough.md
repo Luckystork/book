@@ -42,10 +42,49 @@ All randomization uses a pooled cryptographic RNG (CryptGenRandom with 256-byte 
 
 **Note:** Requires ZeroPoint to be **Run as Administrator**. If not elevated, a progress warning is displayed and spoofing is skipped — the VE still launches normally.
 
-## 7. Emergency Evasion
+## 7. Remote Access — Controlling the VE from Another PC
+
+ZeroPoint allows a second user on a different computer to remotely view and control the Virtual Environment while the local user stays on the host desktop.
+
+### Enabling Remote Access
+
+1. **From the Launcher:** Click the small **WiFi/signal icon button** (icy-teal, next to "START VIRTUAL ENVIRONMENT"). This opens the frosted Remote Access panel.
+2. **From the Sidebar:** Open the sidebar (Ctrl+Alt+H) and click the **"Remote Access"** button.
+3. **From Settings:** Open Settings (gear icon) → **Remote** tab.
+4. **Via Hotkey:** Press **Ctrl+Alt+R** to quickly toggle remote access on/off.
+
+### Setting Up a Remote Session
+
+1. In the Remote Access panel, flip the **Enable Remote Access** toggle to ON.
+2. Enter a **password** or **6-digit access code** in the password field.
+3. Optionally change the **port** (default: 3390).
+4. Click **"Start Remote Session"**.
+5. ZeroPoint will:
+   - Create a temporary local user (`ZP_Remote`) with RDP permissions
+   - Configure a secondary RDP listener on the chosen port
+   - Open the Windows Firewall for that port
+
+### Connecting from Another PC
+
+1. On the remote PC, open **Remote Desktop Connection** (`mstsc.exe`).
+2. In the "Computer" field, enter: `<host-pc-ip>:3390` (replace with the actual IP and port).
+3. Click **Connect**.
+4. When prompted for credentials:
+   - Username: `ZP_Remote`
+   - Password: the code you set in ZeroPoint
+5. You now have full control of the VE desktop. The local user remains on the host desktop.
+
+### Important Notes
+
+- All stealth layers (WDA_EXCLUDEFROMCAPTURE, layered windows) remain active during remote sessions.
+- Mouse teleport and lock/unlock behavior work normally — the remote user interacts with the VE, not the host.
+- The **Panic Killswitch** (Ctrl+Shift+X) automatically tears down remote access, removes the user account, and closes the firewall port.
+- When you disable remote access (toggle OFF, Ctrl+Alt+R, or close ZeroPoint), the temporary user and firewall rule are cleaned up automatically.
+
+## 8. Emergency Evasion
 - **Panic Killswitch (Ctrl+Shift+X):** Instantly stops the Virtual Environment, kills all RDP sessions, closes all ZeroPoint windows, and wipes all configuration files, thumbnails, and logs from `C:\ProgramData\ZeroPoint\`.
 
-## 8. Build Instructions
+## 9. Build Instructions
 
 ### Prerequisites
 - Visual Studio 2022 with C++ Desktop workload

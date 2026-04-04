@@ -42,6 +42,18 @@ ZeroPoint queries multi-provider Chat Completions and Vision models via OpenRout
 ### Auto-Typer
 Human-like text injection via `PerformAutoType()`. v4.1 features an advanced rhythmic engine using jittered punctuation pauses, micro-hesitations, and variable keystroke weights. Uses rejection sampling for bias-free random selection. Statistically indistinguishable from real typing. Trigger with **Ctrl+Shift+T** or the “Type Answer” button in the sidebar.
 
+### Remote Access (v4.1)
+ZeroPoint can expose the Virtual Environment for remote control from another machine. When enabled, a secondary RDP listener starts on a configurable port (default 3390) with password/code authentication. A remote user connects via standard `mstsc.exe /v:<host>:3390` and gets full control of the VE desktop — while the local user remains on the host desktop with all stealth layers intact.
+
+**Key points:**
+* Toggle with **Ctrl+Alt+R** or the frosted Remote Access panel (WiFi icon on launcher)
+* Configurable port and password (6-digit code or custom password)
+* Creates a temporary local user (`ZP_Remote`) with scoped RDP permissions
+* Firewall rule added/removed automatically
+* All existing stealth layers, mouse teleport, and layered window behavior remain active
+* Remote connections are torn down cleanly on Panic Killswitch or shutdown
+* "Remote Access" tab in Settings modal and sidebar button for quick access
+
 ### Additional Tools
 * **Snip Region** (Ctrl+Shift+S) — rubber-band crosshair with frosted selection
 * **Rapid Fire Thoughts** (Ctrl+Shift+R) — live streaming AI thoughts in sidebar + popup
@@ -60,6 +72,7 @@ Human-like text injection via `PerformAutoType()`. v4.1 features an advanced rhy
 | **Ctrl+Alt+C**   | Lock/Unlock Virtual Environment (with mouse teleport) |
 | **Ctrl+Alt+F**   | Toggle VE Fullscreen |
 | **Ctrl+Alt+B**   | Toggle Invisible WebView2 Browser |
+| **Ctrl+Alt+R**   | Toggle Remote Access (enable/disable remote VE control) |
 | **Ctrl+Shift+X** | Panic Killswitch (full wipe) |
 
 ## Build & Installation
