@@ -4,20 +4,17 @@
 
 [Setup]
 AppName=ZeroPoint
-AppVersion=4.3.0
-DefaultDirName={pf32}\ZeroPoint
+AppVersion=4.3.0 Final
+AppPublisher=ZeroPoint
+DefaultDirName={autopf}\ZeroPoint
 DefaultGroupName=ZeroPoint
-OutputDir=Output
 OutputBaseFilename=ZeroPoint_Installer
 Compression=lzma2/ultra
 SolidCompression=yes
 ArchitecturesInstallIn64BitMode=x64
-
-; Icy branding simulation for standard Inno Setup
-; To replicate true frosted glass in Inno Setup, a third-party plugin is needed (e.g. Graphical Installer or ISSkin), 
-; but this configuration ensures the icy/cyan color palette and texts match perfectly.
+WizardImageBackColor=$F0F4FA      ; light icy white - BGR format (fixed)
+WizardSmallImageBackColor=$F0F4FA ; light icy white - BGR format (fixed)
 WizardImageStretch=True
-WizardImageBackColor=$00FAF4F0  ; very light icy gray/white
 DisableWelcomePage=no
 DisableDirPage=yes
 DisableProgramGroupPage=yes
