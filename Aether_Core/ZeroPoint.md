@@ -43,10 +43,21 @@
 - **Live Connected Counter**: `GetRemoteConnectionCount()` queries `WTSEnumerateSessionsA` for active ZP_Remote sessions. Count displayed on launcher WiFi icon (green badge) and Remote panel status.
 - **Copy mstsc Command**: Auto-detects local IP via `getaddrinfo(gethostname)`, formats `mstsc.exe /v:IP:PORT`, copies via `SetClipboardData(CF_TEXT)`. 2-second "Copied!" toast with timer-based dismiss.
 - **Auto-start with VE**: `g_RemoteAutoStartWithVE` persisted as `remote_auto_ve=` in config.ini. Checkbox in Settings → Remote tab. Called at end of `StartVirtualEnvironment()`.
-- **Inactivity Timeout**: Background thread (`InactivityTimerThread`) checks every 30s. If no ZP_Remote sessions for configured minutes, calls `DisableRemoteAccess()`. Field in Remote panel, persisted as `remote_inactivity=`.
+- **Inactivity Timeout**: Background thread (`InactivityTimerThread`) checks every 30s. If no ZP_Remote sessions for configured minutes, signals main thread to disable. Field in Remote panel, persisted as `remote_inactivity=`.
 - **Voice-to-Text**: SAPI `ISpRecognizer` + `ISpRecoGrammar` with dictation grammar on background thread. Recognized text → `PerformAutoType()`. Toggle button with mic icon in Remote panel.
 - **Remote Logging**: `RemoteLog()` with `std::mutex` guard, `SYSTEMTIME` timestamps, 50KB rotation to `.bak`. Path: `C:\ProgramData\ZeroPoint\remote.log`. Wiped by Panic Killswitch.
 - **Settings Tab Fix**: Fixed unreachable Remote tab (dead `else` after `else`) by changing to `else if (g_VECurrentTab == 2)`.
+
+### Final Polish Pass (v4.1.2)
+- **Inactivity Timer Deadlock Fix**: Timer thread no longer calls `DisableRemoteAccess()` directly (which would deadlock via `WaitForSingleObject` on itself). Instead sets `g_InactivityTimeoutTriggered` flag checked by the main message loop.
+- **Winsock Double-Init Fix**: `GetLocalIPAddress()` no longer calls `WSAStartup`/`WSACleanup` — Winsock is already initialized globally by `InitCDPNetworking()`. The extra cleanup could corrupt other active sockets.
+- **Atomic Config Save**: Replaced `DeleteFileA` + `MoveFileA` with `MoveFileExA(MOVEFILE_REPLACE_EXISTING)`. Crash between delete and move no longer loses config.
+- **Hidden Shell Commands**: All `system()` calls replaced with `RunHiddenCmd()` using `CreateProcess(CREATE_NO_WINDOW)` to prevent cmd.exe window flashes during user creation, firewall rules, and TermService restarts.
+- **Font Leak Fixes**: Browser URL bar font and Remote panel edit font are now tracked and properly cleaned up to prevent GDI handle accumulation.
+- **Multi-Monitor Coord Fix**: All `WM_LBUTTONUP`/`WM_MOUSEMOVE` handlers use `(short)LOWORD/HIWORD` casts for correct signed coordinates on secondary monitors with negative positions.
+- **TermService Restart Note**: Added logging and increased sleep time when restarting TermService during remote access toggle, as the active VE loopback session relies on `autoreconnection=1` to recover.
+- **Orphan Cleanup Logging**: `CleanupOrphanedRemoteUser()` now logs to remote.log when recovering from a previous crash.
+- **Version Headers**: Updated all source file version comments from v4.0 to v4.1.
 
 ## Keybinds
 | Shortcut | Action |

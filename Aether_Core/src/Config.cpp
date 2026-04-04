@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Config.cpp  (v4.0)
+//  ZeroPoint — Config.cpp  (v4.1)
 //  AI providers, per-provider API keys, screenshot mode, UI settings,
 //  and full Virtual Environment configuration persistence.
 //
@@ -166,14 +166,19 @@ void SaveConfig() {
     if (!found[12]) lines.push_back("remote_auto_ve=" + std::to_string(g_RemoteAutoStartWithVE ? 1 : 0));
     if (!found[13]) lines.push_back("remote_inactivity=" + std::to_string(g_RemoteInactivityTimeout));
 
-    // Write to temp, then rename for atomicity
+    // Write to temp, then atomic replace
     {
         std::ofstream out(tempPath);
         if (!out.is_open()) return;
         for (const auto& l : lines) out << l << "\n";
     }
-    DeleteFileA(CONFIG_PATH);
-    MoveFileA(tempPath.c_str(), CONFIG_PATH);
+    // MOVEFILE_REPLACE_EXISTING avoids the Delete+Move race where a crash
+    // between DeleteFile and MoveFile would lose the config entirely.
+    if (!MoveFileExA(tempPath.c_str(), CONFIG_PATH, MOVEFILE_REPLACE_EXISTING)) {
+        // Fallback: copy + delete temp (non-atomic but preserves data)
+        CopyFileA(tempPath.c_str(), CONFIG_PATH, FALSE);
+        DeleteFileA(tempPath.c_str());
+    }
 }
 
 // ============================================================================

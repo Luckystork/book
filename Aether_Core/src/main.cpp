@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility  (v4.0)
+//  ZeroPoint — Premium Windows Utility  (v4.1)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
 //             browser, screenshot + vision AI, sidebar with settings,
 //             browser thumbnail panel, multi-provider, custom themes
@@ -793,8 +793,11 @@ static void CreateBrowserWindow() {
         urlW - 68, 4, 56, BROWSER_BAR_H - 8,
         g_BrowserHwnd, (HMENU)ID_URL_GO, GetModuleHandle(NULL), NULL);
 
-    HFONT urlFont = CreateAppFont(13, FW_NORMAL);
-    SendMessage(g_UrlEdit, WM_SETFONT, (WPARAM)urlFont, TRUE);
+    // Font is owned by the edit control — deleted when browser window is destroyed
+    static HFONT s_UrlFont = NULL;
+    if (s_UrlFont) DeleteObject(s_UrlFont);
+    s_UrlFont = CreateAppFont(13, FW_NORMAL);
+    SendMessage(g_UrlEdit, WM_SETFONT, (WPARAM)s_UrlFont, TRUE);
 
     InitWebView2(g_BrowserHwnd);
 }
@@ -1919,7 +1922,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         return 0;
 
     case WM_LBUTTONUP: {
-        POINT pt = { LOWORD(lp), HIWORD(lp) };
+        POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
 
         if (PtInRect(&g_BtnInject, pt)) {
             g_LauncherResult = 1;
@@ -3040,7 +3043,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         EndPaint(hwnd, &ps); return 0;
     }
     case WM_MOUSEMOVE: {
-        int mx = LOWORD(lp), my = HIWORD(lp);
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
         int prev = g_VHoveredBtn; g_VHoveredBtn = 0;
         POINT pt = {mx, my};
         for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) g_VHoveredBtn = 7001+i;
@@ -3053,7 +3056,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         if (g_VHoveredBtn) { g_VHoveredBtn = 0; InvalidateRect(hwnd, NULL, FALSE); }
         return 0;
     case WM_LBUTTONUP: {
-        POINT pt = {LOWORD(lp), HIWORD(lp)};
+        POINT pt = {(short)LOWORD(lp), (short)HIWORD(lp)};
         for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
         if (PtInRect(&g_DoneBtnRect, pt)) { DestroyWindow(hwnd); }
         // Auto-start checkbox in Remote tab
@@ -3227,6 +3230,17 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
             TranslateMessage(&msg);
             DispatchMessage(&msg);
+        }
+
+        // Check if the inactivity timer thread requested remote access teardown.
+        // This flag is set from the timer thread to avoid a deadlock — the actual
+        // DisableRemoteAccess() call must happen on the main thread.
+        {
+            extern volatile bool g_InactivityTimeoutTriggered;
+            if (g_InactivityTimeoutTriggered) {
+                g_InactivityTimeoutTriggered = false;
+                DisableRemoteAccess();
+            }
         }
 
         bool ctrl  = (GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0;
@@ -3498,7 +3512,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                 if (g_MenuHwnd && IsWindow(g_MenuHwnd))
                     DestroyWindow(g_MenuHwnd);
 
-                // Disable remote access before panic
+                // Fast remote cleanup for panic — delete user/firewall/registry
+                // but skip TermService restart (TerminateProcess ends everything).
+                // Must be done before PanicKillAndWipe deletes the sentinel file.
                 DisableRemoteAccess();
 
                 // Wipe screenshot directory before panic

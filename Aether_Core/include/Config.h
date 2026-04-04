@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Config.h  (v4.0)
+//  ZeroPoint — Config.h  (v4.1)
 //  AI providers, per-provider API keys, screenshot modes, UI settings,
 //  Virtual Environment display/audio/interception/resource configuration.
 // ============================================================================

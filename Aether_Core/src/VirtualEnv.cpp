@@ -1308,11 +1308,12 @@ int GetRemoteConnectionCount() {
 // ============================================================================
 
 std::string GetLocalIPAddress() {
-    WSADATA wsaData;
-    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return "?.?.?.?";
+    // Winsock is already initialized globally by InitCDPNetworking() at startup.
+    // Do NOT call WSAStartup/WSACleanup here — that would decrement the global
+    // reference count and could tear down sockets used by other subsystems.
 
     char hostname[256] = {};
-    gethostname(hostname, sizeof(hostname));
+    if (gethostname(hostname, sizeof(hostname)) != 0) return "?.?.?.?";
 
     struct addrinfo hints = {}, *result = NULL;
     hints.ai_family = AF_INET;
@@ -1332,7 +1333,6 @@ std::string GetLocalIPAddress() {
         }
         freeaddrinfo(result);
     }
-    WSACleanup();
     return ip;
 }
 
@@ -1360,6 +1360,13 @@ static HANDLE g_InactivityTimerHandle = NULL;
 static int    g_InactivityMinutes = 0;
 static DWORD  g_LastRemoteActivity = 0;
 
+// Flag set by the inactivity timer thread to request main-thread teardown.
+// Avoids deadlock: DisableRemoteAccess() calls StopRemoteInactivityTimer()
+// which WaitForSingleObject's the timer thread — calling Disable from the
+// timer thread itself would deadlock.
+// Not static — accessed from main.cpp's message loop via extern
+volatile bool g_InactivityTimeoutTriggered = false;
+
 static DWORD WINAPI InactivityTimerThread(LPVOID) {
     while (g_InactivityTimerHandle) {
         Sleep(30000); // Check every 30 seconds
@@ -1376,8 +1383,10 @@ static DWORD WINAPI InactivityTimerThread(LPVOID) {
         }
 
         if (elapsed >= timeoutMs) {
-            RemoteLog("Inactivity timeout reached (%d min), auto-disabling", g_InactivityMinutes);
-            DisableRemoteAccess();
+            RemoteLog("Inactivity timeout reached (%d min), signaling auto-disable", g_InactivityMinutes);
+            // Signal the main thread instead of calling DisableRemoteAccess()
+            // directly — calling it here would deadlock on WaitForSingleObject.
+            g_InactivityTimeoutTriggered = true;
             break;
         }
     }
@@ -1536,14 +1545,32 @@ static bool SentinelExists() {
     return (attr != INVALID_FILE_ATTRIBUTES);
 }
 
+// Run a command hidden (no cmd window flash). Fire-and-forget with timeout.
+static void RunHiddenCmd(const char* cmd, DWORD timeoutMs = 10000) {
+    std::string full = std::string("cmd.exe /C ") + cmd;
+    STARTUPINFOA si = {};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = {};
+    if (CreateProcessA(NULL, const_cast<char*>(full.c_str()),
+                       NULL, NULL, FALSE, CREATE_NO_WINDOW,
+                       NULL, NULL, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, timeoutMs);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+}
+
 // Called once at startup to clean up after a crash
 static void CleanupOrphanedRemoteUser() {
     if (!SentinelExists()) return;
     // Previous session crashed with remote active — remove leftovers
+    RemoteLog("Cleaning up orphaned remote user from previous crash");
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "net user %s /delete >nul 2>&1", REMOTE_USER);
-    system(cmd);
-    system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
+    RunHiddenCmd(cmd);
+    RunHiddenCmd("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
     RegDeleteKeyA(HKEY_LOCAL_MACHINE,
         "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\ZeroPoint-RDP");
     RemoveSentinel();
@@ -1555,8 +1582,8 @@ static void AtExitRemoteCleanup() {
     if (g_RemoteAccessActive) {
         char cmd[256];
         snprintf(cmd, sizeof(cmd), "net user %s /delete >nul 2>&1", REMOTE_USER);
-        system(cmd);
-        system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
+        RunHiddenCmd(cmd, 5000);
+        RunHiddenCmd("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1", 5000);
         RegDeleteKeyA(HKEY_LOCAL_MACHINE, RDP_LISTENER_PATH);
         RemoveSentinel();
     }
@@ -1570,20 +1597,40 @@ static bool CreateRemoteUser(const char* password) {
     snprintf(cmd, sizeof(cmd),
         "net user %s %s /add /expires:never /passwordchg:no >nul 2>&1",
         REMOTE_USER, password);
-    int rc = system(cmd);
+    RunHiddenCmd(cmd);
 
     // Add to Remote Desktop Users group
     snprintf(cmd, sizeof(cmd),
         "net localgroup \"Remote Desktop Users\" %s /add >nul 2>&1", REMOTE_USER);
-    system(cmd);
+    RunHiddenCmd(cmd);
 
-    return (rc == 0);
+    // Verify user was created
+    char verifyCmd[256];
+    snprintf(verifyCmd, sizeof(verifyCmd), "net user %s >nul 2>&1", REMOTE_USER);
+    STARTUPINFOA si = {};
+    si.cb = sizeof(si);
+    si.dwFlags = STARTF_USESHOWWINDOW;
+    si.wShowWindow = SW_HIDE;
+    PROCESS_INFORMATION pi = {};
+    std::string full = std::string("cmd.exe /C ") + verifyCmd;
+    bool created = false;
+    if (CreateProcessA(NULL, const_cast<char*>(full.c_str()),
+                       NULL, NULL, FALSE, CREATE_NO_WINDOW,
+                       NULL, NULL, &si, &pi)) {
+        WaitForSingleObject(pi.hProcess, 5000);
+        DWORD exitCode = 1;
+        GetExitCodeProcess(pi.hProcess, &exitCode);
+        created = (exitCode == 0);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+    }
+    return created;
 }
 
 static void RemoveRemoteUser() {
     char cmd[256];
     snprintf(cmd, sizeof(cmd), "net user %s /delete >nul 2>&1", REMOTE_USER);
-    system(cmd);
+    RunHiddenCmd(cmd);
 }
 
 static bool ConfigureRDPListener(int port) {
@@ -1621,11 +1668,12 @@ static bool OpenFirewallPort(int port) {
     snprintf(cmd, sizeof(cmd),
         "netsh advfirewall firewall add rule name=\"ZeroPoint Remote Access\" "
         "dir=in action=allow protocol=tcp localport=%d >nul 2>&1", port);
-    return (system(cmd) == 0);
+    RunHiddenCmd(cmd);
+    return true;  // Best-effort; firewall may be disabled
 }
 
 static void CloseFirewallPort() {
-    system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
+    RunHiddenCmd("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
 }
 
 // Check if a Windows service is running by querying the Service Control Manager
@@ -1730,9 +1778,12 @@ bool EnableRemoteAccess(const RemoteAccessConfig& cfg) {
     // Step 3: Open firewall
     OpenFirewallPort(cfg.port);
 
-    // Step 4: Restart TermService to apply new listener
-    system("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1");
-    Sleep(1000);
+    // Step 4: Restart TermService to apply new listener.
+    // NOTE: This briefly disrupts the active VE loopback RDP session.
+    // The .rdp file has autoreconnection=1 so mstsc will auto-reconnect.
+    RemoteLog("Restarting TermService (VE session will auto-reconnect)...");
+    RunHiddenCmd("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1", 20000);
+    Sleep(2000);  // Extra time for mstsc auto-reconnect
 
     g_RemoteAccessActive = true;
 
@@ -1766,8 +1817,10 @@ void DisableRemoteAccess() {
     RemoveRemoteUser();
     RemoveSentinel();
 
-    // Restart TermService to drop remote connections
-    system("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1");
+    // Restart TermService to drop remote connections.
+    // The VE loopback session will auto-reconnect (autoreconnection=1 in .rdp).
+    RunHiddenCmd("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1", 20000);
+    Sleep(1500);  // Allow mstsc auto-reconnect time
 
     g_RemoteAccessActive = false;
     g_RemoteConfig.enabled = false;
@@ -1875,7 +1928,11 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         DwmEnableBlurBehindWindow(hwnd, &bb);
         DeleteObject(bb.hRgnBlur);
 
-        HFONT editFont = VE_CreateFont(14, FW_NORMAL);
+        // Font for edit controls — stored statically so we can clean up on re-open
+        static HFONT s_EditFont = NULL;
+        if (s_EditFont) DeleteObject(s_EditFont);
+        s_EditFont = VE_CreateFont(14, FW_NORMAL);
+        HFONT editFont = s_EditFont;
 
         // Password field
         g_RemotePassEdit = CreateWindowExA(
