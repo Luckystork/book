@@ -182,10 +182,9 @@ The build system automatically:
 - Enables MSVC link-time code generation for Release builds
 - Suppresses legacy Win32 API warnings
 
-## 13. v4.1.2 Final Polish Pass
-This release focuses exclusively on bulletproofing the engine and polishing the UI.
-* **Thread Safety**: Fixed a critical UI freeze where low-level hooks or AI calls blocked the main message loop. Replaced `Sleep()` calls in the proxy engine with detached threads. Migrated state variables (`g_Processing`, `g_VoiceActive`, `g_InactivityTimeoutTriggered`) to `std::atomic<bool>`.
-* **Icy UI Aesthetic Consistency**: Updated the fallback Direct2D overlay renderers to correctly utilize the icy snowy frosted-glass aesthetic (dark text on translucent white backgrounds with correct blur).
-* **System Commands**: Eliminated all remaining `system()` calls, migrating them to stealthy `RunHiddenCmd` wrappers utilizing `CreateProcessA` with `CREATE_NO_WINDOW`.
-* **Crash-Safe Remote Tear-down**: Finalized deadlock-free remote session teardown routines using atomic flags across timer threads.
-* **Error Handling & Leaks**: Addressed edge-case GDI leaks, verified COM object release, and strengthened config persistence methods across the entire ecosystem.
+## 13. v4.3.0 Production Hardening
+* **CDP WebSocket Rewrite**: `CDPExtractor.cpp` upgraded from raw TCP to proper RFC 6455 WebSocket protocol — HTTP `/json` discovery, upgrade handshake, masked frame send, unmasked frame receive. Reliable communication with Chromium debug ports.
+* **Thread Safety**: All cross-thread state variables (`g_VoiceActive`, `g_InactivityTimeoutTriggered`) use `std::atomic<bool>`. `#include <atomic>` consolidated to file-level includes.
+* **Legacy Cleanup**: Removed orphaned `build/src/` prototype files (stubs from an earlier version, never compiled by CMakeLists.txt). Application manifest version updated to 4.3.0.0.
+* **Full Rapid Fire Pipeline**: Ctrl+Shift+R executes a complete capture → encode → AI inference → progressive display workflow with real API calls.
+* **Sidebar Exam Mode**: One-click toggle in the AI sidebar for instant max-stealth activation.

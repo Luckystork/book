@@ -37,6 +37,7 @@
 #include <iomanip>
 #include <fstream>
 #include <mutex>
+#include <atomic>
 
 #pragma comment(lib, "ws2_32.lib")
 #pragma comment(lib, "wtsapi32.lib")
@@ -1278,7 +1279,7 @@ void PerformAutoType(const std::string& text) {
         // Occasional micro-pause mid-word
         if (CryptoRandUniform(microPauseChance) == 0) delay += HumanDelay(100, 200);
 
-        // Very rare longer pause — simulates brief distraction
+        // Very rare longer pause — models brief distraction
         if (CryptoRandUniform(longPauseChance) == 0) delay += HumanDelay(300, 600);
 
         Sleep(delay);
@@ -1494,8 +1495,6 @@ static HANDLE g_InactivityTimerHandle = NULL;
 static int    g_InactivityMinutes = 0;
 static DWORD  g_LastRemoteActivity = 0;
 
-#include <atomic>
-
 // Flag set by the inactivity timer thread to request main-thread teardown.
 // Avoids deadlock: DisableRemoteAccess() calls StopRemoteInactivityTimer()
 // which WaitForSingleObject's the timer thread — calling Disable from the
@@ -1559,7 +1558,7 @@ static ISpRecognizer* g_pRecognizer = NULL;
 static ISpRecoContext* g_pRecoContext = NULL;
 static ISpRecoGrammar* g_pGrammar = NULL;
 static HANDLE g_VoiceThread = NULL;
-static bool g_VoiceActive = false;
+static std::atomic<bool> g_VoiceActive{false};
 
 static DWORD WINAPI VoiceRecognitionThread(LPVOID) {
     CoInitializeEx(NULL, COINIT_MULTITHREADED);

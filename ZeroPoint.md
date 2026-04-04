@@ -76,9 +76,11 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 * **Panic Killswitch** (Ctrl+Shift+X) — instantly stops VE, kills RDP sessions, and wipes all traces
 
 ### v4.3.0 — Production Hardening
-* **Real Rapid Fire Pipeline**: Ctrl+Shift+R now executes a full capture → encode → AI inference → display workflow using the active provider with vision support or CDP fallback. All simulated placeholder messages removed.
+* **Full Rapid Fire Pipeline**: Ctrl+Shift+R executes a full capture → encode → AI inference → display workflow using the active provider with vision support or CDP fallback.
+* **CDP WebSocket Rewrite**: `CDPExtractor.cpp` now performs proper RFC 6455 WebSocket communication — HTTP discovery of `webSocketDebuggerUrl`, upgrade handshake, masked frame send, unmasked frame receive.
 * **Sidebar Exam Mode**: One-click "Exam Mode" / "Exam Mode: ON" toggle button added to the AI sidebar for instant stealth activation without opening Settings or the launcher.
-* **Codebase Cleanup**: Removed all remaining mock, simulation, and placeholder comments. All version strings unified to v4.3.0 across source headers, UI labels, installer, and documentation.
+* **Thread Safety**: `g_VoiceActive` migrated to `std::atomic<bool>` for correct cross-thread visibility.
+* **Legacy Cleanup**: Removed orphaned `build/src/` prototype files. Application manifest version updated to 4.3.0.0. All version strings unified to v4.3.0.
 
 ### Final Polish Pass (v4.1.2)
 This release focuses exclusively on bulletproofing the engine and polishing the UI.

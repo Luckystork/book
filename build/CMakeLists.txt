@@ -5,7 +5,7 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # ==============================================================================
-# ZeroPoint v4.1 — MSVC build configuration
+# ZeroPoint v4.3.0 — MSVC build configuration
 #
 # Build from Developer Command Prompt for VS 2022:
 #   cd build
@@ -83,7 +83,7 @@ endif()
 file(WRITE "${CMAKE_BINARY_DIR}/ZeroPoint.manifest"
 "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"yes\"?>
 <assembly xmlns=\"urn:schemas-microsoft-com:asm.v1\" manifestVersion=\"1.0\">
-  <assemblyIdentity version=\"4.1.0.0\" name=\"ZeroPoint\" type=\"win32\"/>
+  <assemblyIdentity version=\"4.3.0.0\" name=\"ZeroPoint\" type=\"win32\"/>
   <trustInfo xmlns=\"urn:schemas-microsoft-com:asm.v3\">
     <security>
       <requestedPrivileges>

@@ -2160,7 +2160,7 @@ static LRESULT CALLBACK PopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         FillFrosted(memDC, rc, g_BgPanel, 230);
         DrawInnerGlow(memDC, rc);
 
-        // Soft shadow at the bottom edge (simulates floating)
+        // Soft shadow at the bottom edge for floating depth
         RECT shadowRc = { 4, h - 6, w - 4, h };
         FillFrosted(memDC, shadowRc, g_ShadowColor, 50);
 

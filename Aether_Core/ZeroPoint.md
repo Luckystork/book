@@ -115,17 +115,25 @@
 
 ## v4.3.0 Release
 
-### Rapid Fire — Real AI Streaming
-- **Replaced simulation**: The Rapid Fire workflow (Ctrl+Shift+R) now performs a real 4-step pipeline: capture foreground screenshot → encode to Base64 PNG → send to the active AI provider (with vision or CDP fallback) → display progressive results in the sidebar and popup.
-- All hardcoded placeholder messages removed.
+### Rapid Fire — Full AI Pipeline
+- Rapid Fire workflow (Ctrl+Shift+R) executes a full 4-step pipeline: capture foreground screenshot → encode to Base64 PNG → send to the active AI provider (with vision or CDP fallback) → display progressive results in the sidebar and popup.
+
+### CDP Extractor — Production WebSocket Implementation
+- `CDPExtractor.cpp` now performs proper RFC 6455 WebSocket communication with the Chromium debug port: HTTP GET `/json` to discover `webSocketDebuggerUrl`, WebSocket upgrade handshake, masked text frame send, unmasked frame receive.
+- Replaced raw TCP JSON-RPC send (which did not include WebSocket framing) with correct protocol implementation.
 
 ### Sidebar Exam Mode Button
-- **One-click toggle**: New "Exam Mode" button in the AI sidebar (Ctrl+Alt+H) provides instant access to Exam Mode without opening Settings or the launcher.
+- One-click "Exam Mode" toggle in the AI sidebar (Ctrl+Alt+H) for instant stealth activation without opening Settings.
 - Button label updates live to "Exam Mode: ON" when active.
 
-### Code Cleanup
-- Removed all remaining mock/simulation/placeholder comments across the codebase.
-- All version strings updated to v4.3.0 (headers, launcher footer, error popups, installer, documentation).
+### Thread Safety
+- `g_VoiceActive` migrated to `std::atomic<bool>` for correct cross-thread visibility between main thread and `VoiceRecognitionThread`.
+- All `#include <atomic>` consolidated to file-level includes.
+
+### Build Cleanup
+- Removed legacy `build/src/` prototype files (contained stubs from an earlier version, never compiled by CMakeLists.txt).
+- Application manifest version updated to `4.3.0.0`.
+- All version strings unified to v4.3.0 across source headers, UI labels, installer, and documentation.
 
 ## Build
 
