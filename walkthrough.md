@@ -74,12 +74,56 @@ ZeroPoint allows a second user on a different computer to remotely view and cont
    - Password: the code you set in ZeroPoint
 5. You now have full control of the VE desktop. The local user remains on the host desktop.
 
+### Copying Connection Info
+
+1. In the Remote Access panel, click **"Copy mstsc Command"**.
+2. ZeroPoint auto-detects your local IP and copies the full command (e.g., `mstsc.exe /v:192.168.1.42:3390`) to the clipboard.
+3. A brief **"Copied!"** toast appears for 2 seconds confirming the copy.
+4. Send this command to the remote user — they paste it into Run (Win+R) or a terminal.
+
+### Monitoring Connections
+
+- When a remote user connects, a **"Connected: X"** counter appears:
+  - On the launcher WiFi icon (with a brighter green glow and count badge)
+  - In the Remote Access panel status line
+  - In the Settings → Remote tab
+- The Start/Stop button border pulses green when someone is actively connected.
+
+### Voice-to-Text (Mic Button)
+
+1. In the Remote Access panel, click the **MIC** button (microphone icon).
+2. Windows speech recognition activates and listens for dictation.
+3. Recognized text is automatically typed into the VE using the auto-typer engine (human-like timing).
+4. Click **MIC ON** again to stop. The button border turns green when active.
+5. All recognized text is logged to `remote.log`.
+
+### Auto-Start with VE
+
+1. Open **Settings** (gear icon) → **Remote** tab.
+2. Check **"Auto-enable Remote Access when starting VE"**.
+3. Next time you click "START VIRTUAL ENVIRONMENT", Remote Access enables automatically after the VE boots.
+
+### Inactivity Timeout
+
+1. In the Remote Access panel, set the **Timeout** field (in minutes, 0 = disabled).
+2. When enabled, if no ZP_Remote sessions are active for the configured duration, Remote Access automatically disables itself.
+3. The timer resets whenever a remote user connects.
+
+### Remote Logging
+
+- All Remote Access events are logged to `C:\ProgramData\ZeroPoint\remote.log`.
+- Events logged: enable/disable, connection info copied, voice recognition text, inactivity timeout triggers, errors.
+- Max 50 KB file size; rotates to `remote.log.bak` when full.
+- The log path is displayed at the bottom of the Remote Access panel.
+- The log file is wiped by the Panic Killswitch.
+
 ### Important Notes
 
 - All stealth layers (WDA_EXCLUDEFROMCAPTURE, layered windows) remain active during remote sessions.
 - Mouse teleport and lock/unlock behavior work normally — the remote user interacts with the VE, not the host.
-- The **Panic Killswitch** (Ctrl+Shift+X) automatically tears down remote access, removes the user account, and closes the firewall port.
+- The **Panic Killswitch** (Ctrl+Shift+X) automatically tears down remote access, removes the user account, closes the firewall port, stops voice-to-text, and wipes the remote log.
 - When you disable remote access (toggle OFF, Ctrl+Alt+R, or close ZeroPoint), the temporary user and firewall rule are cleaned up automatically.
+- All new UI elements (copy button, mic button, connected counter, timeout field) are modeless and non-blocking.
 
 ## 8. Emergency Evasion
 - **Panic Killswitch (Ctrl+Shift+X):** Instantly stops the Virtual Environment, kills all RDP sessions, closes all ZeroPoint windows, and wipes all configuration files, thumbnails, and logs from `C:\ProgramData\ZeroPoint\`.

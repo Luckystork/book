@@ -128,6 +128,10 @@ extern RapidFireConfig g_RapidFireConfig;
 
 extern VEConfig        g_VEConfig;
 
+// Remote access persistent settings
+extern bool            g_RemoteAutoStartWithVE;
+extern int             g_RemoteInactivityTimeout;
+
 // For OpenRouter sub-model selection
 extern std::vector<std::string> g_OpenRouterModels;
 extern int g_OpenRouterModelIndex;

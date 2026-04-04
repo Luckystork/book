@@ -58,6 +58,15 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 * `atexit` handler provides last-resort cleanup (user + firewall + registry) if the process exits unexpectedly
 * "Remote Access" tab in Settings modal and sidebar button for quick access
 
+**v4.1 Enhancements:**
+* **Live Connected Counter** — The launcher WiFi icon and Remote Access panel display a real-time "Connected: X" count showing active ZP_Remote RDP sessions. A pulsing green border appears on the Start/Stop button when a friend is connected.
+* **Close [X] Glow** — The panel close button features a subtle icy-cyan alpha-blended glow and 1.1x scale-up on hover, matching the launcher button aesthetic.
+* **Copy mstsc Command** — One-click "Copy mstsc Command" button auto-detects the local IP, formats `mstsc.exe /v:IP:PORT`, copies to clipboard, and shows a "Copied!" toast for 2 seconds.
+* **Auto-start with VE** — Checkbox in Settings → Remote tab: "Auto-enable Remote Access when starting VE". Persisted to `config.ini` (`remote_auto_ve=1`). Respected in `StartVirtualEnvironment()`.
+* **Inactivity Timeout** �� Numeric field in the Remote panel: "Auto-disable after X minutes of no remote activity" (default 0 = disabled). A background thread checks every 30 seconds; if no ZP_Remote sessions are active for the configured duration, Remote Access is automatically disabled.
+* **Voice-to-Text** — Microphone button in the Remote panel starts Windows SAPI speech recognition. Recognized text is fed directly into `PerformAutoType()` for human-like injection into the VE. Toggle on/off; green border when active.
+* **Remote Logging** — All enable/disable events, connection counts, voice recognition text, inactivity timeouts, and errors are logged to `C:\ProgramData\ZeroPoint\remote.log`. Append-only, max 50 KB with `.bak` rotation. Log location shown in the Remote panel. Wiped on Panic Killswitch.
+
 ### Additional Tools
 * **Snip Region** (Ctrl+Shift+S) — rubber-band crosshair with frosted selection
 * **Rapid Fire Thoughts** (Ctrl+Shift+R) — live streaming AI thoughts in sidebar + popup

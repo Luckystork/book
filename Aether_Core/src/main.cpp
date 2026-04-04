@@ -1788,22 +1788,40 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
                 int dx = g_BtnRemote.right - 6;
                 int dy = g_BtnRemote.top + 6;
 
-                // Outer glow layer (soft, larger, translucent green)
+                int connCnt = GetRemoteConnectionCount();
+                // Pulsing green border when friends are connected
+                COLORREF dotColor = (connCnt > 0) ? RGB(0x00, 0xFF, 0x88) : RGB(0x00, 0xC8, 0x64);
+
+                // Outer glow layer
                 RECT glowRc = { dx - 7, dy - 7, dx + 7, dy + 7 };
-                FillFrosted(memDC, glowRc, RGB(0x00, 0xDD, 0x66), 60);
+                FillFrosted(memDC, glowRc, dotColor, (connCnt > 0) ? (BYTE)80 : (BYTE)60);
 
                 // Mid glow layer
                 RECT midRc = { dx - 5, dy - 5, dx + 5, dy + 5 };
-                FillFrosted(memDC, midRc, RGB(0x00, 0xEE, 0x77), 90);
+                FillFrosted(memDC, midRc, dotColor, (connCnt > 0) ? (BYTE)120 : (BYTE)90);
 
-                // Solid core dot with white border
-                HBRUSH activeDot = CreateSolidBrush(RGB(0x00, 0xC8, 0x64));
+                // Solid core dot
+                HBRUSH activeDot = CreateSolidBrush(dotColor);
                 HPEN activePen = CreatePen(PS_SOLID, 1, RGB(0xFF, 0xFF, 0xFF));
                 SelectObject(memDC, activeDot);
                 SelectObject(memDC, activePen);
                 Ellipse(memDC, dx - 4, dy - 4, dx + 4, dy + 4);
                 DeleteObject(activeDot);
                 DeleteObject(activePen);
+
+                // Connected count badge
+                if (connCnt > 0) {
+                    HFONT cntFont = CreateAppFont(8, FW_BOLD);
+                    HGDIOBJ oldCF = SelectObject(memDC, cntFont);
+                    SetTextColor(memDC, RGB(0x00, 0xAA, 0x55));
+                    char cntBuf[8];
+                    snprintf(cntBuf, sizeof(cntBuf), "%d", connCnt);
+                    RECT cntRc = { g_BtnRemote.left, g_BtnRemote.bottom - 8,
+                                   g_BtnRemote.right, g_BtnRemote.bottom };
+                    DrawTextA(memDC, cntBuf, -1, &cntRc, DT_CENTER | DT_SINGLELINE);
+                    SelectObject(memDC, oldCF);
+                    DeleteObject(cntFont);
+                }
             }
         }
 
@@ -2906,7 +2924,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             RECT c2 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Desktop Composition (Aero)", -1, &c2, DT_LEFT); py+=20;
             RECT c3 = {px, py, w, py+20}; DrawTextA(memDC, "[x] Font Smoothing (ClearType)", -1, &c3, DT_LEFT);
         }
-        else { // Resources
+        else if (g_VECurrentTab == 2) { // Resources
             SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
             RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Audio Device Setup", -1, &rr1, DT_LEFT);
             py+=25;
@@ -2927,7 +2945,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             RECT c2 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Local Drives", -1, &c2, DT_LEFT); py+=20;
             RECT c3 = {px, py, w, py+20}; DrawTextA(memDC, "[ ] Printers", -1, &c3, DT_LEFT);
         }
-        else { // Remote Access tab
+        else { // Remote Access tab (g_VECurrentTab == 3)
             SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
             RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Remote Access Configuration", -1, &rr1, DT_LEFT);
             py+=25;
@@ -2936,10 +2954,17 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             bool remActive = IsRemoteAccessEnabled();
             RemoteAccessConfig remCfg = GetRemoteAccessConfig();
 
-            // Status
+            // Status + connected count
             RECT st1 = {px, py, w, py+20};
             SetTextColor(memDC, remActive ? RGB(0x00, 0xAA, 0x55) : g_TextSecondary);
-            DrawTextA(memDC, remActive ? "Status: ACTIVE" : "Status: Disabled", -1, &st1, DT_LEFT);
+            if (remActive) {
+                int cnt = GetRemoteConnectionCount();
+                char stBuf[64];
+                snprintf(stBuf, sizeof(stBuf), "Status: ACTIVE (Connected: %d)", cnt);
+                DrawTextA(memDC, stBuf, -1, &st1, DT_LEFT);
+            } else {
+                DrawTextA(memDC, "Status: Disabled", -1, &st1, DT_LEFT);
+            }
             py+=25;
 
             SetTextColor(memDC, g_TextPrimary);
@@ -2953,23 +2978,56 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             RECT am1 = {px, py, w, py+20}; DrawTextA(memDC, "Auth: Password / 6-digit code", -1, &am1, DT_LEFT);
             py+=30;
 
+            // Auto-start with VE checkbox
+            {
+                COLORREF cbColor = g_RemoteAutoStartWithVE ? g_AccentColor : g_ShadowColor;
+                HBRUSH cbBr = CreateSolidBrush(cbColor);
+                RECT cb = {px, py+2, px+12, py+14};
+                FillRect(memDC, &cb, cbBr);
+                DeleteObject(cbBr);
+                if (g_RemoteAutoStartWithVE) {
+                    // Draw checkmark
+                    SetTextColor(memDC, RGB(0xFF, 0xFF, 0xFF));
+                    HFONT ckFont = CreateAppFont(10, FW_BOLD);
+                    SelectObject(memDC, ckFont);
+                    RECT ckRc = {px+1, py, px+13, py+16};
+                    DrawTextA(memDC, "v", -1, &ckRc, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DeleteObject(ckFont);
+                    SelectObject(memDC, nrmF);
+                }
+                SetTextColor(memDC, g_TextPrimary);
+                RECT cbLbl = {px+18, py, w, py+18};
+                DrawTextA(memDC, "Auto-enable Remote Access when starting VE", -1, &cbLbl, DT_LEFT);
+            }
+            py+=24;
+
+            // Inactivity timeout display
+            {
+                char toBuf[64];
+                snprintf(toBuf, sizeof(toBuf), "Inactivity timeout: %d min (0=disabled)",
+                         g_RemoteInactivityTimeout);
+                SetTextColor(memDC, g_TextSecondary);
+                RECT toRc = {px, py, w, py+18};
+                DrawTextA(memDC, toBuf, -1, &toRc, DT_LEFT);
+            }
+            py+=26;
+
             // Instructions
             SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
             RECT rr2 = {px, py, w, py+20}; DrawTextA(memDC, "How to Connect", -1, &rr2, DT_LEFT);
             py+=22;
             SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextSecondary);
-            RECT ins = {px, py, w-20, py+80};
+            RECT ins = {px, py, w-20, py+70};
             DrawTextA(memDC,
                 "1. Enable Remote Access (toggle or Ctrl+Alt+R)\n"
-                "2. From another PC, open mstsc.exe\n"
-                "3. Connect to <this-pc-ip>:3390\n"
-                "4. Enter the password/code you set",
+                "2. From another PC: mstsc.exe /v:<ip>:3390\n"
+                "3. Username: ZP_Remote  Password: your code",
                 -1, &ins, DT_LEFT | DT_WORDBREAK);
-            py+=90;
+            py+=74;
 
-            // Hotkey reminder
+            // Log + hotkey
             SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
-            RECT hk = {px, py, w, py+20}; DrawTextA(memDC, "Hotkey: Ctrl+Alt+R to toggle", -1, &hk, DT_LEFT);
+            RECT hk = {px, py, w, py+20}; DrawTextA(memDC, "Ctrl+Alt+R | Log: remote.log", -1, &hk, DT_LEFT);
         }
 
         DeleteObject(hdrF); DeleteObject(nrmF);
@@ -2998,6 +3056,15 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         POINT pt = {LOWORD(lp), HIWORD(lp)};
         for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
         if (PtInRect(&g_DoneBtnRect, pt)) { DestroyWindow(hwnd); }
+        // Auto-start checkbox in Remote tab
+        if (g_VECurrentTab == 3) {
+            RECT cbHit = {25, 167, 400, 185};  // approximate checkbox area
+            if (PtInRect(&cbHit, pt)) {
+                g_RemoteAutoStartWithVE = !g_RemoteAutoStartWithVE;
+                SaveConfig();
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+        }
         return 0;
     }
     case WM_NCHITTEST: {

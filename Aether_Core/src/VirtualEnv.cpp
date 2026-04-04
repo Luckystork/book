@@ -24,13 +24,22 @@
 #include <wincrypt.h>
 #include <dwmapi.h>
 #include <gdiplus.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <wtsapi32.h>
+#include <sapi.h>
 #include <string>
 #include <functional>
 #include <cstdlib>
+#include <cstdarg>
 #include <vector>
 #include <sstream>
 #include <iomanip>
 #include <fstream>
+#include <mutex>
+
+#pragma comment(lib, "ws2_32.lib")
+#pragma comment(lib, "wtsapi32.lib")
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdiplus.lib")
@@ -414,6 +423,14 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
         ToggleVEFullscreen();
 
     if (progressCallback) progressCallback("Virtual Environment ready!");
+
+    // Auto-start Remote Access if configured
+    if (g_RemoteAutoStartWithVE && !g_RemoteAccessActive) {
+        if (progressCallback) progressCallback("Auto-starting Remote Access...");
+        RemoteLog("Auto-starting Remote Access (VE auto-start enabled)");
+        EnableRemoteAccess(g_RemoteConfig);
+    }
+
     return true;
 }
 
@@ -1208,8 +1225,290 @@ void PerformAutoType(const std::string& text) {
 //  All stealth layers (WDA_EXCLUDEFROMCAPTURE, layered windows) remain active.
 // ============================================================================
 
-static RemoteAccessConfig g_RemoteConfig = { false, 3390, "000000" };
+static RemoteAccessConfig g_RemoteConfig = { false, 3390, "000000", false, 0 };
 static bool g_RemoteAccessActive = false;
+
+// ============================================================================
+//  Remote Logging — append-only, 50KB rotate
+// ============================================================================
+
+static const char* REMOTE_LOG_PATH = "C:\\ProgramData\\ZeroPoint\\remote.log";
+static std::mutex  g_LogMutex;
+
+void RemoteLog(const char* fmt, ...) {
+    std::lock_guard<std::mutex> lock(g_LogMutex);
+
+    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+
+    // Rotate if > 50 KB
+    WIN32_FILE_ATTRIBUTE_DATA fad;
+    if (GetFileAttributesExA(REMOTE_LOG_PATH, GetFileExInfoStandard, &fad)) {
+        ULONGLONG size = ((ULONGLONG)fad.nFileSizeHigh << 32) | fad.nFileSizeLow;
+        if (size > 50 * 1024) {
+            std::string bakPath = std::string(REMOTE_LOG_PATH) + ".bak";
+            DeleteFileA(bakPath.c_str());
+            MoveFileA(REMOTE_LOG_PATH, bakPath.c_str());
+        }
+    }
+
+    FILE* f = fopen(REMOTE_LOG_PATH, "a");
+    if (!f) return;
+
+    // Timestamp
+    SYSTEMTIME st;
+    GetLocalTime(&st);
+    fprintf(f, "[%04d-%02d-%02d %02d:%02d:%02d] ",
+            st.wYear, st.wMonth, st.wDay, st.wHour, st.wMinute, st.wSecond);
+
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(f, fmt, args);
+    va_end(args);
+
+    fprintf(f, "\n");
+    fclose(f);
+}
+
+// ============================================================================
+//  Remote Connection Counting — query WTS sessions
+// ============================================================================
+
+int GetRemoteConnectionCount() {
+    if (!g_RemoteAccessActive) return 0;
+
+    WTS_SESSION_INFOA* pSessions = NULL;
+    DWORD count = 0;
+    int connected = 0;
+
+    if (WTSEnumerateSessionsA(WTS_CURRENT_SERVER_HANDLE, 0, 1, &pSessions, &count)) {
+        for (DWORD i = 0; i < count; i++) {
+            // Count active/connected sessions that aren't the console (session 0)
+            // and aren't our own loopback VE session
+            if (pSessions[i].SessionId > 0 &&
+                (pSessions[i].State == WTSActive || pSessions[i].State == WTSConnected)) {
+                // Check if the session user is ZP_Remote
+                LPSTR pUser = NULL;
+                DWORD userLen = 0;
+                if (WTSQuerySessionInformationA(WTS_CURRENT_SERVER_HANDLE,
+                        pSessions[i].SessionId, WTSUserName, &pUser, &userLen)) {
+                    if (pUser && _stricmp(pUser, "ZP_Remote") == 0) {
+                        connected++;
+                    }
+                    WTSFreeMemory(pUser);
+                }
+            }
+        }
+        WTSFreeMemory(pSessions);
+    }
+    return connected;
+}
+
+// ============================================================================
+//  Local IP Detection
+// ============================================================================
+
+std::string GetLocalIPAddress() {
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) return "?.?.?.?";
+
+    char hostname[256] = {};
+    gethostname(hostname, sizeof(hostname));
+
+    struct addrinfo hints = {}, *result = NULL;
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_STREAM;
+
+    std::string ip = "?.?.?.?";
+    if (getaddrinfo(hostname, NULL, &hints, &result) == 0) {
+        for (auto* p = result; p; p = p->ai_next) {
+            struct sockaddr_in* addr = (struct sockaddr_in*)p->ai_addr;
+            char buf[INET_ADDRSTRLEN];
+            inet_ntop(AF_INET, &addr->sin_addr, buf, sizeof(buf));
+            std::string s = buf;
+            if (s != "127.0.0.1" && s.rfind("127.", 0) != 0) {
+                ip = s;
+                break;
+            }
+        }
+        freeaddrinfo(result);
+    }
+    WSACleanup();
+    return ip;
+}
+
+// ============================================================================
+//  Clipboard Helper
+// ============================================================================
+
+void CopyToClipboard(HWND owner, const std::string& text) {
+    if (!OpenClipboard(owner)) return;
+    EmptyClipboard();
+    HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, text.size() + 1);
+    if (hMem) {
+        memcpy(GlobalLock(hMem), text.c_str(), text.size() + 1);
+        GlobalUnlock(hMem);
+        SetClipboardData(CF_TEXT, hMem);
+    }
+    CloseClipboard();
+}
+
+// ============================================================================
+//  Inactivity Timer
+// ============================================================================
+
+static HANDLE g_InactivityTimerHandle = NULL;
+static int    g_InactivityMinutes = 0;
+static DWORD  g_LastRemoteActivity = 0;
+
+static DWORD WINAPI InactivityTimerThread(LPVOID) {
+    while (g_InactivityTimerHandle) {
+        Sleep(30000); // Check every 30 seconds
+        if (!g_RemoteAccessActive || g_InactivityMinutes <= 0) continue;
+
+        DWORD now = GetTickCount();
+        DWORD elapsed = now - g_LastRemoteActivity;
+        DWORD timeoutMs = (DWORD)g_InactivityMinutes * 60 * 1000;
+
+        // Check if there are active connections — if so, reset timer
+        if (GetRemoteConnectionCount() > 0) {
+            g_LastRemoteActivity = now;
+            continue;
+        }
+
+        if (elapsed >= timeoutMs) {
+            RemoteLog("Inactivity timeout reached (%d min), auto-disabling", g_InactivityMinutes);
+            DisableRemoteAccess();
+            break;
+        }
+    }
+    return 0;
+}
+
+void StartRemoteInactivityTimer(int minutes) {
+    StopRemoteInactivityTimer();
+    if (minutes <= 0) return;
+    g_InactivityMinutes = minutes;
+    g_LastRemoteActivity = GetTickCount();
+    g_InactivityTimerHandle = CreateThread(NULL, 0, InactivityTimerThread, NULL, 0, NULL);
+}
+
+void StopRemoteInactivityTimer() {
+    if (g_InactivityTimerHandle) {
+        HANDLE h = g_InactivityTimerHandle;
+        g_InactivityTimerHandle = NULL; // Signal thread to exit
+        WaitForSingleObject(h, 2000);
+        CloseHandle(h);
+    }
+    g_InactivityMinutes = 0;
+}
+
+void ResetRemoteInactivityTimer() {
+    g_LastRemoteActivity = GetTickCount();
+}
+
+// ============================================================================
+//  Voice-to-Text — Windows SAPI speech recognition
+// ============================================================================
+
+static ISpRecognizer* g_pRecognizer = NULL;
+static ISpRecoContext* g_pRecoContext = NULL;
+static ISpRecoGrammar* g_pGrammar = NULL;
+static HANDLE g_VoiceThread = NULL;
+static bool g_VoiceActive = false;
+
+static DWORD WINAPI VoiceRecognitionThread(LPVOID) {
+    CoInitializeEx(NULL, COINIT_MULTITHREADED);
+
+    HRESULT hr = CoCreateInstance(CLSID_SpInprocRecognizer, NULL, CLSCTX_ALL,
+                                  IID_ISpRecognizer, (void**)&g_pRecognizer);
+    if (FAILED(hr)) { CoUninitialize(); g_VoiceActive = false; return 1; }
+
+    // Use default audio input
+    ISpObjectToken* pAudioToken = NULL;
+    hr = SpGetDefaultTokenFromCategoryId(SPCAT_AUDIOIN, &pAudioToken);
+    if (SUCCEEDED(hr)) {
+        g_pRecognizer->SetInput(pAudioToken, TRUE);
+        pAudioToken->Release();
+    }
+
+    hr = g_pRecognizer->CreateRecoContext(&g_pRecoContext);
+    if (FAILED(hr)) {
+        g_pRecognizer->Release(); g_pRecognizer = NULL;
+        CoUninitialize(); g_VoiceActive = false; return 1;
+    }
+
+    g_pRecoContext->SetNotifyWin32Event();
+    g_pRecoContext->SetInterest(SPFEI(SPEI_RECOGNITION), SPFEI(SPEI_RECOGNITION));
+
+    hr = g_pRecoContext->CreateGrammar(0, &g_pGrammar);
+    if (FAILED(hr)) {
+        g_pRecoContext->Release(); g_pRecoContext = NULL;
+        g_pRecognizer->Release(); g_pRecognizer = NULL;
+        CoUninitialize(); g_VoiceActive = false; return 1;
+    }
+
+    g_pGrammar->LoadDictation(NULL, SPLO_STATIC);
+    g_pGrammar->SetDictationState(SPRS_ACTIVE);
+
+    HANDLE hEvent = g_pRecoContext->GetNotifyEventHandle();
+
+    RemoteLog("Voice-to-Text started");
+
+    while (g_VoiceActive) {
+        DWORD wait = WaitForSingleObject(hEvent, 500);
+        if (!g_VoiceActive) break;
+        if (wait != WAIT_OBJECT_0) continue;
+
+        SPEVENT event;
+        ULONG fetched;
+        while (g_pRecoContext->GetEvents(1, &event, &fetched) == S_OK && fetched > 0) {
+            if (event.eEventId == SPEI_RECOGNITION && event.punkVal) {
+                ISpRecoResult* pResult = (ISpRecoResult*)event.punkVal;
+                LPWSTR pText = NULL;
+                if (SUCCEEDED(pResult->GetText(SP_GETWHOLEPHRASE, SP_GETWHOLEPHRASE,
+                                                TRUE, &pText, NULL)) && pText) {
+                    // Convert wide string to UTF-8
+                    int len = WideCharToMultiByte(CP_UTF8, 0, pText, -1, NULL, 0, NULL, NULL);
+                    std::string text(len - 1, '\0');
+                    WideCharToMultiByte(CP_UTF8, 0, pText, -1, &text[0], len, NULL, NULL);
+                    CoTaskMemFree(pText);
+
+                    if (!text.empty()) {
+                        RemoteLog("Voice recognized: %s", text.c_str());
+                        PerformAutoType(text);
+                    }
+                }
+            }
+        }
+    }
+
+    g_pGrammar->SetDictationState(SPRS_INACTIVE);
+    g_pGrammar->Release(); g_pGrammar = NULL;
+    g_pRecoContext->Release(); g_pRecoContext = NULL;
+    g_pRecognizer->Release(); g_pRecognizer = NULL;
+
+    RemoteLog("Voice-to-Text stopped");
+    CoUninitialize();
+    return 0;
+}
+
+void StartVoiceToText() {
+    if (g_VoiceActive) return;
+    g_VoiceActive = true;
+    g_VoiceThread = CreateThread(NULL, 0, VoiceRecognitionThread, NULL, 0, NULL);
+}
+
+void StopVoiceToText() {
+    if (!g_VoiceActive) return;
+    g_VoiceActive = false;
+    if (g_VoiceThread) {
+        WaitForSingleObject(g_VoiceThread, 3000);
+        CloseHandle(g_VoiceThread);
+        g_VoiceThread = NULL;
+    }
+}
+
+bool IsVoiceToTextActive() { return g_VoiceActive; }
 
 static const char* REMOTE_USER = "ZP_Remote";
 static const char* REMOTE_SENTINEL = "C:\\ProgramData\\ZeroPoint\\remote_active.lock";
@@ -1446,11 +1745,21 @@ bool EnableRemoteAccess(const RemoteAccessConfig& cfg) {
         g_AtExitRegistered = true;
     }
 
+    RemoteLog("Remote Access ENABLED — port %d", cfg.port);
+
+    // Start inactivity timer if configured
+    if (g_RemoteConfig.inactivityTimeout > 0) {
+        StartRemoteInactivityTimer(g_RemoteConfig.inactivityTimeout);
+    }
+
     return true;
 }
 
 void DisableRemoteAccess() {
     if (!g_RemoteAccessActive) return;
+
+    StopRemoteInactivityTimer();
+    StopVoiceToText();
 
     RemoveRDPListener();
     CloseFirewallPort();
@@ -1462,6 +1771,8 @@ void DisableRemoteAccess() {
 
     g_RemoteAccessActive = false;
     g_RemoteConfig.enabled = false;
+
+    RemoteLog("Remote Access DISABLED");
 }
 
 void ToggleRemoteAccess() {
@@ -1528,9 +1839,18 @@ static int  g_RemotePanelHover  = 0;
 #define ID_REMOTE_CLOSE   8003
 #define ID_REMOTE_PASS    8004
 #define ID_REMOTE_PORT    8005
+#define ID_REMOTE_COPY    8006
+#define ID_REMOTE_MIC     8007
+#define ID_REMOTE_TIMEOUT 8008
+
+// "Copied!" toast state
+static DWORD g_CopiedToastTime = 0;
+static bool  g_ShowCopiedToast = false;
 
 static HWND g_RemotePassEdit = NULL;
 static HWND g_RemotePortEdit = NULL;
+static HWND g_RemoteTimeoutEdit = NULL;
+static char g_RemoteTimeoutBuf[8] = "0";
 
 // Soft shadow helper — matches launcher's DrawSoftShadow
 static void VE_DrawSoftShadow(HDC hdc, const RECT& rc) {
@@ -1575,7 +1895,20 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         SendMessage(g_RemotePortEdit, WM_SETFONT, (WPARAM)editFont, TRUE);
         SendMessage(g_RemotePortEdit, EM_SETLIMITTEXT, 5, 0);
 
+        // Inactivity timeout field (minutes)
+        snprintf(g_RemoteTimeoutBuf, sizeof(g_RemoteTimeoutBuf), "%d", g_RemoteConfig.inactivityTimeout);
+        g_RemoteTimeoutEdit = CreateWindowExA(
+            WS_EX_CLIENTEDGE, "EDIT", g_RemoteTimeoutBuf,
+            WS_CHILD | WS_VISIBLE | ES_CENTER | ES_NUMBER | ES_AUTOHSCROLL,
+            100, 188, 60, 26,
+            hwnd, (HMENU)ID_REMOTE_TIMEOUT, GetModuleHandle(NULL), NULL);
+        SendMessage(g_RemoteTimeoutEdit, WM_SETFONT, (WPARAM)editFont, TRUE);
+        SendMessage(g_RemoteTimeoutEdit, EM_SETLIMITTEXT, 3, 0);
+
         g_RemoteToggleState = IsRemoteAccessEnabled();
+
+        // Refresh timer for connection count and toast dismissal
+        SetTimer(hwnd, 1, 2000, NULL);
         return 0;
     }
 
@@ -1597,7 +1930,7 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         FillRect(memDC, &rc, bgBrush);
         DeleteObject(bgBrush);
 
-        // Soft shadow + frosted panel + inner glow (matches launcher aesthetic)
+        // Soft shadow + frosted panel + inner glow
         RECT panelRc = { 4, 4, w - 4, h - 4 };
         VE_DrawSoftShadow(memDC, panelRc);
         VE_FillFrosted(memDC, panelRc, VE_ICY_PANEL, 220);
@@ -1630,14 +1963,15 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         SelectObject(memDC, oldAcc);
         DeleteObject(accPen);
 
-        // Toggle label
         HFONT labelFont = VE_CreateFont(13, FW_NORMAL);
         SelectObject(memDC, labelFont);
+
+        // Toggle label
         SetTextColor(memDC, VE_ICY_TEXT);
         RECT toggleLabel = { 22, 60, 190, 80 };
         DrawTextA(memDC, "Enable Remote Access", -1, &toggleLabel, DT_LEFT | DT_SINGLELINE);
 
-        // Toggle switch (pill) — uses actual active state for color
+        // Toggle switch (pill)
         int togX = w - 74, togY = 60;
         RECT togRc = { togX, togY, togX + 50, togY + 24 };
         bool togOn = g_RemoteToggleState;
@@ -1658,22 +1992,27 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         Ellipse(memDC, knobX, togY + 2, knobX + 20, togY + 22);
         DeleteObject(knobBr);
 
-        // Status text — reflects actual runtime state, not just toggle
+        // Status text + connected count
         HFONT statusFont = VE_CreateFont(11, FW_SEMIBOLD);
         SelectObject(memDC, statusFont);
         bool liveActive = g_RemoteAccessActive;
+        int connCount = liveActive ? GetRemoteConnectionCount() : 0;
+        char statusBuf[128];
         if (liveActive) {
             SetTextColor(memDC, RGB(0x00, 0xAA, 0x55));
+            if (connCount > 0)
+                snprintf(statusBuf, sizeof(statusBuf), "ACTIVE  —  Connected: %d", connCount);
+            else
+                snprintf(statusBuf, sizeof(statusBuf), "ACTIVE  —  Listening (0 connected)");
         } else if (togOn) {
-            SetTextColor(memDC, RGB(0xCC, 0x99, 0x00));  // amber: toggled but not yet started
+            SetTextColor(memDC, RGB(0xCC, 0x99, 0x00));
+            snprintf(statusBuf, sizeof(statusBuf), "Ready  —  Press Start to begin");
         } else {
             SetTextColor(memDC, VE_ICY_DIM);
+            snprintf(statusBuf, sizeof(statusBuf), "Disabled");
         }
         RECT statusRc = { 22, 86, w - 22, 104 };
-        const char* statusText = liveActive
-            ? "ACTIVE  —  Listening for connections"
-            : (togOn ? "Ready  —  Press Start to begin" : "Disabled");
-        DrawTextA(memDC, statusText, -1, &statusRc, DT_LEFT | DT_SINGLELINE);
+        DrawTextA(memDC, statusBuf, -1, &statusRc, DT_LEFT | DT_SINGLELINE);
         DeleteObject(statusFont);
 
         // Password label
@@ -1686,31 +2025,111 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         RECT portLabel = { 22, 152, 98, 170 };
         DrawTextA(memDC, "Port:", -1, &portLabel, DT_LEFT | DT_SINGLELINE);
 
-        // Connection info — shows actual port from edit field
-        HFONT infoFont = VE_CreateFont(11, FW_NORMAL);
-        SelectObject(memDC, infoFont);
+        // Timeout label
+        RECT timeoutLabel = { 22, 192, 98, 210 };
+        DrawTextA(memDC, "Timeout:", -1, &timeoutLabel, DT_LEFT | DT_SINGLELINE);
+        HFONT tinyFont = VE_CreateFont(9, FW_NORMAL);
+        SelectObject(memDC, tinyFont);
         SetTextColor(memDC, VE_ICY_DIM);
-        char infoText[256];
-        char portBuf[8] = {};
-        GetWindowTextA(g_RemotePortEdit, portBuf, sizeof(portBuf));
-        snprintf(infoText, sizeof(infoText),
-            "Connect from another PC:\n  mstsc.exe /v:<this-pc-ip>:%s",
-            (portBuf[0] ? portBuf : "3390"));
-        RECT infoRc = { 22, 186, w - 22, 220 };
-        DrawTextA(memDC, infoText, -1, &infoRc, DT_LEFT | DT_WORDBREAK);
-        DeleteObject(infoFont);
+        RECT timeoutHint = { 166, 194, w - 22, 210 };
+        DrawTextA(memDC, "min (0=off)", -1, &timeoutHint, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(tinyFont);
 
-        // Start/Stop button with soft shadow
+        // ---- "Copy mstsc Command" button ----
+        RECT copyBtn = { 22, 222, 200, 246 };
+        {
+            RECT cpShadow = { copyBtn.left + 2, copyBtn.top + 2,
+                              copyBtn.right + 2, copyBtn.bottom + 2 };
+            VE_FillFrosted(memDC, cpShadow, RGB(0xC0, 0xCC, 0xDD), 30);
+        }
+        COLORREF cpBg = (g_RemotePanelHover == ID_REMOTE_COPY)
+            ? RGB(0xE0, 0xEA, 0xF8) : RGB(0xF5, 0xF8, 0xFF);
+        HBRUSH cpBr = CreateSolidBrush(cpBg);
+        HPEN cpPen = CreatePen(PS_SOLID, 1, VE_ICY_ACCENT);
+        SelectObject(memDC, cpBr);
+        SelectObject(memDC, cpPen);
+        RoundRect(memDC, copyBtn.left, copyBtn.top, copyBtn.right, copyBtn.bottom, 8, 8);
+        DeleteObject(cpBr);
+        DeleteObject(cpPen);
+
+        HFONT cpFont = VE_CreateFont(11, FW_SEMIBOLD);
+        SelectObject(memDC, cpFont);
+        SetTextColor(memDC, VE_ICY_ACCENT);
+        DrawTextA(memDC, "Copy mstsc Command", -1, &copyBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+        DeleteObject(cpFont);
+
+        // "Copied!" toast
+        if (g_ShowCopiedToast && (GetTickCount() - g_CopiedToastTime < 2000)) {
+            HFONT toastFont = VE_CreateFont(11, FW_BOLD);
+            SelectObject(memDC, toastFont);
+            SetTextColor(memDC, RGB(0x00, 0xAA, 0x55));
+            RECT toastRc = { 206, 226, w - 22, 246 };
+            DrawTextA(memDC, "Copied!", -1, &toastRc, DT_LEFT | DT_SINGLELINE);
+            DeleteObject(toastFont);
+        } else {
+            g_ShowCopiedToast = false;
+        }
+
+        // ---- Mic (Voice-to-Text) button ----
+        RECT micBtn = { 208, 222, 290, 246 };
+        {
+            bool micActive = IsVoiceToTextActive();
+            COLORREF micBg = (g_RemotePanelHover == ID_REMOTE_MIC)
+                ? RGB(0xE0, 0xEA, 0xF8) : (micActive ? RGB(0xDD, 0xFF, 0xEE) : RGB(0xF5, 0xF8, 0xFF));
+            COLORREF micBrd = micActive ? RGB(0x00, 0xAA, 0x55) : VE_ICY_ACCENT;
+            HBRUSH micBr = CreateSolidBrush(micBg);
+            HPEN micPen = CreatePen(PS_SOLID, 1, micBrd);
+            SelectObject(memDC, micBr);
+            SelectObject(memDC, micPen);
+            RoundRect(memDC, micBtn.left, micBtn.top, micBtn.right, micBtn.bottom, 8, 8);
+            DeleteObject(micBr);
+            DeleteObject(micPen);
+
+            // Microphone icon: circle head + line body
+            int mcx = (micBtn.left + micBtn.right) / 2 - 18;
+            int mcy = (micBtn.top + micBtn.bottom) / 2;
+            HPEN micIconPen = CreatePen(PS_SOLID, 2, micBrd);
+            SelectObject(memDC, micIconPen);
+            SelectObject(memDC, GetStockObject(NULL_BRUSH));
+            // Mic head (small ellipse)
+            Ellipse(memDC, mcx - 3, mcy - 7, mcx + 4, mcy + 1);
+            // Mic body (line down)
+            MoveToEx(memDC, mcx, mcy + 1, NULL);
+            LineTo(memDC, mcx, mcy + 5);
+            // Base arc
+            Arc(memDC, mcx - 6, mcy - 2, mcx + 7, mcy + 7, mcx + 7, mcy + 3, mcx - 6, mcy + 3);
+            DeleteObject(micIconPen);
+
+            HFONT micFont = VE_CreateFont(10, FW_SEMIBOLD);
+            SelectObject(memDC, micFont);
+            SetTextColor(memDC, micBrd);
+            RECT micLbl = { mcx + 8, micBtn.top, micBtn.right - 4, micBtn.bottom };
+            DrawTextA(memDC, micActive ? "MIC ON" : "MIC", -1, &micLbl, DT_LEFT | DT_VCENTER | DT_SINGLELINE);
+            DeleteObject(micFont);
+        }
+
+        // ---- Log location hint ----
+        HFONT logFont = VE_CreateFont(9, FW_NORMAL);
+        SelectObject(memDC, logFont);
+        SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
+        RECT logRc = { 22, 250, w - 22, 264 };
+        DrawTextA(memDC, "Log: C:\\ProgramData\\ZeroPoint\\remote.log", -1, &logRc,
+                  DT_LEFT | DT_SINGLELINE);
+        DeleteObject(logFont);
+
+        // ---- Start/Stop button with soft shadow ----
         RECT startBtn = { w/2 - 84, h - 74, w/2 + 84, h - 42 };
         {
             RECT btnShadow = { startBtn.left + 2, startBtn.top + 2,
                                startBtn.right + 2, startBtn.bottom + 2 };
             VE_FillFrosted(memDC, btnShadow, RGB(0xC0, 0xCC, 0xDD), 40);
         }
-        COLORREF btnBg = (g_RemotePanelHover == ID_REMOTE_START)
+        // Pulsing green border when someone is connected
+        COLORREF startBrd = (liveActive && connCount > 0) ? RGB(0x00, 0xCC, 0x66) : VE_ICY_ACCENT;
+        COLORREF startBg = (g_RemotePanelHover == ID_REMOTE_START)
             ? RGB(0xE0, 0xEA, 0xF8) : RGB(0xF5, 0xF8, 0xFF);
-        HBRUSH btnBr = CreateSolidBrush(btnBg);
-        HPEN btnPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
+        HBRUSH btnBr = CreateSolidBrush(startBg);
+        HPEN btnPen = CreatePen(PS_SOLID, 2, startBrd);
         SelectObject(memDC, btnBr);
         SelectObject(memDC, btnPen);
         RoundRect(memDC, startBtn.left, startBtn.top,
@@ -1720,19 +2139,35 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 
         HFONT btnFont = VE_CreateFont(14, FW_SEMIBOLD);
         SelectObject(memDC, btnFont);
-        SetTextColor(memDC, VE_ICY_ACCENT);
+        SetTextColor(memDC, startBrd);
         const char* btnText = liveActive ? "Stop Remote Session" : "Start Remote Session";
         DrawTextA(memDC, btnText, -1, &startBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
         DeleteObject(btnFont);
 
-        // Close [X] — top-right
-        RECT closeBtn = { w - 30, 6, w - 10, 24 };
-        HFONT closeFont = VE_CreateFont(14, FW_BOLD);
-        SelectObject(memDC, closeFont);
-        SetTextColor(memDC, (g_RemotePanelHover == ID_REMOTE_CLOSE)
-            ? RGB(0xFF, 0x44, 0x44) : VE_ICY_DIM);
-        DrawTextA(memDC, "X", -1, &closeBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
-        DeleteObject(closeFont);
+        // ---- Close [X] — top-right, with icy-cyan glow + 1.1x scale on hover ----
+        {
+            bool closeHov = (g_RemotePanelHover == ID_REMOTE_CLOSE);
+            RECT closeBtn = closeHov
+                ? RECT{ w - 33, 3, w - 7, 27 }   // 1.1x scale-up (wider by ~3px each side)
+                : RECT{ w - 30, 6, w - 10, 24 };
+
+            if (closeHov) {
+                // Icy-cyan outer glow (alpha-blended)
+                RECT glowOuter = { closeBtn.left - 4, closeBtn.top - 4,
+                                   closeBtn.right + 4, closeBtn.bottom + 4 };
+                VE_FillFrosted(memDC, glowOuter, VE_ICY_ACCENT, 35);
+                // Tighter inner glow
+                RECT glowInner = { closeBtn.left - 2, closeBtn.top - 2,
+                                   closeBtn.right + 2, closeBtn.bottom + 2 };
+                VE_FillFrosted(memDC, glowInner, VE_ICY_ACCENT, 55);
+            }
+
+            HFONT closeFont = VE_CreateFont(closeHov ? 16 : 14, FW_BOLD);
+            SelectObject(memDC, closeFont);
+            SetTextColor(memDC, closeHov ? VE_ICY_ACCENT : VE_ICY_DIM);
+            DrawTextA(memDC, "X", -1, &closeBtn, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            DeleteObject(closeFont);
+        }
 
         // Hotkey hint + branding
         HFONT hintFont = VE_CreateFont(10, FW_NORMAL);
@@ -1754,6 +2189,13 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         return 0;
     }
 
+    case WM_TIMER:
+        // Periodic refresh for connection count and toast dismissal
+        if (wp == 1) {
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        return 0;
+
     case WM_MOUSEMOVE: {
         int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
         RECT rc; GetClientRect(hwnd, &rc);
@@ -1762,13 +2204,17 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         g_RemotePanelHover = 0;
 
         RECT startBtn = { w/2 - 84, rc.bottom - 74, w/2 + 84, rc.bottom - 42 };
-        RECT closeBtn = { w - 30, 6, w - 10, 24 };
+        RECT closeBtn = { w - 33, 3, w - 7, 27 };  // use the larger hit area
         RECT togRc    = { w - 74, 60, w - 24, 84 };
+        RECT copyBtn  = { 22, 222, 200, 246 };
+        RECT micBtn   = { 208, 222, 290, 246 };
         POINT pt = { mx, my };
 
-        if (PtInRect(&startBtn, pt))     g_RemotePanelHover = ID_REMOTE_START;
-        else if (PtInRect(&closeBtn, pt)) g_RemotePanelHover = ID_REMOTE_CLOSE;
-        else if (PtInRect(&togRc, pt))    g_RemotePanelHover = ID_REMOTE_TOGGLE;
+        if (PtInRect(&startBtn, pt))      g_RemotePanelHover = ID_REMOTE_START;
+        else if (PtInRect(&closeBtn, pt))  g_RemotePanelHover = ID_REMOTE_CLOSE;
+        else if (PtInRect(&togRc, pt))     g_RemotePanelHover = ID_REMOTE_TOGGLE;
+        else if (PtInRect(&copyBtn, pt))   g_RemotePanelHover = ID_REMOTE_COPY;
+        else if (PtInRect(&micBtn, pt))    g_RemotePanelHover = ID_REMOTE_MIC;
 
         if (prev != g_RemotePanelHover) {
             InvalidateRect(hwnd, NULL, FALSE);
@@ -1794,17 +2240,41 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
         POINT pt = { mx, my };
 
         RECT startBtn = { w/2 - 84, rc.bottom - 74, w/2 + 84, rc.bottom - 42 };
-        RECT closeBtn = { w - 30, 6, w - 10, 24 };
+        RECT closeBtn = { w - 33, 3, w - 7, 27 };
         RECT togRc    = { w - 74, 60, w - 24, 84 };
+        RECT copyBtn  = { 22, 222, 200, 246 };
+        RECT micBtn   = { 208, 222, 290, 246 };
 
         if (PtInRect(&togRc, pt)) {
             g_RemoteToggleState = !g_RemoteToggleState;
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        else if (PtInRect(&copyBtn, pt)) {
+            // Copy mstsc command to clipboard
+            char portBuf[8] = {};
+            GetWindowTextA(g_RemotePortEdit, portBuf, sizeof(portBuf));
+            std::string ip = GetLocalIPAddress();
+            std::string cmd = "mstsc.exe /v:" + ip + ":" + (portBuf[0] ? portBuf : "3390");
+            CopyToClipboard(hwnd, cmd);
+            g_ShowCopiedToast = true;
+            g_CopiedToastTime = GetTickCount();
+            RemoteLog("Connection command copied: %s", cmd.c_str());
+            InvalidateRect(hwnd, NULL, FALSE);
+        }
+        else if (PtInRect(&micBtn, pt)) {
+            // Toggle Voice-to-Text
+            if (IsVoiceToTextActive()) {
+                StopVoiceToText();
+            } else {
+                StartVoiceToText();
+            }
             InvalidateRect(hwnd, NULL, TRUE);
         }
         else if (PtInRect(&startBtn, pt)) {
             // Read current values from edit controls
             GetWindowTextA(g_RemotePassEdit, g_RemotePassBuf, sizeof(g_RemotePassBuf));
             GetWindowTextA(g_RemotePortEdit, g_RemotePortBuf, sizeof(g_RemotePortBuf));
+            GetWindowTextA(g_RemoteTimeoutEdit, g_RemoteTimeoutBuf, sizeof(g_RemoteTimeoutBuf));
 
             if (g_RemoteToggleState && !g_RemoteAccessActive) {
                 RemoteAccessConfig cfg;
@@ -1813,6 +2283,10 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                 if (cfg.port < 1 || cfg.port > 65535) cfg.port = 3390;
                 strncpy(cfg.password, g_RemotePassBuf, sizeof(cfg.password) - 1);
                 cfg.password[sizeof(cfg.password) - 1] = '\0';
+                cfg.autoStartWithVE = g_RemoteConfig.autoStartWithVE;
+                cfg.inactivityTimeout = atoi(g_RemoteTimeoutBuf);
+                // Sync to global config for persistence
+                g_RemoteInactivityTimeout = cfg.inactivityTimeout;
 
                 if (strlen(cfg.password) == 0) {
                     ShowErrorPopup("Remote Access",
@@ -1820,10 +2294,8 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
                         "before starting the remote session.");
                 } else {
                     if (EnableRemoteAccess(cfg)) {
-                        // Sync toggle to actual state on success
                         g_RemoteToggleState = true;
                     } else {
-                        // EnableRemoteAccess already showed error popup
                         g_RemoteToggleState = false;
                     }
                 }
@@ -1848,16 +2320,17 @@ static LRESULT CALLBACK RemotePanelProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
             ScreenToClient(hwnd, &pt);
             RECT crc;
             GetClientRect(hwnd, &crc);
-            // Title bar area = draggable, but not over [X] close button
-            if (pt.y < 48 && pt.x < crc.right - 32) return HTCAPTION;
+            if (pt.y < 48 && pt.x < crc.right - 36) return HTCAPTION;
         }
         return hit;
     }
 
     case WM_DESTROY:
-        g_RemotePanelHwnd = NULL;
-        g_RemotePassEdit  = NULL;
-        g_RemotePortEdit  = NULL;
+        KillTimer(hwnd, 1);
+        g_RemotePanelHwnd    = NULL;
+        g_RemotePassEdit     = NULL;
+        g_RemotePortEdit     = NULL;
+        g_RemoteTimeoutEdit  = NULL;
         return 0;
     }
     return DefWindowProc(hwnd, msg, wp, lp);
@@ -1875,6 +2348,7 @@ void ShowRemoteAccessPanel(HWND owner) {
     g_RemoteToggleState = cfg.enabled || IsRemoteAccessEnabled();
     strncpy(g_RemotePassBuf, cfg.password, sizeof(g_RemotePassBuf) - 1);
     snprintf(g_RemotePortBuf, sizeof(g_RemotePortBuf), "%d", cfg.port);
+    snprintf(g_RemoteTimeoutBuf, sizeof(g_RemoteTimeoutBuf), "%d", cfg.inactivityTimeout);
 
     const char* cls = "ZPRemotePanel";
     static bool registered = false;
@@ -1889,7 +2363,7 @@ void ShowRemoteAccessPanel(HWND owner) {
         registered = true;
     }
 
-    int panelW = 330, panelH = 290;
+    int panelW = 340, panelH = 380;
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
 

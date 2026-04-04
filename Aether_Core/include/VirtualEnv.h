@@ -121,7 +121,51 @@ struct RemoteAccessConfig {
     bool     enabled;       // master toggle
     int      port;          // listening port (default 3390)
     char     password[64];  // 6-digit code or password for auth
+    bool     autoStartWithVE;   // auto-enable when VE starts
+    int      inactivityTimeout; // minutes, 0 = disabled
 };
+
+// ---------------------------------------------------------------------------
+//  Remote Access — Connection Monitoring
+// ---------------------------------------------------------------------------
+
+// Count active RDP sessions on the custom remote port
+int  GetRemoteConnectionCount();
+
+// ---------------------------------------------------------------------------
+//  Remote Access — Logging
+// ---------------------------------------------------------------------------
+
+// Append a line to C:\ProgramData\ZeroPoint\remote.log
+// Rotates at 50 KB. Thread-safe.
+void RemoteLog(const char* fmt, ...);
+
+// ---------------------------------------------------------------------------
+//  Remote Access — Inactivity Timer
+// ---------------------------------------------------------------------------
+
+void StartRemoteInactivityTimer(int minutes);
+void StopRemoteInactivityTimer();
+void ResetRemoteInactivityTimer();
+
+// ---------------------------------------------------------------------------
+//  Remote Access — Voice-to-Text
+// ---------------------------------------------------------------------------
+
+// Start Windows speech recognition, feed results into PerformAutoType
+void StartVoiceToText();
+void StopVoiceToText();
+bool IsVoiceToTextActive();
+
+// ---------------------------------------------------------------------------
+//  Remote Access — Clipboard Helper
+// ---------------------------------------------------------------------------
+
+// Get the local LAN IP address (first non-loopback IPv4)
+std::string GetLocalIPAddress();
+
+// Copy text to the Windows clipboard
+void CopyToClipboard(HWND owner, const std::string& text);
 
 // Enable remote access listener on the configured port.
 // Creates a secondary RDP listener bound to 0.0.0.0:<port>.

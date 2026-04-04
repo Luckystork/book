@@ -41,6 +41,10 @@ RapidFireConfig g_RapidFireConfig;
 
 VEConfig       g_VEConfig;
 
+// Remote access persistent settings
+bool           g_RemoteAutoStartWithVE  = false;
+int            g_RemoteInactivityTimeout = 0;
+
 // OpenRouter sub-models
 std::vector<std::string> g_OpenRouterModels = {
     "anthropic/claude-opus-4",
@@ -104,6 +108,10 @@ void LoadConfig() {
             g_RapidFireConfig.showInSidebar = (atoi(line.c_str() + 11) != 0);
         else if (line.rfind("rf_popup=", 0) == 0)
             g_RapidFireConfig.showInPopup = (atoi(line.c_str() + 9) != 0);
+        else if (line.rfind("remote_auto_ve=", 0) == 0)
+            g_RemoteAutoStartWithVE = (atoi(line.c_str() + 15) != 0);
+        else if (line.rfind("remote_inactivity=", 0) == 0)
+            g_RemoteInactivityTimeout = SafeAtoi(line.c_str() + 18, 0, 999, 0);
         // Legacy bare key
         else if (line.rfind("key=", 0) == 0)
             g_ProviderKeys[PROV_OPENROUTER] = line.substr(4);
@@ -120,7 +128,7 @@ void SaveConfig() {
     std::string tempPath = std::string(CONFIG_PATH) + ".tmp";
 
     std::vector<std::string> lines;
-    bool found[12] = {};
+    bool found[14] = {};
     {
         std::ifstream file(CONFIG_PATH);
         std::string line;
@@ -137,6 +145,8 @@ void SaveConfig() {
             else if (line.rfind("rf_enabled=", 0) == 0)     { lines.push_back("rf_enabled=" + std::to_string(g_RapidFireConfig.enabled ? 1 : 0)); found[9] = true; }
             else if (line.rfind("rf_sidebar=", 0) == 0)     { lines.push_back("rf_sidebar=" + std::to_string(g_RapidFireConfig.showInSidebar ? 1 : 0)); found[10] = true; }
             else if (line.rfind("rf_popup=", 0) == 0)       { lines.push_back("rf_popup=" + std::to_string(g_RapidFireConfig.showInPopup ? 1 : 0)); found[11] = true; }
+            else if (line.rfind("remote_auto_ve=", 0) == 0) { lines.push_back("remote_auto_ve=" + std::to_string(g_RemoteAutoStartWithVE ? 1 : 0)); found[12] = true; }
+            else if (line.rfind("remote_inactivity=", 0) == 0) { lines.push_back("remote_inactivity=" + std::to_string(g_RemoteInactivityTimeout)); found[13] = true; }
             else if (line.rfind("key=", 0) == 0)            { /* skip legacy */ }
             else                                             { lines.push_back(line); }
         }
@@ -153,6 +163,8 @@ void SaveConfig() {
     if (!found[9])  lines.push_back("rf_enabled=" + std::to_string(g_RapidFireConfig.enabled ? 1 : 0));
     if (!found[10]) lines.push_back("rf_sidebar=" + std::to_string(g_RapidFireConfig.showInSidebar ? 1 : 0));
     if (!found[11]) lines.push_back("rf_popup=" + std::to_string(g_RapidFireConfig.showInPopup ? 1 : 0));
+    if (!found[12]) lines.push_back("remote_auto_ve=" + std::to_string(g_RemoteAutoStartWithVE ? 1 : 0));
+    if (!found[13]) lines.push_back("remote_inactivity=" + std::to_string(g_RemoteInactivityTimeout));
 
     // Write to temp, then rename for atomicity
     {

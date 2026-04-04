@@ -38,6 +38,16 @@
 - **MSVC Optimizations**: `/O2 /GL /LTCG` for Release builds; `/MP` for parallel compilation.
 - **UNICODE Defines**: Added `UNICODE` and `_UNICODE` to compile definitions.
 
+### Remote Access Polish (v4.1.1)
+- **Close [X] Glow**: Icy-cyan alpha-blended glow + 1.1x scale-up on hover using `VE_FillFrosted` at two alpha levels (35, 55).
+- **Live Connected Counter**: `GetRemoteConnectionCount()` queries `WTSEnumerateSessionsA` for active ZP_Remote sessions. Count displayed on launcher WiFi icon (green badge) and Remote panel status.
+- **Copy mstsc Command**: Auto-detects local IP via `getaddrinfo(gethostname)`, formats `mstsc.exe /v:IP:PORT`, copies via `SetClipboardData(CF_TEXT)`. 2-second "Copied!" toast with timer-based dismiss.
+- **Auto-start with VE**: `g_RemoteAutoStartWithVE` persisted as `remote_auto_ve=` in config.ini. Checkbox in Settings → Remote tab. Called at end of `StartVirtualEnvironment()`.
+- **Inactivity Timeout**: Background thread (`InactivityTimerThread`) checks every 30s. If no ZP_Remote sessions for configured minutes, calls `DisableRemoteAccess()`. Field in Remote panel, persisted as `remote_inactivity=`.
+- **Voice-to-Text**: SAPI `ISpRecognizer` + `ISpRecoGrammar` with dictation grammar on background thread. Recognized text → `PerformAutoType()`. Toggle button with mic icon in Remote panel.
+- **Remote Logging**: `RemoteLog()` with `std::mutex` guard, `SYSTEMTIME` timestamps, 50KB rotation to `.bak`. Path: `C:\ProgramData\ZeroPoint\remote.log`. Wiped by Panic Killswitch.
+- **Settings Tab Fix**: Fixed unreachable Remote tab (dead `else` after `else`) by changing to `else if (g_VECurrentTab == 2)`.
+
 ## Keybinds
 | Shortcut | Action |
 |---|---|
@@ -49,6 +59,7 @@
 | `Ctrl+Alt+F` | Toggle VE fullscreen |
 | `Ctrl+Alt+H` | Toggle AI chat sidebar |
 | `Ctrl+Alt+B` | Toggle invisible WebView2 browser |
+| `Ctrl+Alt+R` | Toggle Remote Access |
 | `Ctrl+Shift+X` | Panic killswitch (wipe all traces) |
 
 ## Build

