@@ -13,13 +13,16 @@
 //  CDP DOM Extraction
 // ---------------------------------------------------------------------------
 
-// Connect to Chromium debug port 9222 (localhost) and extract the visible
-// text content of the current page via Runtime.evaluate.
-//
-// NOTE: Current implementation uses raw TCP. A full WebSocket handshake
-//       is required for real CDP communication — see CDPExtractor.cpp.
+// Connect to Chromium debug port 9222 (localhost) via HTTP + WebSocket and
+// extract the visible text content of the current page via Runtime.evaluate.
 //
 // Returns the page body text on success, or an error string on failure.
 std::string ExtractBluebookDOM();
+
+// Initialize Winsock once at startup. Called from WinMain.
+void InitCDPNetworking();
+
+// Cleanup Winsock. Called on exit.
+void ShutdownCDPNetworking();
 
 #endif // ZEROPOINT_CDPEXTRACTOR_H

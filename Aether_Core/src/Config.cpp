@@ -8,7 +8,7 @@
 //    C:\ProgramData\ZeroPoint\ve_config.ini   — Virtual Environment settings
 // ============================================================================
 
-#include "Config.h"
+#include "../include/Config.h"
 #include <windows.h>
 #include <fstream>
 #include <string>
@@ -56,8 +56,16 @@ std::string g_OpenRouterKey;
 std::vector<std::string> g_AvailableModels;
 int g_ActiveModelIndex = 0;
 
-static const std::string CONFIG_PATH    = "C:\\ProgramData\\ZeroPoint\\config.ini";
-static const std::string VE_CONFIG_PATH = "C:\\ProgramData\\ZeroPoint\\ve_config.ini";
+static const char* CONFIG_DIR     = "C:\\ProgramData\\ZeroPoint";
+static const char* CONFIG_PATH    = "C:\\ProgramData\\ZeroPoint\\config.ini";
+static const char* VE_CONFIG_PATH = "C:\\ProgramData\\ZeroPoint\\ve_config.ini";
+
+// Helper: safe string-to-int with bounds
+static int SafeAtoi(const char* s, int minVal, int maxVal, int defVal) {
+    int val = atoi(s);
+    if (val < minVal || val > maxVal) return defVal;
+    return val;
+}
 
 // ============================================================================
 //  Load / Save — main config (AI + UI)
@@ -72,8 +80,8 @@ void LoadConfig() {
         if (line.empty() || line[0] == '#' || line[0] == ';') continue;
 
         if (line.rfind("provider=", 0) == 0) {
-            int idx = atoi(line.c_str() + 9);
-            if (idx >= 0 && idx < PROV_COUNT) g_ActiveProvider = (Provider)idx;
+            int idx = SafeAtoi(line.c_str() + 9, 0, PROV_COUNT - 1, 0);
+            g_ActiveProvider = (Provider)idx;
         }
         else if (line.rfind("key_claude=", 0) == 0)     g_ProviderKeys[PROV_CLAUDE]     = line.substr(11);
         else if (line.rfind("key_grok=", 0) == 0)       g_ProviderKeys[PROV_GROK]       = line.substr(9);
@@ -81,31 +89,35 @@ void LoadConfig() {
         else if (line.rfind("key_deepseek=", 0) == 0)   g_ProviderKeys[PROV_DEEPSEEK]   = line.substr(13);
         else if (line.rfind("key_openrouter=", 0) == 0) g_ProviderKeys[PROV_OPENROUTER] = line.substr(15);
         else if (line.rfind("or_model=", 0) == 0) {
-            int idx = atoi(line.c_str() + 9);
-            if (idx >= 0 && idx < (int)g_OpenRouterModels.size()) g_OpenRouterModelIndex = idx;
+            int idx = SafeAtoi(line.c_str() + 9, 0, (int)g_OpenRouterModels.size() - 1, 0);
+            g_OpenRouterModelIndex = idx;
         }
         else if (line.rfind("mode=", 0) == 0) {
             int m = atoi(line.c_str() + 5);
             g_ScreenshotMode = (m == 1) ? MODE_ADD_TO_CHAT : MODE_AUTO_SEND;
         }
-        else if (line.rfind("popup=", 0) == 0) {
+        else if (line.rfind("popup=", 0) == 0)
             g_PopupEnabled = (atoi(line.c_str() + 6) != 0);
-        }
-        else if (line.rfind("rf_enabled=", 0) == 0) g_RapidFireConfig.enabled = (atoi(line.c_str() + 11) != 0);
-        else if (line.rfind("rf_sidebar=", 0) == 0) g_RapidFireConfig.showInSidebar = (atoi(line.c_str() + 11) != 0);
-        else if (line.rfind("rf_popup=", 0) == 0) g_RapidFireConfig.showInPopup = (atoi(line.c_str() + 9) != 0);
+        else if (line.rfind("rf_enabled=", 0) == 0)
+            g_RapidFireConfig.enabled = (atoi(line.c_str() + 11) != 0);
+        else if (line.rfind("rf_sidebar=", 0) == 0)
+            g_RapidFireConfig.showInSidebar = (atoi(line.c_str() + 11) != 0);
+        else if (line.rfind("rf_popup=", 0) == 0)
+            g_RapidFireConfig.showInPopup = (atoi(line.c_str() + 9) != 0);
         // Legacy bare key
-        else if (line.rfind("key=", 0) == 0) g_ProviderKeys[PROV_OPENROUTER] = line.substr(4);
+        else if (line.rfind("key=", 0) == 0)
+            g_ProviderKeys[PROV_OPENROUTER] = line.substr(4);
     }
 
     g_OpenRouterKey = g_ProviderKeys[PROV_OPENROUTER];
-
-    // Also load VE config
     LoadVEConfig();
 }
 
 void SaveConfig() {
-    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+    CreateDirectoryA(CONFIG_DIR, NULL);
+
+    // Write to temp file first, then rename (atomic save)
+    std::string tempPath = std::string(CONFIG_PATH) + ".tmp";
 
     std::vector<std::string> lines;
     bool found[12] = {};
@@ -129,20 +141,27 @@ void SaveConfig() {
             else                                             { lines.push_back(line); }
         }
     }
+
     if (!found[0]) lines.insert(lines.begin(), "provider=" + std::to_string((int)g_ActiveProvider));
     for (int i = 0; i < PROV_COUNT; i++) {
-        if (!found[i+1] && !g_ProviderKeys[i].empty())
+        if (!found[i + 1] && !g_ProviderKeys[i].empty())
             lines.push_back(std::string(g_Providers[i].configKey) + "=" + g_ProviderKeys[i]);
     }
-    if (!found[6]) lines.push_back("or_model=" + std::to_string(g_OpenRouterModelIndex));
-    if (!found[7]) lines.push_back("mode=" + std::to_string((int)g_ScreenshotMode));
-    if (!found[8]) lines.push_back("popup=" + std::to_string(g_PopupEnabled ? 1 : 0));
-    if (!found[9]) lines.push_back("rf_enabled=" + std::to_string(g_RapidFireConfig.enabled ? 1 : 0));
+    if (!found[6])  lines.push_back("or_model=" + std::to_string(g_OpenRouterModelIndex));
+    if (!found[7])  lines.push_back("mode=" + std::to_string((int)g_ScreenshotMode));
+    if (!found[8])  lines.push_back("popup=" + std::to_string(g_PopupEnabled ? 1 : 0));
+    if (!found[9])  lines.push_back("rf_enabled=" + std::to_string(g_RapidFireConfig.enabled ? 1 : 0));
     if (!found[10]) lines.push_back("rf_sidebar=" + std::to_string(g_RapidFireConfig.showInSidebar ? 1 : 0));
     if (!found[11]) lines.push_back("rf_popup=" + std::to_string(g_RapidFireConfig.showInPopup ? 1 : 0));
 
-    std::ofstream out(CONFIG_PATH);
-    for (const auto& l : lines) out << l << "\n";
+    // Write to temp, then rename for atomicity
+    {
+        std::ofstream out(tempPath);
+        if (!out.is_open()) return;
+        for (const auto& l : lines) out << l << "\n";
+    }
+    DeleteFileA(CONFIG_PATH);
+    MoveFileA(tempPath.c_str(), CONFIG_PATH);
 }
 
 // ============================================================================
@@ -170,20 +189,23 @@ void LoadVEConfig() {
         if (line.empty() || line[0] == '#') continue;
 
         // Display
-        if      (line.rfind("res_w=", 0) == 0)        g_VEConfig.display.resW = atoi(line.c_str() + 6);
-        else if (line.rfind("res_h=", 0) == 0)        g_VEConfig.display.resH = atoi(line.c_str() + 6);
-        else if (line.rfind("color_depth=", 0) == 0)   g_VEConfig.display.colorDepth = atoi(line.c_str() + 12);
+        if      (line.rfind("res_w=", 0) == 0)        g_VEConfig.display.resW = SafeAtoi(line.c_str() + 6, 640, 7680, 1280);
+        else if (line.rfind("res_h=", 0) == 0)        g_VEConfig.display.resH = SafeAtoi(line.c_str() + 6, 480, 4320, 720);
+        else if (line.rfind("color_depth=", 0) == 0)   g_VEConfig.display.colorDepth = SafeAtoi(line.c_str() + 12, 15, 32, 32);
         else if (line.rfind("multi_monitor=", 0) == 0)  g_VEConfig.display.multiMonitor = (atoi(line.c_str() + 14) != 0);
         else if (line.rfind("fullscreen=", 0) == 0)    g_VEConfig.display.fullScreen = (atoi(line.c_str() + 11) != 0);
         // Audio
-        else if (line.rfind("audio_mode=", 0) == 0)    g_VEConfig.audioMode = (VEAudioMode)atoi(line.c_str() + 11);
+        else if (line.rfind("audio_mode=", 0) == 0) {
+            int mode = SafeAtoi(line.c_str() + 11, 0, 1, 0);
+            g_VEConfig.audioMode = (VEAudioMode)mode;
+        }
         // Resources
         else if (line.rfind("clipboard=", 0) == 0)     g_VEConfig.resources.clipboard = (atoi(line.c_str() + 10) != 0);
         else if (line.rfind("local_drives=", 0) == 0)   g_VEConfig.resources.localDrives = (atoi(line.c_str() + 13) != 0);
         else if (line.rfind("printers=", 0) == 0)      g_VEConfig.resources.printers = (atoi(line.c_str() + 9) != 0);
         else if (line.rfind("font_smooth=", 0) == 0)    g_VEConfig.resources.fontSmoothing = (atoi(line.c_str() + 12) != 0);
         else if (line.rfind("desktop_comp=", 0) == 0)   g_VEConfig.resources.desktopCompo = (atoi(line.c_str() + 13) != 0);
-        else if (line.rfind("conn_quality=", 0) == 0)   g_VEConfig.resources.connectionQual = atoi(line.c_str() + 13);
+        else if (line.rfind("conn_quality=", 0) == 0)   g_VEConfig.resources.connectionQual = SafeAtoi(line.c_str() + 13, 0, 4, 4);
         // Interception
         else if (line.rfind("custom_target=", 0) == 0)  g_VEConfig.interception.customTarget = line.substr(14);
         // Wallpaper
@@ -192,30 +214,25 @@ void LoadVEConfig() {
 }
 
 void SaveVEConfig() {
-    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+    CreateDirectoryA(CONFIG_DIR, NULL);
 
     std::ofstream out(VE_CONFIG_PATH);
     if (!out.is_open()) return;
 
     out << "# ZeroPoint Virtual Environment Config\n";
-    // Display
     out << "res_w=" << g_VEConfig.display.resW << "\n";
     out << "res_h=" << g_VEConfig.display.resH << "\n";
     out << "color_depth=" << g_VEConfig.display.colorDepth << "\n";
     out << "multi_monitor=" << (g_VEConfig.display.multiMonitor ? 1 : 0) << "\n";
     out << "fullscreen=" << (g_VEConfig.display.fullScreen ? 1 : 0) << "\n";
-    // Audio
     out << "audio_mode=" << (int)g_VEConfig.audioMode << "\n";
-    // Resources
     out << "clipboard=" << (g_VEConfig.resources.clipboard ? 1 : 0) << "\n";
     out << "local_drives=" << (g_VEConfig.resources.localDrives ? 1 : 0) << "\n";
     out << "printers=" << (g_VEConfig.resources.printers ? 1 : 0) << "\n";
     out << "font_smooth=" << (g_VEConfig.resources.fontSmoothing ? 1 : 0) << "\n";
     out << "desktop_comp=" << (g_VEConfig.resources.desktopCompo ? 1 : 0) << "\n";
     out << "conn_quality=" << g_VEConfig.resources.connectionQual << "\n";
-    // Interception
     out << "custom_target=" << g_VEConfig.interception.customTarget << "\n";
-    // Wallpaper
     out << "wallpaper=" << g_VEConfig.wallpaperPath << "\n";
 }
 

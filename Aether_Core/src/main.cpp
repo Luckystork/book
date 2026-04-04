@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility  (v3.0)
+//  ZeroPoint — Premium Windows Utility  (v4.0)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
 //             browser, screenshot + vision AI, sidebar with settings,
 //             browser thumbnail panel, multi-provider, custom themes
@@ -29,6 +29,7 @@
 #include <shlobj.h>
 #include <string>
 #include <vector>
+#include <deque>
 #include <fstream>
 #include <sstream>
 #include <algorithm>
@@ -162,29 +163,33 @@ static HFONT CreateAppFont(int size, int weight = FW_NORMAL) {
 
 // Alpha-blended fill — premultiplied alpha for true translucency
 static void FillFrosted(HDC hdc, const RECT& rc, COLORREF base, BYTE alpha) {
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+
     HDC mem = CreateCompatibleDC(hdc);
     BITMAPINFO bi = {};
     bi.bmiHeader.biSize        = sizeof(bi.bmiHeader);
-    bi.bmiHeader.biWidth       = rc.right - rc.left;
-    bi.bmiHeader.biHeight      = rc.bottom - rc.top;
+    bi.bmiHeader.biWidth       = w;
+    bi.bmiHeader.biHeight      = h;
     bi.bmiHeader.biPlanes      = 1;
     bi.bmiHeader.biBitCount    = 32;
     bi.bmiHeader.biCompression = BI_RGB;
     void* bits = nullptr;
     HBITMAP bmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!bmp || !bits) { DeleteDC(mem); return; }
     HGDIOBJ old = SelectObject(mem, bmp);
 
     BYTE r = (BYTE)((GetRValue(base) * alpha) / 255);
     BYTE g = (BYTE)((GetGValue(base) * alpha) / 255);
     BYTE b = (BYTE)((GetBValue(base) * alpha) / 255);
-    int pixels = bi.bmiHeader.biWidth * bi.bmiHeader.biHeight;
+    int pixels = w * h;
     DWORD* px = (DWORD*)bits;
     DWORD val = (alpha << 24) | (r << 16) | (g << 8) | b;
     for (int i = 0; i < pixels; i++) px[i] = val;
 
     BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-    AlphaBlend(hdc, rc.left, rc.top, bi.bmiHeader.biWidth, bi.bmiHeader.biHeight,
-               mem, 0, 0, bi.bmiHeader.biWidth, bi.bmiHeader.biHeight, bf);
+    AlphaBlend(hdc, rc.left, rc.top, w, h, mem, 0, 0, w, h, bf);
 
     SelectObject(mem, old);
     DeleteObject(bmp);
@@ -349,9 +354,12 @@ static std::string HttpsPost(const std::wstring& host, const std::wstring& path,
 
     HINTERNET hConnect = WinHttpConnect(hSession, host.c_str(),
         INTERNET_DEFAULT_HTTPS_PORT, 0);
+    if (!hConnect) { WinHttpCloseHandle(hSession); return "[ERROR] HTTP connect failed"; }
+
     HINTERNET hRequest = WinHttpOpenRequest(hConnect, L"POST", path.c_str(),
         NULL, WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
         WINHTTP_FLAG_SECURE);
+    if (!hRequest) { WinHttpCloseHandle(hConnect); WinHttpCloseHandle(hSession); return "[ERROR] HTTP request setup failed"; }
 
     BOOL ok = WinHttpSendRequest(hRequest,
         headers.c_str(), (DWORD)headers.length(),
@@ -365,7 +373,12 @@ static std::string HttpsPost(const std::wstring& host, const std::wstring& path,
         return "[ERROR] HTTP request failed (check network)";
     }
 
-    WinHttpReceiveResponse(hRequest, NULL);
+    if (!WinHttpReceiveResponse(hRequest, NULL)) {
+        WinHttpCloseHandle(hRequest);
+        WinHttpCloseHandle(hConnect);
+        WinHttpCloseHandle(hSession);
+        return "[ERROR] No response from server";
+    }
 
     std::string resp;
     char buffer[8192];
@@ -463,8 +476,9 @@ std::string CallAI(const std::string& question) {
 //  invisible to this capture — only the exam app is captured.
 
 static const std::string SCREENSHOT_DIR = "C:\\ProgramData\\ZeroPoint\\screenshots\\";
-static std::vector<std::string> g_ScreenshotHistory;   // file paths of saved PNGs
+static std::deque<std::string> g_ScreenshotHistory;   // file paths of saved PNGs
 static const int MAX_SCREENSHOTS = 10;
+static int g_HoveredThumb = -1;  // thumbnail index under cursor (for highlight)
 
 // Capture the foreground window to an HBITMAP
 static HBITMAP CaptureScreenshotBitmap(int& outW, int& outH) {
@@ -480,11 +494,12 @@ static HBITMAP CaptureScreenshotBitmap(int& outW, int& outH) {
     HDC screenDC = GetDC(fg);
     HDC memDC = CreateCompatibleDC(screenDC);
     HBITMAP bmp = CreateCompatibleBitmap(screenDC, outW, outH);
-    SelectObject(memDC, bmp);
+    HGDIOBJ oldBmp = SelectObject(memDC, bmp);
 
     // PrintWindow captures even if partially occluded
     PrintWindow(fg, memDC, PW_CLIENTONLY);
 
+    SelectObject(memDC, oldBmp);  // restore before deleting DC
     DeleteDC(memDC);
     ReleaseDC(fg, screenDC);
     return bmp;
@@ -586,7 +601,7 @@ static std::string SaveScreenshotToFile(HBITMAP hBitmap) {
     g_ScreenshotHistory.push_back(path);
     while ((int)g_ScreenshotHistory.size() > MAX_SCREENSHOTS) {
         DeleteFileA(g_ScreenshotHistory.front().c_str());
-        g_ScreenshotHistory.erase(g_ScreenshotHistory.begin());
+        g_ScreenshotHistory.pop_front();
     }
 
     return path;
@@ -758,10 +773,12 @@ static void CreateBrowserWindow() {
     SetLayeredWindowAttributes(g_BrowserHwnd, 0, g_WindowAlpha, LWA_ALPHA);
 
     // Hide from screen recording (WDA_EXCLUDEFROMCAPTURE = 0x11)
-    typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
-    PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
-        GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
-    if (pSWDA) pSWDA(g_BrowserHwnd, 0x00000011);
+    {
+        typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
+        static PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
+            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+        if (pSWDA) pSWDA(g_BrowserHwnd, 0x00000011);
+    }
 
     // URL bar spans the webview area (not the thumbnail panel)
     int urlW = w - BROWSER_PANEL_W;  // URL bar width excludes panel
@@ -1006,10 +1023,11 @@ class ZPDataObject : public IDataObject {
     FORMATETC   m_fmt;
     STGMEDIUM   m_stg;
     bool        m_hasData;
+    bool        m_dataConsumed; // true after DoDragDrop takes ownership
     HBITMAP     m_hThumb;       // thumbnail bitmap for IDragSourceHelper
 
 public:
-    ZPDataObject(const std::string& filePath) : m_refCount(1), m_hasData(false), m_hThumb(NULL) {
+    ZPDataObject(const std::string& filePath) : m_refCount(1), m_hasData(false), m_dataConsumed(false), m_hThumb(NULL) {
         // Build a DROPFILES structure containing the file path (wide/Unicode)
         // DROPFILES is the standard shell format for drag-and-drop files.
         // We use fWide=TRUE so WebView2 and modern shell targets get proper Unicode paths.
@@ -1046,11 +1064,14 @@ public:
     }
 
     ~ZPDataObject() {
-        if (m_hasData && m_stg.hGlobal) {
+        if (m_hasData && m_stg.hGlobal && !m_dataConsumed) {
             GlobalFree(m_stg.hGlobal);
         }
         if (m_hThumb) DeleteObject(m_hThumb);
     }
+
+    // Mark data as consumed by DoDragDrop (caller relinquished ownership)
+    void MarkConsumed() { m_dataConsumed = true; }
 
     // Store a thumbnail bitmap for IDragSourceHelper to use as drag image
     void SetThumbnail(HBITMAP hBmp) { m_hThumb = hBmp; }
@@ -1203,6 +1224,10 @@ static void BeginThumbnailDragDrop(const std::string& filePath) {
         &dwEffect
     );
 
+    // Mark data consumed if drop succeeded (prevents double-free)
+    if (hr == DRAGDROP_S_DROP && dwEffect != DROPEFFECT_NONE)
+        pDataObj->MarkConsumed();
+
     // If drag was cancelled or drop target didn't accept,
     // fall back to clipboard copy so the user can Ctrl+V
     if (hr == DRAGDROP_S_CANCEL || dwEffect == DROPEFFECT_NONE) {
@@ -1244,7 +1269,7 @@ static void BeginThumbnailDragDrop(const std::string& filePath) {
 static bool  g_DragPending   = false;    // LMB is down in thumbnail area
 static int   g_DragIndex     = -1;       // which screenshot index is being dragged
 static POINT g_DragStartPt   = { 0, 0 }; // mousedown position (client coords)
-static int   g_HoveredThumb  = -1;       // thumbnail index under the cursor (for highlight)
+// g_HoveredThumb declared earlier (near g_ScreenshotHistory)
 
 // Helper: determine which thumbnail index is at a given Y position
 static int HitTestThumbnail(int mouseY) {
@@ -1293,8 +1318,7 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_COMMAND:
-        if (LOWORD(wp) == ID_URL_GO ||
-            (LOWORD(wp) == ID_URL_EDIT && HIWORD(wp) == EN_KILLFOCUS)) {
+        if (LOWORD(wp) == ID_URL_GO) {
             BrowserNavigate();
         }
         return 0;
@@ -1580,13 +1604,17 @@ static LRESULT CALLBACK AlphaDialogProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM l
 
 static void ShowAlphaPicker(HWND owner) {
     const char* cls = "ZPAlphaPicker";
-    WNDCLASSA wc = {};
-    wc.lpfnWndProc   = AlphaDialogProc;
-    wc.hInstance      = GetModuleHandle(NULL);
-    wc.lpszClassName  = cls;
-    wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
-    wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
-    RegisterClassA(&wc);
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = AlphaDialogProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = cls;
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        wc.hbrBackground  = (HBRUSH)(COLOR_WINDOW + 1);
+        RegisterClassA(&wc);
+        registered = true;
+    }
 
     RECT ownerRc;
     GetWindowRect(owner, &ownerRc);
@@ -1607,7 +1635,6 @@ static void ShowAlphaPicker(HWND owner) {
         TranslateMessage(&msg);
         DispatchMessage(&msg);
     }
-    UnregisterClassA(cls, GetModuleHandle(NULL));
 }
 
 
@@ -1777,7 +1804,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
     }
 
     case WM_MOUSEMOVE: {
-        int mx = LOWORD(lp), my = HIWORD(lp);
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
         int prev = g_HoveredBtn;
         g_HoveredBtn = 0;
 
@@ -2161,7 +2188,7 @@ static void ShowSettingsPopover(HWND owner);
 static void SidebarTakeScreenshot(HWND hwnd) {
     // Hide sidebar briefly to avoid capturing ourselves
     ShowWindow(hwnd, SW_HIDE);
-    Sleep(100);  // Let the window fully hide
+    Sleep(50);  // Brief settle for hide animation
 
     int ssX = 0, ssY = 0, ssW = 0, ssH = 0;
     HBITMAP hBitmap = SnipRegionCapture(ssX, ssY, ssW, ssH);
@@ -2328,74 +2355,79 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         DrawAccentLine(memDC, 14, 34, w - 28);
 
-        // (Screenshot button at y=42 is a native control)
+        // Layout: Snip@42, TypeAnswer@80, Dropdown@120, KeyBtn+Gear@150
+        // (native controls above — paint only the chrome around them)
 
-        // ---- Divider ----
-        DrawAccentLine(memDC, 14, 78, w - 28);
+        // ---- Divider below Type Answer button ----
+        DrawAccentLine(memDC, 14, 114, w - 28);
 
         // ---- "PROVIDER" label ----
         HFONT labelFont = CreateAppFont(10, FW_SEMIBOLD);
-        SelectObject(memDC, labelFont);
+        HGDIOBJ oldLblF = SelectObject(memDC, labelFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT provLabel = { 14, 82, w - 10, 94 };
+        RECT provLabel = { 14, 116, w - 10, 128 };
         DrawTextA(memDC, "PROVIDER", -1, &provLabel, DT_LEFT | DT_SINGLELINE);
+        SelectObject(memDC, oldLblF);
         DeleteObject(labelFont);
 
-        // (Combo at y=94, key btn at y=124, gear at y=124 are native controls)
-
-        // ---- Divider ----
-        DrawAccentLine(memDC, 14, 156, w - 28);
+        // ---- Divider below Key/Gear buttons ----
+        DrawAccentLine(memDC, 14, 180, w - 28);
 
         // ---- Key status ----
         HFONT statusFont = CreateAppFont(10, FW_SEMIBOLD);
-        SelectObject(memDC, statusFont);
+        HGDIOBJ oldStatF = SelectObject(memDC, statusFont);
         bool hasKey = !GetProviderKey(GetActiveProvider()).empty();
         SetTextColor(memDC, hasKey ? RGB(0x22, 0xDD, 0x66) : RGB(0xFF, 0x44, 0x44));
         std::string keyStatus = hasKey ? "API Key: Configured" : "API Key: Not Set";
-        RECT keyRc = { 14, 162, w - 10, 176 };
+        RECT keyRc = { 14, 184, w - 10, 198 };
         DrawTextA(memDC, keyStatus.c_str(), -1, &keyRc, DT_LEFT | DT_SINGLELINE);
+        SelectObject(memDC, oldStatF);
         DeleteObject(statusFont);
 
         // ---- Mode indicator ----
         HFONT modeFont = CreateAppFont(10, FW_NORMAL);
-        SelectObject(memDC, modeFont);
+        HGDIOBJ oldModF = SelectObject(memDC, modeFont);
         SetTextColor(memDC, g_TextSecondary);
         std::string modeLine = std::string("Mode: ") +
             (g_ScreenshotMode == MODE_AUTO_SEND ? "Auto-Send" : "Add to Chat");
-        RECT modeRc = { 14, 180, w - 10, 194 };
+        RECT modeRc = { 14, 200, w - 10, 214 };
         DrawTextA(memDC, modeLine.c_str(), -1, &modeRc, DT_LEFT | DT_SINGLELINE);
+        SelectObject(memDC, oldModF);
         DeleteObject(modeFont);
 
         // ---- Active provider ----
         HFONT activeFont = CreateAppFont(10, FW_NORMAL);
-        SelectObject(memDC, activeFont);
+        HGDIOBJ oldActF = SelectObject(memDC, activeFont);
         SetTextColor(memDC, g_TextSecondary);
         std::string activeLine = "Active: " + GetActiveProviderName();
-        RECT activeLblRc = { 14, 196, w - 10, 210 };
+        RECT activeLblRc = { 14, 216, w - 10, 230 };
         DrawTextA(memDC, activeLine.c_str(), -1, &activeLblRc,
                   DT_LEFT | DT_SINGLELINE);
+        SelectObject(memDC, oldActF);
         DeleteObject(activeFont);
 
         // ---- Divider ----
-        DrawAccentLine(memDC, 14, 216, w - 28);
+        DrawAccentLine(memDC, 14, 234, w - 28);
 
         // ---- Answer/Scratchpad header ----
         HFONT hdrFont = CreateAppFont(10, FW_SEMIBOLD);
-        SelectObject(memDC, hdrFont);
+        HGDIOBJ oldHdrF = SelectObject(memDC, hdrFont);
         SetTextColor(memDC, g_AccentColor);
         const char* hdrText = (g_ScreenshotMode == MODE_ADD_TO_CHAT) ?
                               "SCRATCHPAD" : "LAST ANSWER";
-        RECT hdrRc = { 14, 222, w - 10, 236 };
+        RECT hdrRc = { 14, 238, w - 10, 252 };
         DrawTextA(memDC, hdrText, -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
+        SelectObject(memDC, oldHdrF);
         DeleteObject(hdrFont);
 
         // ---- Answer text ----
         HFONT textFont = CreateAppFont(11, FW_NORMAL);
-        SelectObject(memDC, textFont);
+        HGDIOBJ oldTxtF = SelectObject(memDC, textFont);
         SetTextColor(memDC, g_TextPrimary);
-        RECT textRc = { 14, 240, w - 10, h - 24 };
+        RECT textRc = { 14, 256, w - 10, h - 24 };
         DrawTextA(memDC, g_LastAnswer.c_str(), -1, &textRc,
                   DT_LEFT | DT_WORDBREAK);
+        SelectObject(memDC, oldTxtF);
         DeleteObject(textFont);
 
         // ---- Dismiss hint ----
@@ -2670,10 +2702,12 @@ static void ToggleFullMenu() {
         SetLayeredWindowAttributes(g_MenuHwnd, 0, g_WindowAlpha, LWA_ALPHA);
 
         // Hide from screen recording
-        typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
-        PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
-            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
-        if (pSWDA) pSWDA(g_MenuHwnd, 0x00000011);
+        {
+            typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
+            static PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
+                GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+            if (pSWDA) pSWDA(g_MenuHwnd, 0x00000011);
+        }
     }
 
     // Sync the dropdown with current provider when showing
@@ -2689,14 +2723,14 @@ static void ToggleFullMenu() {
 //  Entry Point
 // ============================================================================
 
-static const char* ZEROPOINT_VERSION = "v4.0.0";
+static const char* ZEROPOINT_VERSION = "v4.1.0";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Initialize GDI+ for screenshot PNG encoding
     Gdiplus::GdiplusStartupInput gdiplusStartupInput;
     Gdiplus::GdiplusStartup(&g_GdiplusToken, &gdiplusStartupInput, NULL);
 
-    // Initialize OLE for drag-and-drop support
+    // OleInitialize handles COM init (COINIT_APARTMENTTHREADED) + OLE/drag-drop
     OleInitialize(NULL);
 
     // Initialize common controls (combo box + trackbar)
@@ -2704,8 +2738,8 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         ICC_STANDARD_CLASSES | ICC_BAR_CLASSES };
     InitCommonControlsEx(&icc);
 
-    // Initialize COM for WebView2
-    CoInitializeEx(NULL, COINIT_APARTMENTTHREADED);
+    // Initialize Winsock for CDP extraction
+    InitCDPNetworking();
 
     LoadConfig();
     LoadThemeSettings();
@@ -2722,9 +2756,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     int action = ShowLauncher();
 
     if (action == 0) {
+        ShutdownCDPNetworking();
         Gdiplus::GdiplusShutdown(g_GdiplusToken);
         OleUninitialize();
-        CoUninitialize();
         return 0;
     }
 
@@ -2737,9 +2771,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             "Check that ZeroPointPayload.exe exists in:\n"
             "C:\\ProgramData\\ZeroPoint\\",
             "ZeroPoint", MB_OK | MB_ICONERROR);
+        ShutdownCDPNetworking();
         Gdiplus::GdiplusShutdown(g_GdiplusToken);
         OleUninitialize();
-        CoUninitialize();
         return 1;
     }
 
@@ -3021,11 +3055,14 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
             keyX = false;
         }
 
-        Sleep(10);
+        // Efficient wait: yield CPU until messages arrive or 16ms elapses (~60Hz poll)
+        MsgWaitForMultipleObjects(0, NULL, FALSE, 16, QS_ALLINPUT);
     }
 
+    // Clean shutdown
+    StopVirtualEnvironment();
+    ShutdownCDPNetworking();
     Gdiplus::GdiplusShutdown(g_GdiplusToken);
     OleUninitialize();
-    CoUninitialize();
     return 0;
 }

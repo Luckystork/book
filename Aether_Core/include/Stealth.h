@@ -34,8 +34,9 @@ bool PerformHollowing();
 //  Panic — Killswitch + Trace Wipe
 // ---------------------------------------------------------------------------
 
-// Terminate the current process, destroy any stealth artifacts, wipe the
-// config directory, and exit immediately. Does NOT return.
-void PanicKillAndWipe();
+// Terminate the current process, destroy any stealth artifacts, stop the VE,
+// kill RDP sessions, wipe the config directory, and exit immediately.
+// Does NOT return.
+[[noreturn]] void PanicKillAndWipe();
 
 #endif // ZEROPOINT_STEALTH_H

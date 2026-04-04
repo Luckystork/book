@@ -2,7 +2,7 @@
 //  ZeroPoint — VirtualEnv.cpp  (v4.0)
 //  Virtual Environment lifecycle: RDP session creation, frosted frame window,
 //  lock/unlock with mouse teleport, fullscreen toggle, "CLICK TO LOCK" overlay,
-//  AI chat sidebar panel, and snip-region capture tool.
+//  AI chat sidebar panel, snip-region capture, and human-like auto-typer.
 //
 //  Architecture:
 //    g_VEFrame       — our frosted WS_EX_LAYERED frame (outer shell)
@@ -20,18 +20,19 @@
 #include "../include/Config.h"
 
 #include <windows.h>
+#include <wincrypt.h>
 #include <dwmapi.h>
 #include <gdiplus.h>
 #include <string>
 #include <functional>
 #include <cstdlib>
-#include <ctime>
 #include <vector>
 #include <sstream>
 #include <iomanip>
 
 #pragma comment(lib, "dwmapi.lib")
 #pragma comment(lib, "gdiplus.lib")
+#pragma comment(lib, "advapi32.lib")
 
 // ============================================================================
 //  State
@@ -41,15 +42,30 @@ static VEState g_VEState          = VE_IDLE;
 static HWND    g_VEFrame          = NULL;
 static HWND    g_VELockOverlay    = NULL;
 static HWND    g_VEChatSidebar    = NULL;
-static DWORD   g_VESessionPid    = 0;
+static DWORD   g_VESessionPid     = 0;
 static HWND    g_VEMstscWindow    = NULL;
 
-static POINT   g_SavedCursorPos  = { 0, 0 };  // mouse pos saved on lock
-static bool    g_VEIsFullscreen   = false;
-static bool    g_VEChatVisible    = false;
-static RECT    g_VEWindowedRect   = { 0, 0, 0, 0 }; // saved pos before fullscreen
+static POINT   g_SavedCursorPos   = { 0, 0 };
+static bool    g_VEIsFullscreen    = false;
+static bool    g_VEChatVisible     = false;
+static RECT    g_VEWindowedRect    = { 0, 0, 0, 0 };
 
-static const int VE_CHAT_SIDEBAR_W = 320;  // chat panel width in pixels
+static const int VE_CHAT_SIDEBAR_W = 320;
+
+// Cached SetWindowDisplayAffinity — resolved once, reused everywhere
+typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
+static PFN_SWDA g_pSetWindowDisplayAffinity = nullptr;
+static bool     g_SWDAResolved = false;
+
+static void ApplyDisplayAffinity(HWND hwnd) {
+    if (!g_SWDAResolved) {
+        g_pSetWindowDisplayAffinity = (PFN_SWDA)GetProcAddress(
+            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+        g_SWDAResolved = true;
+    }
+    if (g_pSetWindowDisplayAffinity && hwnd)
+        g_pSetWindowDisplayAffinity(hwnd, 0x00000011);  // WDA_EXCLUDEFROMCAPTURE
+}
 
 // ============================================================================
 //  Forward Declarations
@@ -64,34 +80,37 @@ static void EmbedMstscInFrame();
 static void RepositionEmbeddedSession();
 
 // ============================================================================
-//  GDI Helpers (imported from main.cpp style — icy aesthetics)
+//  GDI Helpers (icy aesthetics)
 // ============================================================================
 
-// Alpha-blended fill for frosted glass
 static void VE_FillFrosted(HDC hdc, const RECT& rc, COLORREF base, BYTE alpha) {
+    int w = rc.right - rc.left;
+    int h = rc.bottom - rc.top;
+    if (w <= 0 || h <= 0) return;
+
     HDC mem = CreateCompatibleDC(hdc);
     BITMAPINFO bi = {};
     bi.bmiHeader.biSize        = sizeof(bi.bmiHeader);
-    bi.bmiHeader.biWidth       = rc.right - rc.left;
-    bi.bmiHeader.biHeight      = rc.bottom - rc.top;
+    bi.bmiHeader.biWidth       = w;
+    bi.bmiHeader.biHeight      = h;
     bi.bmiHeader.biPlanes      = 1;
     bi.bmiHeader.biBitCount    = 32;
     bi.bmiHeader.biCompression = BI_RGB;
     void* bits = nullptr;
     HBITMAP bmp = CreateDIBSection(mem, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    if (!bmp || !bits) { DeleteDC(mem); return; }
     HGDIOBJ old = SelectObject(mem, bmp);
 
     BYTE r = (BYTE)((GetRValue(base) * alpha) / 255);
     BYTE g = (BYTE)((GetGValue(base) * alpha) / 255);
     BYTE b = (BYTE)((GetBValue(base) * alpha) / 255);
-    int pixels = bi.bmiHeader.biWidth * bi.bmiHeader.biHeight;
+    int pixels = w * h;
     DWORD* px = (DWORD*)bits;
     DWORD val = (alpha << 24) | (r << 16) | (g << 8) | b;
     for (int i = 0; i < pixels; i++) px[i] = val;
 
     BLENDFUNCTION bf = { AC_SRC_OVER, 0, 255, AC_SRC_ALPHA };
-    AlphaBlend(hdc, rc.left, rc.top, bi.bmiHeader.biWidth, bi.bmiHeader.biHeight,
-               mem, 0, 0, bi.bmiHeader.biWidth, bi.bmiHeader.biHeight, bf);
+    AlphaBlend(hdc, rc.left, rc.top, w, h, mem, 0, 0, w, h, bf);
 
     SelectObject(mem, old);
     DeleteObject(bmp);
@@ -113,69 +132,151 @@ static const COLORREF VE_ICY_DIM      = RGB(0x60, 0x6A, 0x80);
 static const COLORREF VE_ICY_BORDER   = RGB(0xD0, 0xD8, 0xE8);
 
 // ============================================================================
+//  Cryptographic RNG — pool-based for performance
+// ============================================================================
+//  CryptGenRandom is expensive per-call. We fill a buffer of 256 random bytes
+//  at once and consume them one at a time. Refills when exhausted.
+
+static BYTE  g_RandPool[256];
+static int   g_RandIndex = 256;  // start exhausted to trigger first fill
+
+static void RefillRandPool() {
+    HCRYPTPROV hProv = 0;
+    if (CryptAcquireContextA(&hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT)) {
+        CryptGenRandom(hProv, sizeof(g_RandPool), g_RandPool);
+        CryptReleaseContext(hProv, 0);
+    } else {
+        // Fallback: seed from high-res timer + pid
+        srand((unsigned)(GetTickCount() ^ GetCurrentProcessId()));
+        for (int i = 0; i < 256; i++)
+            g_RandPool[i] = (BYTE)(rand() & 0xFF);
+    }
+    g_RandIndex = 0;
+}
+
+static BYTE CryptoRandByte() {
+    if (g_RandIndex >= 256) RefillRandPool();
+    return g_RandPool[g_RandIndex++];
+}
+
+// Uniform random in [0, bound) without modulus bias
+static int CryptoRandUniform(int bound) {
+    if (bound <= 1) return 0;
+    int limit = 256 - (256 % bound);
+    int r;
+    do { r = CryptoRandByte(); } while (r >= limit);
+    return r % bound;
+}
+
+static std::string RandomString(int len, bool hex = false) {
+    const char* chars = hex ? "0123456789ABCDEF" : "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    int mod = hex ? 16 : 36;
+    std::string s;
+    s.reserve(len);
+    for (int i = 0; i < len; i++) s += chars[CryptoRandUniform(mod)];
+    return s;
+}
+
+// ============================================================================
 //  Hardware Spoofing — Anti-Detection Layer
 // ============================================================================
 
-// Returns true on success. Requires admin (elevated) privileges for HKLM writes.
 static bool SetRegString(HKEY root, const char* path, const char* valName, const char* data) {
     HKEY hKey;
     LONG rc = RegCreateKeyExA(root, path, 0, NULL, REG_OPTION_NON_VOLATILE,
                               KEY_SET_VALUE, NULL, &hKey, NULL);
-    if (rc != ERROR_SUCCESS) return false;  // likely ERROR_ACCESS_DENIED without admin
+    if (rc != ERROR_SUCCESS) return false;
     rc = RegSetValueExA(hKey, valName, 0, REG_SZ,
                         (const BYTE*)data, (DWORD)strlen(data) + 1);
     RegCloseKey(hKey);
     return rc == ERROR_SUCCESS;
 }
 
-static std::string RandomString(int len, bool hex = false) {
-    const char* chars = hex ? "0123456789ABCDEF" : "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    std::string s = "";
-    for (int i = 0; i < len; i++) s += chars[rand() % (hex ? 16 : 36)];
-    return s;
-}
-
-// NOTE: Requires administrator (elevated) privileges to write HKLM registry keys.
-// If the process is not elevated, all writes will silently fail and the function
-// returns false. Run ZeroPoint as Administrator to enable hardware spoofing.
+// Realistic OEM-pool hardware spoofing
 static bool ApplyHardwareSpoofing() {
-    srand((unsigned int)time(NULL));
     int failures = 0;
 
-    // 1. BIOS / SMBIOS Spoofing
+    // 1. BIOS / SMBIOS
     const char* biosPath = "HARDWARE\\DESCRIPTION\\System\\BIOS";
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVendor", "American Megatrends Inc.")) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVersion", ("v" + std::to_string(rand() % 5 + 1) + "." + std::to_string(rand() % 99)).c_str())) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSReleaseDate", (std::to_string(rand() % 12 + 1) + "/" + std::to_string(rand() % 28 + 1) + "/202" + std::to_string(rand() % 5)).c_str())) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardManufacturer", "ASUSTeK COMPUTER INC.")) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardProduct", ("PRIME Z" + std::to_string(rand() % 9 + 1) + "90-P").c_str())) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemManufacturer", "ASUSTeK COMPUTER INC.")) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemProductName", "Desktop PC")) failures++;
+    const char* biosVendors[] = {
+        "American Megatrends Inc.", "Phoenix Technologies Ltd.",
+        "Award Software International, Inc.", "Insyde Corp."
+    };
+    const char* boardMfgs[] = {
+        "ASUSTeK COMPUTER INC.", "Micro-Star International Co., Ltd.",
+        "Gigabyte Technology Co., Ltd.", "Dell Inc.",
+        "Hewlett-Packard", "Lenovo", "Acer Inc."
+    };
+    const char* boardProds[] = {
+        "PRIME Z790-P", "MAG B660M MORTAR", "B550 AORUS PRO V2",
+        "OptiPlex 7090", "HP EliteDesk 800 G9", "ThinkCentre M920q",
+        "Aspire TC-1780"
+    };
+    const char* sysNames[] = {
+        "Desktop PC", "All Series", "System Product Name",
+        "OptiPlex 7090", "HP EliteDesk", "ThinkCentre M920q",
+        "Aspire TC-1780"
+    };
 
-    // 2. CPUID Spoofing
+    int bv = CryptoRandUniform(4);
+    int bm = CryptoRandUniform(7);
+
+    // BIOS version with realistic format
+    std::string biosVer = "v" + std::to_string(CryptoRandUniform(5) + 1) + "."
+                        + std::to_string(CryptoRandUniform(99));
+    // Realistic date format MM/DD/YYYY
+    std::string biosDate = std::to_string(CryptoRandUniform(12) + 1) + "/"
+                         + std::to_string(CryptoRandUniform(28) + 1) + "/202"
+                         + std::to_string(CryptoRandUniform(5));
+
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVendor", biosVendors[bv])) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSVersion", biosVer.c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BIOSReleaseDate", biosDate.c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardManufacturer", boardMfgs[bm])) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardProduct", boardProds[bm])) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemManufacturer", boardMfgs[bm])) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "SystemProductName", sysNames[bm])) failures++;
+
+    // 2. CPU
     const char* cpuPath = "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0";
-    const char* cpus[] = { "13th Gen Intel(R) Core(TM) i9-13900K", "12th Gen Intel(R) Core(TM) i7-12700K", "AMD Ryzen 9 7950X 16-Core Processor" };
-    if (!SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "ProcessorNameString", cpus[rand() % 3])) failures++;
+    const char* cpus[] = {
+        "13th Gen Intel(R) Core(TM) i9-13900K",
+        "12th Gen Intel(R) Core(TM) i7-12700K",
+        "AMD Ryzen 9 7950X 16-Core Processor",
+        "Intel(R) Core(TM) i7-14700K",
+        "AMD Ryzen 7 7800X3D 8-Core Processor"
+    };
+    if (!SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "ProcessorNameString", cpus[CryptoRandUniform(5)])) failures++;
 
-    // 3. GPU Spoofing
+    // 3. GPU
     const char* gpuPath = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000";
-    const char* gpus[] = { "NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 3080 Ti", "AMD Radeon RX 7900 XTX" };
-    if (!SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "DriverDesc", gpus[rand() % 3])) failures++;
-    if (!SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "HardwareInformation.AdapterString", gpus[rand() % 3])) failures++;
+    const char* gpus[] = {
+        "NVIDIA GeForce RTX 4090", "NVIDIA GeForce RTX 3080 Ti",
+        "AMD Radeon RX 7900 XTX", "NVIDIA GeForce RTX 4070 Ti",
+        "AMD Radeon RX 7800 XT"
+    };
+    int gi = CryptoRandUniform(5);
+    if (!SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "DriverDesc", gpus[gi])) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, gpuPath, "HardwareInformation.AdapterString", gpus[gi])) failures++;
 
-    // 4. Disk Serial Spoofing
-    if (!SetRegString(HKEY_LOCAL_MACHINE, "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum", "0", ("SCSI\\Disk&Ven_NVMe&Prod_Samsung_SSD_980\\" + RandomString(12)).c_str())) failures++;
+    // 4. Disk Serial
+    std::string diskEnum = "SCSI\\Disk&Ven_NVMe&Prod_Samsung_SSD_980\\" + RandomString(12);
+    if (!SetRegString(HKEY_LOCAL_MACHINE,
+        "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum", "0", diskEnum.c_str())) failures++;
 
-    // 5. MAC Address Simulation (Randomized NetworkAddress)
+    // 5. MAC Address (locally administered bit set: second nibble is 2/6/A/E)
     const char* netPath = "SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e972-e325-11ce-bfc1-08002be10318}\\0001";
-    std::string mac = "00" + RandomString(10, true);
+    std::string mac = "02" + RandomString(10, true);  // 02 = locally administered
     if (!SetRegString(HKEY_LOCAL_MACHINE, netPath, "NetworkAddress", mac.c_str())) failures++;
 
-    // Any failure likely means no admin rights — report partial success honestly
-    if (failures == 12) return false;   // total failure: not elevated
-    if (failures > 0)  return true;     // partial: some keys protected, some written
-    return true;                        // full success
+    return (failures < 12);
 }
+
+// ============================================================================
+//  Public: get the mstsc PID (for filtered KillAllRDPSessions)
+// ============================================================================
+
+DWORD GetVESessionPid() { return g_VESessionPid; }
 
 // ============================================================================
 //  StartVirtualEnvironment — main entry point
@@ -184,9 +285,7 @@ static bool ApplyHardwareSpoofing() {
 bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     if (g_VEState == VE_RUNNING || g_VEState == VE_LOCKED) return true;
 
-    // Apply hardware spoofing before session initialization (requires admin)
     if (!ApplyHardwareSpoofing()) {
-        // All 12 HKLM writes failed — process is not elevated
         if (progressCallback)
             progressCallback("WARNING: Hardware spoofing failed (ACCESS_DENIED). "
                              "Restart ZeroPoint as Administrator to enable HWID spoofing.");
@@ -210,14 +309,14 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
         if (progressCallback) progressCallback("Updating rdpwrap.ini...");
         UpdateRDPWrapperINI(progressCallback);
         RestartTermService();
-        Sleep(2000);
+        Sleep(1500);
     }
 
-    // Step 2: Create the loopback RDP session
+    // Step 2: Create loopback RDP session
     if (progressCallback) progressCallback("Initializing Virtual Environment...");
 
-    int w = g_VEConfig.display.resW;
-    int h = g_VEConfig.display.resH;
+    int w     = g_VEConfig.display.resW;
+    int h     = g_VEConfig.display.resH;
     int depth = g_VEConfig.display.colorDepth;
 
     g_VESessionPid = CreateHiddenRDPSession(w, h, depth);
@@ -227,43 +326,37 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
         return false;
     }
 
-    // Step 3: Find the mstsc window
+    // Step 3: Find mstsc window
     if (progressCallback) progressCallback("Connecting to session...");
     g_VEMstscWindow = FindRDPSessionWindow(g_VESessionPid);
 
     if (!g_VEMstscWindow) {
         if (progressCallback) progressCallback("Could not find RDP window");
         DestroyRDPSession(g_VESessionPid);
+        g_VESessionPid = 0;
         g_VEState = VE_ERROR;
         return false;
     }
 
-    // Step 4: Create our frosted frame and embed mstsc inside it
+    // Step 4: Create frosted frame and embed mstsc
     if (progressCallback) progressCallback("Building virtual desktop...");
     CreateVEFrame(w, h);
-    Sleep(500);
+    Sleep(300);
     EmbedMstscInFrame();
 
-    // Step 5: Create the lock overlay
+    // Step 5: Lock overlay
     CreateVELockOverlay();
 
-    // Step 6: Apply stealth — hide from screen recording
-    typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
-    PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
-        GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
-    if (pSWDA) {
-        pSWDA(g_VEFrame, 0x00000011);
-    }
+    // Step 6: Stealth — hide from screen recording
+    ApplyDisplayAffinity(g_VEFrame);
 
     g_VEState = VE_RUNNING;
 
-    // Show the frame
     ShowWindow(g_VEFrame, SW_SHOW);
     SetForegroundWindow(g_VEFrame);
 
-    if (g_VEConfig.display.fullScreen) {
+    if (g_VEConfig.display.fullScreen)
         ToggleVEFullscreen();
-    }
 
     if (progressCallback) progressCallback("Virtual Environment ready!");
     return true;
@@ -272,14 +365,12 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
 void StopVirtualEnvironment() {
     if (g_VEState == VE_IDLE) return;
 
-    // Kill the RDP session
     if (g_VESessionPid) {
         DestroyRDPSession(g_VESessionPid);
         g_VESessionPid = 0;
     }
     g_VEMstscWindow = NULL;
 
-    // Destroy our windows
     if (g_VELockOverlay && IsWindow(g_VELockOverlay))
         DestroyWindow(g_VELockOverlay);
     if (g_VEChatSidebar && IsWindow(g_VEChatSidebar))
@@ -287,18 +378,18 @@ void StopVirtualEnvironment() {
     if (g_VEFrame && IsWindow(g_VEFrame))
         DestroyWindow(g_VEFrame);
 
-    g_VEFrame = NULL;
+    g_VEFrame       = NULL;
     g_VELockOverlay = NULL;
     g_VEChatSidebar = NULL;
-    g_VEState = VE_IDLE;
+    g_VEState        = VE_IDLE;
     g_VEIsFullscreen = false;
-    g_VEChatVisible = false;
+    g_VEChatVisible  = false;
 }
 
 VEState GetVEState() { return g_VEState; }
 
 // ============================================================================
-//  VE Frame — our frosted outer window that contains the RDP session
+//  VE Frame — frosted outer window containing the RDP session
 // ============================================================================
 
 static void CreateVEFrame(int w, int h) {
@@ -317,8 +408,8 @@ static void CreateVEFrame(int w, int h) {
 
     int sx = GetSystemMetrics(SM_CXSCREEN);
     int sy = GetSystemMetrics(SM_CYSCREEN);
-    int frameW = w + 4;   // 2px border each side
-    int frameH = h + 32;  // title bar + bottom border
+    int frameW = w + 4;
+    int frameH = h + 32;
 
     g_VEFrame = CreateWindowExA(
         WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
@@ -329,7 +420,6 @@ static void CreateVEFrame(int w, int h) {
 
     SetLayeredWindowAttributes(g_VEFrame, 0, 245, LWA_ALPHA);
 
-    // Enable DWM blur
     DWM_BLURBEHIND bb = {};
     bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
     bb.fEnable  = TRUE;
@@ -341,22 +431,18 @@ static void CreateVEFrame(int w, int h) {
 static void EmbedMstscInFrame() {
     if (!g_VEMstscWindow || !g_VEFrame) return;
 
-    // Remove mstsc's title bar and border — make it a plain child
-    LONG style = GetWindowLong(g_VEMstscWindow, GWL_STYLE);
+    // Remove mstsc's chrome — make it a plain child
+    LONG_PTR style = GetWindowLongPtrA(g_VEMstscWindow, GWL_STYLE);
     style &= ~(WS_CAPTION | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_SYSMENU);
     style |= WS_CHILD;
-    SetWindowLong(g_VEMstscWindow, GWL_STYLE, style);
+    SetWindowLongPtrA(g_VEMstscWindow, GWL_STYLE, style);
 
-    LONG exStyle = GetWindowLong(g_VEMstscWindow, GWL_EXSTYLE);
+    LONG_PTR exStyle = GetWindowLongPtrA(g_VEMstscWindow, GWL_EXSTYLE);
     exStyle &= ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
-    SetWindowLong(g_VEMstscWindow, GWL_EXSTYLE, exStyle);
+    SetWindowLongPtrA(g_VEMstscWindow, GWL_EXSTYLE, exStyle);
 
-    // Re-parent into our frame
     SetParent(g_VEMstscWindow, g_VEFrame);
-
-    // Position within the frame (below our title bar, leaving room for chat sidebar)
     RepositionEmbeddedSession();
-
     ShowWindow(g_VEMstscWindow, SW_SHOW);
 }
 
@@ -366,9 +452,9 @@ static void RepositionEmbeddedSession() {
     RECT rc;
     GetClientRect(g_VEFrame, &rc);
 
-    int chatW = (g_VEChatVisible) ? VE_CHAT_SIDEBAR_W : 0;
+    int chatW    = g_VEChatVisible ? VE_CHAT_SIDEBAR_W : 0;
     int sessionX = 0;
-    int sessionY = 28;   // below our custom title bar
+    int sessionY = 28;
     int sessionW = rc.right - chatW;
     int sessionH = rc.bottom - 28;
 
@@ -387,11 +473,9 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         RECT rc;
         GetClientRect(hwnd, &rc);
 
-        // Frosted title bar (top 28px)
         RECT titleRc = { 0, 0, rc.right, 28 };
         VE_FillFrosted(hdc, titleRc, VE_ICY_PANEL, 230);
 
-        // Accent line under title bar
         HPEN pen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
         HGDIOBJ oldPen = SelectObject(hdc, pen);
         MoveToEx(hdc, 0, 27, NULL);
@@ -399,19 +483,17 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SelectObject(hdc, oldPen);
         DeleteObject(pen);
 
-        // Title text
         SetBkMode(hdc, TRANSPARENT);
         HFONT titleFont = VE_CreateFont(13, FW_SEMIBOLD);
-        SelectObject(hdc, titleFont);
+        HGDIOBJ oldFont = SelectObject(hdc, titleFont);
         SetTextColor(hdc, VE_ICY_ACCENT);
         RECT txtRc = { 12, 4, 400, 24 };
         DrawTextA(hdc, "ZEROPOINT  |  Virtual Environment", -1, &txtRc,
                   DT_LEFT | DT_SINGLELINE | DT_VCENTER);
-        DeleteObject(titleFont);
 
-        // Right-side buttons text: [Lock] [FS] [X]
         HFONT btnFont = VE_CreateFont(11, FW_NORMAL);
         SelectObject(hdc, btnFont);
+        DeleteObject(titleFont);
         SetTextColor(hdc, VE_ICY_DIM);
 
         RECT lockRc = { rc.right - 200, 4, rc.right - 140, 24 };
@@ -424,6 +506,7 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         RECT closeRc = { rc.right - 50, 4, rc.right - 10, 24 };
         DrawTextA(hdc, "[X]", -1, &closeRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
+        SelectObject(hdc, oldFont);
         DeleteObject(btnFont);
 
         EndPaint(hwnd, &ps);
@@ -435,20 +518,16 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         RECT rc;
         GetClientRect(hwnd, &rc);
 
-        // Click in title bar area
         if ((short)HIWORD(lp) < 28) {
             if (mx >= rc.right - 50 && mx < rc.right - 10) {
-                // Close button
                 StopVirtualEnvironment();
                 return 0;
             }
             if (mx >= rc.right - 130 && mx < rc.right - 70) {
-                // Fullscreen button
                 ToggleVEFullscreen();
                 return 0;
             }
             if (mx >= rc.right - 200 && mx < rc.right - 140) {
-                // Lock button
                 LockVE();
                 return 0;
             }
@@ -463,8 +542,9 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             pt.x = (short)LOWORD(lp);
             pt.y = (short)HIWORD(lp);
             ScreenToClient(hwnd, &pt);
-            // Title bar area is draggable (but not over the buttons)
-            if (pt.y < 28 && pt.x < (int)(GetClientRect(hwnd, NULL), 0))
+            RECT crc;
+            GetClientRect(hwnd, &crc);
+            if (pt.y < 28 && pt.x < crc.right - 200)
                 return HTCAPTION;
         }
         return hit;
@@ -488,13 +568,9 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 void LockVE() {
     if (g_VEState != VE_RUNNING) return;
 
-    // Save the current cursor position so we can restore it on unlock
     GetCursorPos(&g_SavedCursorPos);
-
-    // Hide the VE frame
     ShowWindow(g_VEFrame, SW_HIDE);
 
-    // Show the lock overlay on the host desktop
     if (g_VELockOverlay && IsWindow(g_VELockOverlay)) {
         ShowWindow(g_VELockOverlay, SW_SHOW);
         SetForegroundWindow(g_VELockOverlay);
@@ -506,25 +582,21 @@ void LockVE() {
 void UnlockVE() {
     if (g_VEState != VE_LOCKED) return;
 
-    // Hide the lock overlay
-    if (g_VELockOverlay && IsWindow(g_VELockOverlay)) {
+    if (g_VELockOverlay && IsWindow(g_VELockOverlay))
         ShowWindow(g_VELockOverlay, SW_HIDE);
-    }
 
-    // Show the VE frame
     ShowWindow(g_VEFrame, SW_SHOW);
     SetForegroundWindow(g_VEFrame);
 
-    // Teleport the mouse cursor back to the saved position
-    // This prevents proctors from detecting that the user tabbed away
+    // Teleport mouse back — prevents proctor focus-change detection
     SetCursorPos(g_SavedCursorPos.x, g_SavedCursorPos.y);
 
     g_VEState = VE_RUNNING;
 }
 
 void ToggleVELock() {
-    if (g_VEState == VE_RUNNING) LockVE();
-    else if (g_VEState == VE_LOCKED) UnlockVE();
+    if (g_VEState == VE_RUNNING)      LockVE();
+    else if (g_VEState == VE_LOCKED)  UnlockVE();
 }
 
 // ============================================================================
@@ -535,17 +607,13 @@ void ToggleVEFullscreen() {
     if (!g_VEFrame) return;
 
     if (!g_VEIsFullscreen) {
-        // Save current position for restore
         GetWindowRect(g_VEFrame, &g_VEWindowedRect);
-
-        // Go fullscreen
         int sx = GetSystemMetrics(SM_CXSCREEN);
         int sy = GetSystemMetrics(SM_CYSCREEN);
         SetWindowPos(g_VEFrame, HWND_TOPMOST, 0, 0, sx, sy,
                      SWP_SHOWWINDOW | SWP_FRAMECHANGED);
         g_VEIsFullscreen = true;
     } else {
-        // Restore windowed position
         SetWindowPos(g_VEFrame, HWND_TOPMOST,
                      g_VEWindowedRect.left, g_VEWindowedRect.top,
                      g_VEWindowedRect.right - g_VEWindowedRect.left,
@@ -560,7 +628,7 @@ void ToggleVEFullscreen() {
 bool IsVEFullscreen() { return g_VEIsFullscreen; }
 
 // ============================================================================
-//  "CLICK TO LOCK" Overlay — frosted transparent overlay on the host desktop
+//  "CLICK TO LOCK" Overlay
 // ============================================================================
 
 static void CreateVELockOverlay() {
@@ -586,12 +654,12 @@ static void CreateVELockOverlay() {
         0, 0, sx, sy,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
-    // High alpha transparency (245) combined with COLORKEY for the outside areas
     SetLayeredWindowAttributes(g_VELockOverlay, RGB(255, 0, 255), 245, LWA_COLORKEY | LWA_ALPHA);
 
-    // Enable DWM blur only for the centered box
+    // DPI-aware overlay box dimensions
     int overlayW = 520, overlayH = 220;
-    RECT rcBox = { (sx - overlayW) / 2, (sy - overlayH) / 2, (sx + overlayW) / 2, (sy + overlayH) / 2 };
+    RECT rcBox = { (sx - overlayW) / 2, (sy - overlayH) / 2,
+                   (sx + overlayW) / 2, (sy + overlayH) / 2 };
     HRGN hrgnBox = CreateRectRgn(rcBox.left, rcBox.top, rcBox.right, rcBox.bottom);
 
     DWM_BLURBEHIND bb = {};
@@ -601,13 +669,7 @@ static void CreateVELockOverlay() {
     DwmEnableBlurBehindWindow(g_VELockOverlay, &bb);
     DeleteObject(hrgnBox);
 
-    // Hide from screen recording
-    typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
-    PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
-        GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
-    if (pSWDA) pSWDA(g_VELockOverlay, 0x00000011);
-
-    // Start hidden — shown when Lock is triggered
+    ApplyDisplayAffinity(g_VELockOverlay);
     ShowWindow(g_VELockOverlay, SW_HIDE);
 }
 
@@ -625,54 +687,54 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
         HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
 
-        // Fill entire screen with Magenta (transparent colorkey)
+        // Magenta fill (transparent via colorkey)
         HBRUSH bgTransparent = CreateSolidBrush(RGB(255, 0, 255));
         FillRect(memDC, &rc, bgTransparent);
         DeleteObject(bgTransparent);
 
         int overlayW = 520, overlayH = 220;
-        RECT boxRc = { (w - overlayW) / 2, (h - overlayH) / 2, (w + overlayW) / 2, (h + overlayH) / 2 };
+        RECT boxRc = { (w - overlayW) / 2, (h - overlayH) / 2,
+                       (w + overlayW) / 2, (h + overlayH) / 2 };
 
-        // Frosted glass background for the centered box
+        // Frosted glass box
         HBRUSH bgBox = CreateSolidBrush(VE_ICY_BG);
         FillRect(memDC, &boxRc, bgBox);
         DeleteObject(bgBox);
-
         VE_FillFrosted(memDC, boxRc, VE_ICY_PANEL, 180);
 
         // Accent border
         HPEN borderPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
-        SelectObject(memDC, borderPen);
+        HGDIOBJ oldPen = SelectObject(memDC, borderPen);
         SelectObject(memDC, GetStockObject(NULL_BRUSH));
         RoundRect(memDC, boxRc.left, boxRc.top, boxRc.right, boxRc.bottom, 20, 20);
+        SelectObject(memDC, oldPen);
         DeleteObject(borderPen);
 
         SetBkMode(memDC, TRANSPARENT);
 
-        // Big "CLICK TO LOCK" text with soft teal glow
+        // Multi-layer teal glow text
         HFONT bigFont = VE_CreateFont(42, FW_LIGHT);
-        SelectObject(memDC, bigFont);
-        
-        // Multi-layered glow for a softer, more premium teal glow effect
-        SetTextColor(memDC, RGB(0x40, 0xDD, 0xFF)); // Deeper teal outer glow
+        HGDIOBJ oldFont = SelectObject(memDC, bigFont);
+
+        SetTextColor(memDC, RGB(0x40, 0xDD, 0xFF));
         RECT glowRc1 = { boxRc.left - 2, boxRc.top - 2, boxRc.right - 2, boxRc.bottom - 20 };
         RECT glowRc2 = { boxRc.left + 2, boxRc.top + 2, boxRc.right + 2, boxRc.bottom - 20 };
         DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc1, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc2, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
-        
-        SetTextColor(memDC, RGB(0x80, 0xEE, 0xFF)); // Brighter inner glow
+
+        SetTextColor(memDC, RGB(0x80, 0xEE, 0xFF));
         RECT glowRc3 = { boxRc.left - 1, boxRc.top - 1, boxRc.right - 1, boxRc.bottom - 20 };
         RECT glowRc4 = { boxRc.left + 1, boxRc.top + 1, boxRc.right + 1, boxRc.bottom - 20 };
         DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc3, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         DrawTextA(memDC, "CLICK TO LOCK", -1, &glowRc4, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
 
-        // Main text layer (icy white)
+        // Main text (icy white)
         SetTextColor(memDC, RGB(0xFF, 0xFF, 0xFF));
         RECT bigRc = { boxRc.left, boxRc.top, boxRc.right, boxRc.bottom - 20 };
         DrawTextA(memDC, "CLICK TO LOCK", -1, &bigRc, DT_CENTER | DT_SINGLELINE | DT_VCENTER);
         DeleteObject(bigFont);
 
-        // Subtitle: hotkey instructions
+        // Hotkey hints
         HFONT subFont = VE_CreateFont(14, FW_NORMAL);
         SelectObject(memDC, subFont);
         SetTextColor(memDC, VE_ICY_DIM);
@@ -684,13 +746,13 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         DrawTextA(memDC, "(Ctrl+Alt+F to Toggle Fullscreen)", -1, &line2, DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
-        // Small ZeroPoint branding
+        // Branding
         HFONT tinyFont = VE_CreateFont(10, FW_NORMAL);
         SelectObject(memDC, tinyFont);
         SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
         RECT brandRc = { boxRc.left, boxRc.bottom - 24, boxRc.right, boxRc.bottom - 6 };
-        DrawTextA(memDC, "ZeroPoint Virtual Environment", -1, &brandRc,
-                  DT_CENTER | DT_SINGLELINE);
+        DrawTextA(memDC, "ZeroPoint Virtual Environment", -1, &brandRc, DT_CENTER | DT_SINGLELINE);
+        SelectObject(memDC, oldFont);
         DeleteObject(tinyFont);
 
         BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
@@ -703,24 +765,19 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     case WM_NCHITTEST: {
-        // Proper hit-testing: centered overlay catches clicks, rest is click-through
         int mx = (short)LOWORD(lp);
         int my = (short)HIWORD(lp);
-        
         int sx = GetSystemMetrics(SM_CXSCREEN);
         int sy = GetSystemMetrics(SM_CYSCREEN);
         int overlayW = 520, overlayH = 220;
-        RECT boxRc = { (sx - overlayW) / 2, (sy - overlayH) / 2, (sx + overlayW) / 2, (sy + overlayH) / 2 };
-        
+        RECT boxRc = { (sx - overlayW) / 2, (sy - overlayH) / 2,
+                       (sx + overlayW) / 2, (sy + overlayH) / 2 };
         POINT pt = { mx, my };
-        if (PtInRect(&boxRc, pt)) {
-            return HTCLIENT;
-        }
+        if (PtInRect(&boxRc, pt)) return HTCLIENT;
         return HTTRANSPARENT;
     }
 
     case WM_LBUTTONUP:
-        // Click on the overlay — unlock the VE
         UnlockVE();
         return 0;
 
@@ -738,13 +795,13 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 //  Window Handle Getters
 // ============================================================================
 
-HWND GetVEFrameWindow()      { return g_VEFrame; }
-HWND GetVESessionWindow()    { return g_VEMstscWindow; }
-HWND GetVELockOverlay()      { return g_VELockOverlay; }
+HWND GetVEFrameWindow()       { return g_VEFrame; }
+HWND GetVESessionWindow()     { return g_VEMstscWindow; }
+HWND GetVELockOverlay()       { return g_VELockOverlay; }
 HWND GetVEChatSidebarWindow() { return g_VEChatSidebar; }
 
 // ============================================================================
-//  AI Chat Sidebar (inside VE Frame)
+//  AI Chat Sidebar
 // ============================================================================
 
 void ToggleVEChatSidebar() {
@@ -759,10 +816,10 @@ bool IsVEChatSidebarVisible() { return g_VEChatVisible; }
 //  Snip Region Tool — cross-hair selection overlay
 // ============================================================================
 
-static RECT  g_SnipRect     = {};
-static bool  g_SnipDragging = false;
-static POINT g_SnipStart    = {};
-static HBITMAP g_SnipResult = NULL;
+static RECT    g_SnipRect     = {};
+static bool    g_SnipDragging = false;
+static POINT   g_SnipStart    = {};
+static HBITMAP g_SnipResult   = NULL;
 
 static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     switch (msg) {
@@ -798,17 +855,16 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int sh = g_SnipRect.bottom - g_SnipRect.top;
 
         if (sw > 5 && sh > 5) {
-            // Capture the selected region from the screen
             HDC screenDC = GetDC(NULL);
             HDC memDC = CreateCompatibleDC(screenDC);
             g_SnipResult = CreateCompatibleBitmap(screenDC, sw, sh);
-            SelectObject(memDC, g_SnipResult);
+            HGDIOBJ oldBmp = SelectObject(memDC, g_SnipResult);
 
-            // Convert client coords to screen coords
             POINT topLeft = { g_SnipRect.left, g_SnipRect.top };
             ClientToScreen(hwnd, &topLeft);
-
             BitBlt(memDC, 0, 0, sw, sh, screenDC, topLeft.x, topLeft.y, SRCCOPY);
+
+            SelectObject(memDC, oldBmp);
             DeleteDC(memDC);
             ReleaseDC(NULL, screenDC);
         }
@@ -820,6 +876,8 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_KEYDOWN:
         if (wp == VK_ESCAPE) {
             g_SnipResult = NULL;
+            ReleaseCapture();
+            g_SnipDragging = false;
             DestroyWindow(hwnd);
         }
         return 0;
@@ -827,14 +885,14 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     case WM_PAINT: {
         PAINTSTRUCT ps;
         HDC hdc = BeginPaint(hwnd, &ps);
-
-        // Semi-transparent overlay with hole cut out for selection
         RECT rc;
         GetClientRect(hwnd, &rc);
-        
+
+        // Semi-transparent overlay with hole for selection
         HRGN hrgnFull = CreateRectRgn(rc.left, rc.top, rc.right, rc.bottom);
         if (g_SnipDragging || (g_SnipRect.right - g_SnipRect.left > 0)) {
-            HRGN hrgnSnip = CreateRectRgn(g_SnipRect.left, g_SnipRect.top, g_SnipRect.right, g_SnipRect.bottom);
+            HRGN hrgnSnip = CreateRectRgn(g_SnipRect.left, g_SnipRect.top,
+                                          g_SnipRect.right, g_SnipRect.bottom);
             CombineRgn(hrgnFull, hrgnFull, hrgnSnip, RGN_DIFF);
             DeleteObject(hrgnSnip);
         }
@@ -843,25 +901,26 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SelectClipRgn(hdc, NULL);
         DeleteObject(hrgnFull);
 
-        // Draw the selection rectangle in accent color
+        // Selection rectangle border
         if (g_SnipDragging || (g_SnipRect.right - g_SnipRect.left > 0)) {
-            // Draw accent border around selection
             HPEN selPen = CreatePen(PS_SOLID, 2, VE_ICY_ACCENT);
-            SelectObject(hdc, selPen);
+            HGDIOBJ oldPen = SelectObject(hdc, selPen);
             SelectObject(hdc, GetStockObject(NULL_BRUSH));
             Rectangle(hdc, g_SnipRect.left, g_SnipRect.top,
                       g_SnipRect.right, g_SnipRect.bottom);
+            SelectObject(hdc, oldPen);
             DeleteObject(selPen);
         }
 
-        // Instructions text at top
+        // Instructions
         SetBkMode(hdc, TRANSPARENT);
         HFONT instrFont = VE_CreateFont(16, FW_SEMIBOLD);
-        SelectObject(hdc, instrFont);
+        HGDIOBJ oldFont = SelectObject(hdc, instrFont);
         SetTextColor(hdc, VE_ICY_ACCENT);
         RECT instrRc = { 0, 20, rc.right, 50 };
         DrawTextA(hdc, "Click and drag to select region  |  Esc to cancel", -1,
                   &instrRc, DT_CENTER | DT_SINGLELINE);
+        SelectObject(hdc, oldFont);
         DeleteObject(instrFont);
 
         EndPaint(hwnd, &ps);
@@ -876,9 +935,9 @@ static LRESULT CALLBACK VESnipProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 }
 
 HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
-    g_SnipResult = NULL;
+    g_SnipResult   = NULL;
     g_SnipDragging = false;
-    g_SnipRect = {};
+    g_SnipRect     = {};
 
     const char* cls = "ZPSnipOverlay";
     static bool registered = false;
@@ -901,11 +960,9 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
         0, 0, sx, sy,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
-    SetLayeredWindowAttributes(snipWnd, 0, 1, LWA_ALPHA);  // almost transparent initially
-    SetLayeredWindowAttributes(snipWnd, 0, 120, LWA_ALPHA); // then semi-transparent
+    SetLayeredWindowAttributes(snipWnd, 0, 120, LWA_ALPHA);
     SetForegroundWindow(snipWnd);
 
-    // Run local message loop until snip window closes
     MSG msg;
     while (GetMessage(&msg, NULL, 0, 0)) {
         if (!IsWindow(snipWnd)) break;
@@ -922,15 +979,43 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
 }
 
 // ============================================================================
-// Real Auto-Typer - Human-like text injection into exam window
+//  Real Auto-Typer — Human-like text injection into exam window
 // ============================================================================
 
 static std::wstring Utf8ToUtf16(const std::string& str) {
     if (str.empty()) return L"";
-    int size = MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), NULL, 0);
+    int size = MultiByteToWideChar(CP_UTF8, 0, str.data(), (int)str.size(), NULL, 0);
     std::wstring wstr(size, 0);
-    MultiByteToWideChar(CP_UTF8, 0, &str[0], (int)str.size(), &wstr[0], size);
+    MultiByteToWideChar(CP_UTF8, 0, str.data(), (int)str.size(), &wstr[0], size);
     return wstr;
+}
+
+// Gamma-like distribution: sum of multiple uniform samples
+// produces a bell-curve shape mimicking real human keystroke timing
+static int HumanDelay(int base, int variance) {
+    if (variance <= 0) return base;
+    int partVar = variance / 3 + 1;
+    int sum = CryptoRandUniform(partVar) + CryptoRandUniform(partVar) + CryptoRandUniform(partVar);
+    return base + sum;
+}
+
+static void SendUnicodeChar(wchar_t c) {
+    INPUT ip[2] = {};
+    ip[0].type = INPUT_KEYBOARD;
+    ip[0].ki.wScan = c;
+    ip[0].ki.dwFlags = KEYEVENTF_UNICODE;
+    ip[1].type = INPUT_KEYBOARD;
+    ip[1].ki.wScan = c;
+    ip[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+    SendInput(2, ip, sizeof(INPUT));
+}
+
+static void SendVKey(WORD vk, bool down) {
+    INPUT ip = {};
+    ip.type = INPUT_KEYBOARD;
+    ip.ki.wVk = vk;
+    ip.ki.dwFlags = down ? 0 : KEYEVENTF_KEYUP;
+    SendInput(1, &ip, sizeof(INPUT));
 }
 
 void PerformAutoType(const std::string& text) {
@@ -938,59 +1023,45 @@ void PerformAutoType(const std::string& text) {
 
     std::wstring wText = Utf8ToUtf16(text);
 
-    // Bring the exam window to foreground if possible
-    HWND hwnd = GetForegroundWindow();
-    if (!hwnd) return;
-    SetForegroundWindow(hwnd);
-
-    srand((unsigned int)time(NULL));
+    // Brief settle time for focus
+    Sleep(50);
 
     for (size_t i = 0; i < wText.size(); i++) {
         wchar_t c = wText[i];
 
-        // 1. Natural error simulation (occasional typo)
-        if (rand() % 40 == 0) {
-            wchar_t typo = L'a' + (rand() % 26);
-            INPUT ipErr = {0};
-            ipErr.type = INPUT_KEYBOARD;
-            ipErr.ki.wScan = typo;
-            ipErr.ki.dwFlags = KEYEVENTF_UNICODE;
-            SendInput(1, &ipErr, sizeof(INPUT));
-            // Key-up for the typo character
-            ipErr.ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
-            SendInput(1, &ipErr, sizeof(INPUT));
+        // 1. Natural error simulation (~2% chance)
+        // More likely mid-word than at word boundaries
+        bool atWordBoundary = (i == 0 || wText[i - 1] == L' ' || wText[i - 1] == L'\n');
+        int typoChance = atWordBoundary ? 80 : 50;  // lower = more frequent
+        if (CryptoRandUniform(typoChance) == 0 && c != L'\n' && c != L'\r' && c != L' ') {
+            // Type a nearby key as a typo
+            wchar_t typo = L'a' + (wchar_t)CryptoRandUniform(26);
+            SendUnicodeChar(typo);
+            Sleep(HumanDelay(80, 120));
 
-            Sleep(100 + (rand() % 100)); // processing time
-
-            // Backspace it (down then up)
-            INPUT ipBs = {0};
-            ipBs.type = INPUT_KEYBOARD;
-            ipBs.ki.wVk = VK_BACK;
-            ipBs.ki.dwFlags = 0;
-            SendInput(1, &ipBs, sizeof(INPUT));
-            ipBs.ki.dwFlags = KEYEVENTF_KEYUP;
-            SendInput(1, &ipBs, sizeof(INPUT));
-
-            Sleep(150 + (rand() % 150)); // pause before re-typing
+            // Recognize and backspace the mistake
+            SendVKey(VK_BACK, true);
+            SendVKey(VK_BACK, false);
+            Sleep(HumanDelay(120, 150));
         }
 
         // 2. Type the correct character
-        INPUT ip = {0};
-        ip.type = INPUT_KEYBOARD;
-        ip.ki.wScan = c;
-        ip.ki.dwFlags = KEYEVENTF_UNICODE;
-        SendInput(1, &ip, sizeof(INPUT));
+        SendUnicodeChar(c);
 
-        // Release (essential for some apps)
-        ip.ki.dwFlags |= KEYEVENTF_KEYUP;
-        SendInput(1, &ip, sizeof(INPUT));
+        // 3. Human-like delay with gamma distribution
+        int delay = HumanDelay(70, 120);
 
-        // 3. Human-like delay (80-180ms)
-        int delay = 80 + (rand() % 100);
-        
-        // Punctuation takes longer to think about
-        if (c == L'.' || c == L'?' || c == L'!') delay += 200 + (rand() % 300);
-        else if (c == L' ' || c == L',') delay += 50 + (rand() % 100);
+        // Punctuation pauses — simulate thinking
+        if (c == L'.' || c == L'?' || c == L'!') delay += HumanDelay(180, 350);
+        else if (c == L'\n')                      delay += HumanDelay(200, 400);
+        else if (c == L' ' || c == L',')          delay += HumanDelay(30, 80);
+        else if (c == L':' || c == L';')          delay += HumanDelay(60, 120);
+
+        // Occasional micro-pause mid-word (~5% chance)
+        if (CryptoRandUniform(20) == 0) delay += HumanDelay(100, 200);
+
+        // Very rare longer pause (~0.5% chance) — simulates brief distraction
+        if (CryptoRandUniform(200) == 0) delay += HumanDelay(300, 600);
 
         Sleep(delay);
     }
