@@ -1790,7 +1790,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
         char footerBuf[128];
-        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.0  |  Stealth Proxy Active");
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.1  |  Stealth Proxy Active");
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
@@ -2073,6 +2073,215 @@ static void ShowAIPopup(const std::string& text) {
 }
 
 // ============================================================================
+//  Global Error Popup — icy frosted style, centered on screen
+// ============================================================================
+//  Matches the premium ZeroPoint aesthetic: frosted glass panel, soft shadow,
+//  inner glow, red accent bar, rounded corners. Used for all user-facing
+//  error messages across the application so every failure looks intentional
+//  and calm, not like a crash.
+//
+//  Usage:  ShowErrorPopup("Setup Failed", "RDP session could not be created.\n\nTry: ...");
+
+static std::string g_ErrorPopupTitle;
+static std::string g_ErrorPopupMsg;
+static HWND        g_ErrorPopupHwnd = NULL;
+
+static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
+    switch (msg) {
+    case WM_CREATE: {
+        DWM_BLURBEHIND bb = {};
+        bb.dwFlags  = DWM_BB_ENABLE | DWM_BB_BLURREGION;
+        bb.fEnable  = TRUE;
+        bb.hRgnBlur = CreateRectRgn(0, 0, -1, -1);
+        DwmEnableBlurBehindWindow(hwnd, &bb);
+        DeleteObject(bb.hRgnBlur);
+        return 0;
+    }
+
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hwnd, &ps);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int w = rc.right, h = rc.bottom;
+
+        // ---- Double-buffer ----
+        HDC memDC = CreateCompatibleDC(hdc);
+        HBITMAP memBmp = CreateCompatibleBitmap(hdc, w, h);
+        HGDIOBJ oldBmp = SelectObject(memDC, memBmp);
+
+        // Snow-white base fill
+        HBRUSH bgBrush = CreateSolidBrush(g_BgColor);
+        FillRect(memDC, &rc, bgBrush);
+        DeleteObject(bgBrush);
+
+        // Frosted glass overlay with inner glow
+        FillFrosted(memDC, rc, g_BgPanel, 235);
+        DrawInnerGlow(memDC, rc);
+
+        // Soft shadow at the bottom edge
+        RECT shadowRc = { 4, h - 6, w - 4, h };
+        FillFrosted(memDC, shadowRc, g_ShadowColor, 50);
+
+        // ---- Red accent header bar (error = warm red instead of icy cyan) ----
+        COLORREF errorAccent = RGB(0xFF, 0x44, 0x44);
+        RECT accentBar = { 0, 0, w, 5 };
+        HBRUSH accentBrush = CreateSolidBrush(errorAccent);
+        FillRect(memDC, &accentBar, accentBrush);
+        DeleteObject(accentBrush);
+
+        // Outer border — red accent, rounded
+        HPEN borderPen = CreatePen(PS_SOLID, 2, errorAccent);
+        SelectObject(memDC, borderPen);
+        SelectObject(memDC, GetStockObject(NULL_BRUSH));
+        RoundRect(memDC, 0, 0, w, h, 16, 16);
+        DeleteObject(borderPen);
+
+        // Inner border — subtle icy edge
+        HPEN innerPen = CreatePen(PS_SOLID, 1, g_BorderColor);
+        SelectObject(memDC, innerPen);
+        RoundRect(memDC, 1, 1, w - 1, h - 1, 14, 14);
+        DeleteObject(innerPen);
+
+        SetBkMode(memDC, TRANSPARENT);
+
+        // ---- Warning triangle icon (drawn with GDI) ----
+        HFONT iconFont = CreateAppFont(22, FW_BOLD);
+        SelectObject(memDC, iconFont);
+        SetTextColor(memDC, errorAccent);
+        RECT iconRc = { 16, 12, 40, 36 };
+        DrawTextA(memDC, "\xe2\x9a\xa0", -1, &iconRc, DT_LEFT | DT_SINGLELINE);
+        DeleteObject(iconFont);
+
+        // ---- Title (e.g. "Setup Failed") ----
+        HFONT titleFont = CreateAppFont(16, FW_BOLD);
+        SelectObject(memDC, titleFont);
+        SetTextColor(memDC, errorAccent);
+        RECT titleRc = { 42, 12, w - 16, 36 };
+        DrawTextA(memDC, g_ErrorPopupTitle.c_str(), -1, &titleRc,
+                  DT_LEFT | DT_SINGLELINE);
+        DeleteObject(titleFont);
+
+        // ZeroPoint branding tag (right-aligned)
+        HFONT tagFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, tagFont);
+        SetTextColor(memDC, g_TextSecondary);
+        RECT tagRc = { w - 120, 14, w - 16, 30 };
+        DrawTextA(memDC, "ZeroPoint v4.1", -1, &tagRc,
+                  DT_RIGHT | DT_SINGLELINE);
+        DeleteObject(tagFont);
+
+        // Accent separator (using error red)
+        HPEN sepPen = CreatePen(PS_SOLID, 2, errorAccent);
+        HGDIOBJ oldPen = SelectObject(memDC, sepPen);
+        MoveToEx(memDC, 16, 40, NULL);
+        LineTo(memDC, w - 16, 40);
+        SelectObject(memDC, oldPen);
+        DeleteObject(sepPen);
+
+        // ---- Message body ----
+        HFONT textFont = CreateAppFont(13, FW_NORMAL);
+        SelectObject(memDC, textFont);
+        SetTextColor(memDC, g_TextPrimary);
+        RECT textRc = { 16, 50, w - 16, h - 28 };
+        DrawTextA(memDC, g_ErrorPopupMsg.c_str(), -1, &textRc,
+                  DT_LEFT | DT_WORDBREAK);
+        DeleteObject(textFont);
+
+        // ---- Close hint ----
+        HFONT hintFont = CreateAppFont(10, FW_NORMAL);
+        SelectObject(memDC, hintFont);
+        SetTextColor(memDC, g_ShadowColor);
+        RECT hintRc = { 16, h - 24, w - 16, h - 6 };
+        DrawTextA(memDC, "click anywhere to dismiss", -1, &hintRc,
+                  DT_CENTER | DT_SINGLELINE);
+        DeleteObject(hintFont);
+
+        // ---- Blit ----
+        BitBlt(hdc, 0, 0, w, h, memDC, 0, 0, SRCCOPY);
+        SelectObject(memDC, oldBmp);
+        DeleteObject(memBmp);
+        DeleteDC(memDC);
+
+        EndPaint(hwnd, &ps);
+        return 0;
+    }
+
+    case WM_LBUTTONUP:
+        DestroyWindow(hwnd);
+        return 0;
+
+    case WM_TIMER:
+        DestroyWindow(hwnd);
+        return 0;
+
+    case WM_DESTROY:
+        g_ErrorPopupHwnd = NULL;
+        return 0;
+    }
+    return DefWindowProc(hwnd, msg, wp, lp);
+}
+
+void ShowErrorPopup(const std::string& title, const std::string& message) {
+    g_ErrorPopupTitle = title;
+    g_ErrorPopupMsg   = message;
+
+    // If one is already showing, update it in-place
+    if (g_ErrorPopupHwnd && IsWindow(g_ErrorPopupHwnd)) {
+        InvalidateRect(g_ErrorPopupHwnd, NULL, TRUE);
+        UpdateWindow(g_ErrorPopupHwnd);
+        KillTimer(g_ErrorPopupHwnd, 2);
+        SetTimer(g_ErrorPopupHwnd, 2, 12000, NULL);
+        return;
+    }
+
+    const char* cls = "ZPErrorPopup";
+    static bool registered = false;
+    if (!registered) {
+        WNDCLASSA wc = {};
+        wc.lpfnWndProc   = ErrorPopupProc;
+        wc.hInstance      = GetModuleHandle(NULL);
+        wc.lpszClassName  = cls;
+        wc.hCursor        = LoadCursor(NULL, IDC_ARROW);
+        RegisterClassA(&wc);
+        registered = true;
+    }
+
+    // Size popup based on message length for readability
+    int popW = 480;
+    int popH = 220;
+    if (message.size() > 200) popH = 280;
+    if (message.size() > 400) popH = 340;
+
+    int sx = GetSystemMetrics(SM_CXSCREEN);
+    int sy = GetSystemMetrics(SM_CYSCREEN);
+
+    g_ErrorPopupHwnd = CreateWindowExA(
+        WS_EX_LAYERED | WS_EX_TOPMOST | WS_EX_TOOLWINDOW,
+        cls, NULL,
+        WS_POPUP | WS_VISIBLE,
+        (sx - popW) / 2, (sy - popH) / 2,   // ---- CENTERED on screen ----
+        popW, popH,
+        NULL, NULL, GetModuleHandle(NULL), NULL);
+
+    SetLayeredWindowAttributes(g_ErrorPopupHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+
+    // Hide from screen recording
+    {
+        typedef BOOL(WINAPI* PFN_SWDA)(HWND, DWORD);
+        static PFN_SWDA pSWDA = (PFN_SWDA)GetProcAddress(
+            GetModuleHandleA("user32.dll"), "SetWindowDisplayAffinity");
+        if (pSWDA) pSWDA(g_ErrorPopupHwnd, 0x00000011);
+    }
+
+    // Auto-dismiss after 12 seconds
+    SetTimer(g_ErrorPopupHwnd, 2, 12000, NULL);
+
+    ShowWindow(g_ErrorPopupHwnd, SW_SHOW);
+    UpdateWindow(g_ErrorPopupHwnd);
+}
+
+// ============================================================================
 //  API Key Input Dialog — inline prompt (no manual config.ini editing)
 // ============================================================================
 
@@ -2204,11 +2413,11 @@ static void SidebarTakeScreenshot(HWND hwnd) {
                                "Set your key in Settings, or switch to Add-to-Chat mode.";
                 if (!g_KeyWarningShown) {
                     g_KeyWarningShown = true;
-                    MessageBoxA(hwnd,
-                        "API key required for Auto-Send mode.\n\n"
-                        "Please enter it in the sidebar settings (gear icon),\n"
-                        "or switch to Add-to-Chat mode to use without a key.",
-                        "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+                    ShowErrorPopup(
+                        "API Key Required",
+                        "Auto-Send mode needs an API key to work.\n\n"
+                        "Set your key in the sidebar settings (gear icon),\n"
+                        "or switch to Add-to-Chat mode to capture without a key.");
                 }
             } else {
                 std::string b64 = BitmapToBase64PNG(hBitmap);
@@ -2224,6 +2433,10 @@ static void SidebarTakeScreenshot(HWND hwnd) {
         DeleteObject(hBitmap);
     } else {
         g_LastAnswer = "[ERROR] Could not capture foreground window.";
+        ShowErrorPopup(
+            "Capture Failed",
+            "Could not capture the foreground window.\n\n"
+            "Make sure the exam window is visible and not minimized.");
     }
 
     // Restore sidebar — always repaint to show updated conversation/scratchpad
@@ -2825,11 +3038,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                                            "Set your key in Settings, or switch to Add-to-Chat mode.";
                             if (!g_KeyWarningShown) {
                                 g_KeyWarningShown = true;
-                                MessageBoxA(NULL,
-                                    "API key required for Auto-Send mode.\n\n"
-                                    "Please enter it in the sidebar settings (gear icon),\n"
-                                    "or switch to Add-to-Chat mode to use without a key.",
-                                    "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+                                ShowErrorPopup(
+                                    "API Key Required",
+                                    "Auto-Send mode needs an API key to work.\n\n"
+                                    "Set your key in the sidebar settings (gear icon),\n"
+                                    "or switch to Add-to-Chat mode to capture without a key.");
                             }
                         } else {
                             // Key available — encode and call vision AI
@@ -2858,7 +3071,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 
                     DeleteObject(hBitmap);
                 } else {
-                    // Screenshot failed — fall back to text-only CDP extraction
+                    // Screenshot failed — show styled error + fall back to CDP
+                    ShowErrorPopup(
+                        "Screenshot Capture Failed",
+                        "Could not capture the foreground window.\n\n"
+                        "Make sure the exam window is visible and not minimized.\n"
+                        "Falling back to text extraction (CDP) if API key is set.");
+
                     if (GetProviderKey(GetActiveProvider()).empty()) {
                         g_LastAnswer = "[ERROR] Screenshot failed and no API key set.";
                     } else {
@@ -2904,11 +3123,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                                            "Set your key in Settings, or switch to Add-to-Chat mode.";
                             if (!g_KeyWarningShown) {
                                 g_KeyWarningShown = true;
-                                MessageBoxA(NULL,
-                                    "API key required for Auto-Send mode.\n\n"
-                                    "Please enter it in the sidebar settings (gear icon),\n"
-                                    "or switch to Add-to-Chat mode to use without a key.",
-                                    "ZeroPoint", MB_OK | MB_ICONINFORMATION);
+                                ShowErrorPopup(
+                                    "API Key Required",
+                                    "Auto-Send mode needs an API key to work.\n\n"
+                                    "Set your key in the sidebar settings (gear icon),\n"
+                                    "or switch to Add-to-Chat mode to capture without a key.");
                             }
                         } else {
                             std::string b64 = BitmapToBase64PNG(hBitmap);
@@ -2923,6 +3142,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
                     DeleteObject(hBitmap);
                 } else {
                     g_LastAnswer = "[ERROR] Could not capture region.";
+                    ShowErrorPopup(
+                        "Snip Capture Failed",
+                        "The region capture returned no image.\n\n"
+                        "Make sure the exam window is visible and not minimized.\n"
+                        "Press Esc during capture to cancel cleanly.");
                 }
 
                 // Restore sidebar

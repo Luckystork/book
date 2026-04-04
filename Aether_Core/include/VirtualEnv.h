@@ -1,7 +1,8 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.h  (v4.0)
+//  ZeroPoint — VirtualEnv.h  (v4.1)
 //  Virtual Environment lifecycle, window management, lock/unlock,
-//  mouse position teleport, fullscreen toggle, and frosted overlays.
+//  mouse position teleport, fullscreen toggle, frosted overlays,
+//  and global error popup system.
 // ============================================================================
 
 #pragma once
@@ -99,5 +100,14 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH);
 
 // Real Auto-Typer — Human-like text injection into exam window
 void PerformAutoType(const std::string& text);
+
+// ---------------------------------------------------------------------------
+//  Global Error Popup — icy frosted style (defined in main.cpp)
+// ---------------------------------------------------------------------------
+
+// Show a centered frosted error popup with title, message, and a suggestion.
+// Uses the same premium icy aesthetic as the rest of ZeroPoint.
+// Safe to call from any thread/module — creates its own top-level window.
+void ShowErrorPopup(const std::string& title, const std::string& message);
 
 #endif // ZEROPOINT_VIRTUALENV_H

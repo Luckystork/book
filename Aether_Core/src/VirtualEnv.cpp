@@ -1,8 +1,9 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.cpp  (v4.0)
+//  ZeroPoint — VirtualEnv.cpp  (v4.1)
 //  Virtual Environment lifecycle: RDP session creation, frosted frame window,
 //  lock/unlock with mouse teleport, fullscreen toggle, "CLICK TO LOCK" overlay,
-//  AI chat sidebar panel, snip-region capture, and human-like auto-typer.
+//  AI chat sidebar panel, snip-region capture, human-like auto-typer,
+//  and robust error popup handling for all failure paths.
 //
 //  Architecture:
 //    g_VEFrame       — our frosted WS_EX_LAYERED frame (outer shell)
@@ -287,8 +288,16 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
 
     if (!ApplyHardwareSpoofing()) {
         if (progressCallback)
-            progressCallback("WARNING: Hardware spoofing failed (ACCESS_DENIED). "
-                             "Restart ZeroPoint as Administrator to enable HWID spoofing.");
+            progressCallback("WARNING: Hardware spoofing failed (ACCESS_DENIED).");
+        // ---- Frosted warning popup for HWID spoofing failure ----
+        ShowErrorPopup(
+            "Hardware Spoofing Failed",
+            "Registry writes were denied (ACCESS_DENIED).\n\n"
+            "HWID spoofing requires Administrator privileges.\n"
+            "The Virtual Environment will still launch, but your\n"
+            "hardware fingerprint will NOT be randomized.\n\n"
+            "Fix: Right-click ZeroPoint and select\n"
+            "\"Run as Administrator\" to enable full spoofing.");
     } else {
         if (progressCallback) progressCallback("Hardware identity randomized.");
     }
@@ -303,6 +312,14 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
         if (progressCallback) progressCallback("Installing RDP Wrapper Library...");
         if (!InstallRDPWrapper(progressCallback)) {
             g_VEState = VE_ERROR;
+            ShowErrorPopup(
+                "RDP Wrapper Installation Failed",
+                "ZeroPoint could not install the RDP Wrapper Library.\n\n"
+                "This component is required for the Virtual Environment.\n\n"
+                "Try:\n"
+                "  1. Run ZeroPoint as Administrator\n"
+                "  2. Temporarily disable antivirus (it may block the installer)\n"
+                "  3. Reboot and try again");
             return false;
         }
     } else if (rdpState == RDPWRAP_INSTALLED_OUTDATED) {
@@ -323,6 +340,15 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     if (g_VESessionPid == 0) {
         if (progressCallback) progressCallback("Failed to create RDP session");
         g_VEState = VE_ERROR;
+        ShowErrorPopup(
+            "RDP Session Failed",
+            "Could not create a loopback RDP session (127.0.0.2).\n\n"
+            "The Remote Desktop Service may be disabled or blocked.\n\n"
+            "Try:\n"
+            "  1. Open Services (services.msc) and start \"Remote Desktop Services\"\n"
+            "  2. Run ZeroPoint as Administrator\n"
+            "  3. Check that RDP Wrapper is installed correctly\n"
+            "  4. Disable any VPN or firewall blocking loopback");
         return false;
     }
 
@@ -335,6 +361,15 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
         DestroyRDPSession(g_VESessionPid);
         g_VESessionPid = 0;
         g_VEState = VE_ERROR;
+        ShowErrorPopup(
+            "Session Window Not Found",
+            "The RDP session was created (PID active), but ZeroPoint\n"
+            "could not find the mstsc.exe window to embed.\n\n"
+            "This usually means the session is still initializing.\n\n"
+            "Try:\n"
+            "  1. Wait a few seconds and try again\n"
+            "  2. Check Task Manager for orphan mstsc.exe processes\n"
+            "  3. Restart the Remote Desktop Service");
         return false;
     }
 
@@ -343,6 +378,23 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     CreateVEFrame(w, h);
     Sleep(300);
     EmbedMstscInFrame();
+
+    // Verify embedding succeeded
+    if (!g_VEFrame || !IsWindow(g_VEFrame)) {
+        if (progressCallback) progressCallback("Frame creation failed");
+        DestroyRDPSession(g_VESessionPid);
+        g_VESessionPid = 0;
+        g_VEState = VE_ERROR;
+        ShowErrorPopup(
+            "VE Frame Creation Failed",
+            "ZeroPoint could not create the frosted desktop frame.\n\n"
+            "This may indicate low system resources or a GDI object leak.\n\n"
+            "Try:\n"
+            "  1. Close unnecessary applications\n"
+            "  2. Restart ZeroPoint\n"
+            "  3. Reboot your machine if the issue persists");
+        return false;
+    }
 
     // Step 5: Lock overlay
     CreateVELockOverlay();
@@ -960,6 +1012,15 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
         0, 0, sx, sy,
         NULL, NULL, GetModuleHandle(NULL), NULL);
 
+    if (!snipWnd) {
+        ShowErrorPopup(
+            "Snip Tool Failed",
+            "Could not create the screen capture overlay.\n\n"
+            "Try closing other overlay applications and retry.");
+        outX = outY = outW = outH = 0;
+        return NULL;
+    }
+
     SetLayeredWindowAttributes(snipWnd, 0, 120, LWA_ALPHA);
     SetForegroundWindow(snipWnd);
 
@@ -974,6 +1035,15 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH) {
     outY = g_SnipRect.top;
     outW = g_SnipRect.right - g_SnipRect.left;
     outH = g_SnipRect.bottom - g_SnipRect.top;
+
+    // ---- Report capture failure with a nice popup ----
+    if (!g_SnipResult && outW > 5 && outH > 5) {
+        ShowErrorPopup(
+            "Capture Failed",
+            "The screen region was selected, but the capture returned empty.\n\n"
+            "Make sure the exam window is visible and not minimized.\n"
+            "Some apps with DRM protection may block screen capture.");
+    }
 
     return g_SnipResult;
 }
@@ -1019,12 +1089,33 @@ static void SendVKey(WORD vk, bool down) {
 }
 
 void PerformAutoType(const std::string& text) {
-    if (text.empty()) return;
+    if (text.empty()) {
+        ShowErrorPopup(
+            "Auto-Type: Nothing to Type",
+            "No text is available for injection.\n\n"
+            "Use Ctrl+Shift+Z to capture a screenshot and get an AI answer first,\n"
+            "then press Ctrl+Shift+T to type the response.");
+        return;
+    }
+
+    // ---- Validate foreground window exists for injection target ----
+    HWND fg = GetForegroundWindow();
+    if (!fg) {
+        ShowErrorPopup(
+            "Auto-Type: No Target Window",
+            "Could not find a foreground window to type into.\n\n"
+            "Make sure the exam window or text field is focused\n"
+            "before pressing Ctrl+Shift+T.");
+        return;
+    }
 
     std::wstring wText = Utf8ToUtf16(text);
 
     // Brief settle time for focus
     Sleep(50);
+
+    // Track injection success — if SendInput returns 0, UIPI is blocking us
+    bool injectionFailed = false;
 
     for (size_t i = 0; i < wText.size(); i++) {
         wchar_t c = wText[i];
@@ -1045,8 +1136,22 @@ void PerformAutoType(const std::string& text) {
             Sleep(HumanDelay(120, 150));
         }
 
-        // 2. Type the correct character
-        SendUnicodeChar(c);
+        // 2. Type the correct character — check if SendInput succeeded
+        {
+            INPUT ip[2] = {};
+            ip[0].type = INPUT_KEYBOARD;
+            ip[0].ki.wScan = c;
+            ip[0].ki.dwFlags = KEYEVENTF_UNICODE;
+            ip[1].type = INPUT_KEYBOARD;
+            ip[1].ki.wScan = c;
+            ip[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
+            UINT sent = SendInput(2, ip, sizeof(INPUT));
+            if (sent == 0 && i == 0) {
+                // First character failed — UIPI or elevation mismatch
+                injectionFailed = true;
+                break;
+            }
+        }
 
         // 3. Human-like delay with gamma distribution
         int delay = HumanDelay(70, 120);
@@ -1064,5 +1169,16 @@ void PerformAutoType(const std::string& text) {
         if (CryptoRandUniform(200) == 0) delay += HumanDelay(300, 600);
 
         Sleep(delay);
+    }
+
+    if (injectionFailed) {
+        ShowErrorPopup(
+            "Auto-Type: Injection Blocked",
+            "SendInput failed — the target window rejected keyboard input.\n\n"
+            "This happens when the exam app runs at a higher privilege level.\n\n"
+            "Fix:\n"
+            "  1. Run ZeroPoint as Administrator\n"
+            "  2. Make sure the exam window is focused\n"
+            "  3. Click inside the text field before pressing Ctrl+Shift+T");
     }
 }
