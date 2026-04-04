@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — RDPWrapper.h  (v4.1)
+//  ZeroPoint — RDPWrapper.h  (v4.2)
 //  RDP Wrapper Library integration for local hidden parallel RDP sessions.
 //
 //  RDP Wrapper enables concurrent RDP sessions on Windows Home/Pro by

@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.h  (v4.1)
+//  ZeroPoint — VirtualEnv.h  (v4.2)
 //  Virtual Environment lifecycle, window management, lock/unlock,
 //  mouse position teleport, fullscreen toggle, frosted overlays,
 //  global error popup system, and remote access.
@@ -100,6 +100,15 @@ HBITMAP SnipRegionCapture(int& outX, int& outY, int& outW, int& outH);
 
 // Real Auto-Typer — Human-like text injection into exam window
 void PerformAutoType(const std::string& text);
+
+// Exam Mode — one-click max stealth preset
+void ActivateExamMode();
+void DeactivateExamMode();
+bool IsExamModeActive();
+
+// Session Recording Blocker — extra WDA_EXCLUDEFROMCAPTURE layer
+void ApplyRecordingBlocker(HWND hwnd);
+void RefreshRecordingBlocker();
 
 // ---------------------------------------------------------------------------
 //  Global Error Popup — icy frosted style (defined in main.cpp)

@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.cpp  (v4.1)
+//  ZeroPoint — VirtualEnv.cpp  (v4.2)
 //  Virtual Environment lifecycle: RDP session creation, frosted frame window,
 //  lock/unlock with mouse teleport, fullscreen toggle, "CLICK TO LOCK" overlay,
 //  AI chat sidebar panel, snip-region capture, human-like auto-typer,
@@ -280,7 +280,44 @@ static bool ApplyHardwareSpoofing() {
     std::string mac = "02" + RandomString(10, true);  // 02 = locally administered
     if (!SetRegString(HKEY_LOCAL_MACHINE, netPath, "NetworkAddress", mac.c_str())) failures++;
 
-    return (failures < 12);
+    // 6. UEFI / Secure Boot strings — reported by WMI and SEB/Respondus checks
+    const char* uefiPath = "HARDWARE\\DESCRIPTION\\System";
+    const char* uefiTypes[] = { "UEFI", "UEFI", "BIOS" };
+    if (!SetRegString(HKEY_LOCAL_MACHINE, uefiPath, "SystemBiosVersion",
+        (std::string("UEFI ") + biosVer + " " + biosDate).c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "ECFirmwareMajorRelease",
+        std::to_string(CryptoRandUniform(5) + 1).c_str())) failures++;
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "ECFirmwareMinorRelease",
+        std::to_string(CryptoRandUniform(99)).c_str())) failures++;
+
+    // 7. CPUID feature flags — stored in registry for WMI queries
+    std::string cpuIdStr = "GenuineIntel";
+    if (CryptoRandUniform(2)) cpuIdStr = "AuthenticAMD";
+    if (!SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "VendorIdentifier", cpuIdStr.c_str())) failures++;
+    // Randomize stepping/model in Identifier string
+    char cpuIdBuf[128];
+    snprintf(cpuIdBuf, sizeof(cpuIdBuf), "%s Family %d Model %d Stepping %d",
+             cpuIdStr == "GenuineIntel" ? "x86" : "AMD64",
+             CryptoRandUniform(4) + 6,    // family 6-9
+             CryptoRandUniform(120) + 30,  // model 30-149
+             CryptoRandUniform(15));        // stepping 0-14
+    if (!SetRegString(HKEY_LOCAL_MACHINE, cpuPath, "Identifier", cpuIdBuf)) failures++;
+
+    // 8. Motherboard serial — additional SMBIOS field queried by proctors
+    std::string moboSerial = RandomString(4) + std::to_string(CryptoRandUniform(900000) + 100000);
+    if (!SetRegString(HKEY_LOCAL_MACHINE, biosPath, "BaseBoardVersion", moboSerial.c_str())) failures++;
+
+    // 9. Disk model string — covers StorageDeviceIdProperty queries
+    const char* diskModels[] = {
+        "Samsung SSD 980 PRO 1TB", "WD_BLACK SN850X 2TB",
+        "Seagate FireCuda 530 1TB", "SK Hynix P41 Platinum 1TB",
+        "Crucial T700 2TB"
+    };
+    if (!SetRegString(HKEY_LOCAL_MACHINE,
+        "SYSTEM\\CurrentControlSet\\Services\\disk\\Enum",
+        "FriendlyName", diskModels[CryptoRandUniform(5)])) failures++;
+
+    return (failures < 18);
 }
 
 // ============================================================================
@@ -626,6 +663,15 @@ static LRESULT CALLBACK VEFrameProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         RepositionEmbeddedSession();
         return 0;
 
+    // Forward mouse wheel to embedded mstsc for smooth scrolling inside VE
+    case WM_MOUSEWHEEL:
+    case WM_MOUSEHWHEEL:
+        if (g_VEMstscWindow && IsWindow(g_VEMstscWindow)) {
+            PostMessage(g_VEMstscWindow, msg, wp, lp);
+            return 0;
+        }
+        break;
+
     case WM_DESTROY:
         g_VEFrame = NULL;
         return 0;
@@ -729,7 +775,7 @@ static void CreateVELockOverlay() {
     SetLayeredWindowAttributes(g_VELockOverlay, RGB(255, 0, 255), 245, LWA_COLORKEY | LWA_ALPHA);
 
     // DPI-aware overlay box dimensions
-    int overlayW = 520, overlayH = 220;
+    int overlayW = 520, overlayH = 250;
     RECT rcBox = { (sx - overlayW) / 2, (sy - overlayH) / 2,
                    (sx + overlayW) / 2, (sy + overlayH) / 2 };
     HRGN hrgnBox = CreateRectRgn(rcBox.left, rcBox.top, rcBox.right, rcBox.bottom);
@@ -764,7 +810,7 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         FillRect(memDC, &rc, bgTransparent);
         DeleteObject(bgTransparent);
 
-        int overlayW = 520, overlayH = 220;
+        int overlayW = 520, overlayH = 250;
         RECT boxRc = { (w - overlayW) / 2, (h - overlayH) / 2,
                        (w + overlayW) / 2, (h + overlayH) / 2 };
 
@@ -816,6 +862,11 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         RECT line2 = { boxRc.left, boxRc.top + 140, boxRc.right, boxRc.top + 165 };
         DrawTextA(memDC, "(Ctrl+Alt+F to Toggle Fullscreen)", -1, &line2, DT_CENTER | DT_SINGLELINE);
+
+        // Panic hotkey reminder — safety-red accent
+        SetTextColor(memDC, RGB(0xDC, 0x3C, 0x50));
+        RECT line3 = { boxRc.left, boxRc.top + 165, boxRc.right, boxRc.top + 190 };
+        DrawTextA(memDC, "PANIC: Ctrl+Shift+X — wipes all traces", -1, &line3, DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
         // Branding
@@ -841,7 +892,7 @@ static LRESULT CALLBACK VELockProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         int my = (short)HIWORD(lp);
         int sx = GetSystemMetrics(SM_CXSCREEN);
         int sy = GetSystemMetrics(SM_CYSCREEN);
-        int overlayW = 520, overlayH = 220;
+        int overlayW = 520, overlayH = 250;
         RECT boxRc = { (sx - overlayW) / 2, (sy - overlayH) / 2,
                        (sx + overlayW) / 2, (sy + overlayH) / 2 };
         POINT pt = { mx, my };
@@ -1121,7 +1172,7 @@ void PerformAutoType(const std::string& text) {
         return;
     }
 
-    // ---- Validate foreground window exists for injection target ----
+    // Validate foreground window exists for injection target
     HWND fg = GetForegroundWindow();
     if (!fg) {
         ShowErrorPopup(
@@ -1132,33 +1183,67 @@ void PerformAutoType(const std::string& text) {
         return;
     }
 
+    // Speed parameters: base delay and variance per TypingSpeed setting
+    int baseDelay = 70, delayVar = 120;
+    switch (g_AutoTyperConfig.speed) {
+        case TYPING_SLOW:   baseDelay = 120; delayVar = 200; break;
+        case TYPING_MEDIUM: baseDelay = 70;  delayVar = 120; break;
+        case TYPING_FAST:   baseDelay = 30;  delayVar = 70;  break;
+    }
+
+    // Humanization parameters: typo frequency and pause intensity
+    int typoBase = 50;          // lower = more frequent typos
+    int typoWordBoundary = 80;  // higher = rarer at word boundaries
+    int microPauseChance = 20;  // 1-in-N chance per char
+    int longPauseChance = 200;  // 1-in-N chance per char
+    int punctPauseMul = 1;      // multiplier for punctuation pauses
+
+    switch (g_AutoTyperConfig.humanization) {
+        case HUMAN_LOW:
+            typoBase = 200;           // ~0.5% typo rate
+            typoWordBoundary = 400;
+            microPauseChance = 80;    // very rare micro-pause
+            longPauseChance = 500;
+            punctPauseMul = 0;        // minimal punctuation pause
+            break;
+        case HUMAN_MEDIUM:
+            typoBase = 50;            // ~2% typo rate
+            typoWordBoundary = 80;
+            microPauseChance = 20;
+            longPauseChance = 200;
+            punctPauseMul = 1;
+            break;
+        case HUMAN_HIGH:
+            typoBase = 25;            // ~4% typo rate
+            typoWordBoundary = 40;
+            microPauseChance = 10;    // frequent micro-pauses
+            longPauseChance = 80;
+            punctPauseMul = 2;        // longer punctuation pauses
+            break;
+    }
+
     std::wstring wText = Utf8ToUtf16(text);
 
     // Brief settle time for focus
     Sleep(50);
 
-    // Track injection success — if SendInput returns 0, UIPI is blocking us
     bool injectionFailed = false;
 
     for (size_t i = 0; i < wText.size(); i++) {
         wchar_t c = wText[i];
 
-        // 1. Natural error simulation (~2% chance)
-        // More likely mid-word than at word boundaries
+        // 1. Natural error simulation — frequency controlled by humanization
         bool atWordBoundary = (i == 0 || wText[i - 1] == L' ' || wText[i - 1] == L'\n');
-        int typoChance = atWordBoundary ? 80 : 50;  // lower = more frequent
+        int typoChance = atWordBoundary ? typoWordBoundary : typoBase;
         if (CryptoRandUniform(typoChance) == 0 && c != L'\n' && c != L'\r' && c != L' ') {
-            // Type a nearby key as a typo
             wchar_t typo = L'a' + (wchar_t)CryptoRandUniform(26);
             SendUnicodeChar(typo);
             Sleep(HumanDelay(80, 120));
-
-            // Recognize and backspace the mistake
             SendFullVKey(VK_BACK);
             Sleep(HumanDelay(120, 150));
         }
 
-        // 2. Type the correct character — check if SendInput succeeded
+        // 2. Type the correct character
         {
             INPUT ip[2] = {};
             ip[0].type = INPUT_KEYBOARD;
@@ -1169,27 +1254,32 @@ void PerformAutoType(const std::string& text) {
             ip[1].ki.dwFlags = KEYEVENTF_UNICODE | KEYEVENTF_KEYUP;
             UINT sent = SendInput(2, ip, sizeof(INPUT));
             if (sent == 0 && i == 0) {
-                // First character failed — UIPI or elevation mismatch
                 injectionFailed = true;
                 break;
             }
         }
 
-        // 3. Human-like delay with variable rhythm
-        int delay = HumanDelay(70, 120);
+        // 3. Human-like delay — base controlled by speed setting
+        int delay = HumanDelay(baseDelay, delayVar);
 
-        // Punctuation pauses — simulate thinking with natural variation
-        int jitter = CryptoRandUniform(30); // Random drift for non-linear rhythm
-        if (c == L'.' || c == L'?' || c == L'!') delay += HumanDelay(180 + jitter, 350);
-        else if (c == L'\n')                      delay += HumanDelay(200 + jitter, 400);
-        else if (c == L' ' || c == L',')          delay += HumanDelay(30 + jitter, 80);
-        else if (c == L':' || c == L';')          delay += HumanDelay(60 + jitter, 120);
+        // Punctuation pauses scaled by humanization level
+        int jitter = CryptoRandUniform(30);
+        if (punctPauseMul > 0) {
+            if (c == L'.' || c == L'?' || c == L'!')
+                delay += HumanDelay((180 + jitter) * punctPauseMul, 350 * punctPauseMul);
+            else if (c == L'\n')
+                delay += HumanDelay((200 + jitter) * punctPauseMul, 400 * punctPauseMul);
+            else if (c == L' ' || c == L',')
+                delay += HumanDelay((30 + jitter) * punctPauseMul, 80 * punctPauseMul);
+            else if (c == L':' || c == L';')
+                delay += HumanDelay((60 + jitter) * punctPauseMul, 120 * punctPauseMul);
+        }
 
-        // Occasional micro-pause mid-word (~5% chance)
-        if (CryptoRandUniform(20) == 0) delay += HumanDelay(100, 200);
+        // Occasional micro-pause mid-word
+        if (CryptoRandUniform(microPauseChance) == 0) delay += HumanDelay(100, 200);
 
-        // Very rare longer pause (~0.5% chance) — simulates brief distraction
-        if (CryptoRandUniform(200) == 0) delay += HumanDelay(300, 600);
+        // Very rare longer pause — simulates brief distraction
+        if (CryptoRandUniform(longPauseChance) == 0) delay += HumanDelay(300, 600);
 
         Sleep(delay);
     }
@@ -1203,6 +1293,50 @@ void PerformAutoType(const std::string& text) {
             "  1. Run ZeroPoint as Administrator\n"
             "  2. Make sure the exam window is focused\n"
             "  3. Click inside the text field before pressing Ctrl+Shift+T");
+    }
+}
+
+// ============================================================================
+//  Exam Mode — one-click max stealth preset
+// ============================================================================
+
+void ActivateExamMode() {
+    g_ExamModeConfig.active = true;
+    g_RapidFireConfig.enabled = true;
+    g_SessionRecordingBlocker = true;
+    RefreshRecordingBlocker();
+
+    // If VE is running, ensure lock overlay is ready (don't lock, just prime)
+    if (g_VEState == VE_RUNNING && g_VELockOverlay && IsWindow(g_VELockOverlay)) {
+        ApplyDisplayAffinity(g_VELockOverlay);
+    }
+    SaveConfig();
+}
+
+void DeactivateExamMode() {
+    g_ExamModeConfig.active = false;
+    SaveConfig();
+}
+
+bool IsExamModeActive() { return g_ExamModeConfig.active; }
+
+// ============================================================================
+//  Session Recording Blocker — applies WDA_EXCLUDEFROMCAPTURE to a window
+// ============================================================================
+
+void ApplyRecordingBlocker(HWND hwnd) {
+    if (!g_SessionRecordingBlocker || !hwnd) return;
+    ApplyDisplayAffinity(hwnd);
+}
+
+void RefreshRecordingBlocker() {
+    if (g_SessionRecordingBlocker) {
+        if (g_VEFrame && IsWindow(g_VEFrame))
+            ApplyDisplayAffinity(g_VEFrame);
+        if (g_VELockOverlay && IsWindow(g_VELockOverlay))
+            ApplyDisplayAffinity(g_VELockOverlay);
+        if (g_VEChatSidebar && IsWindow(g_VEChatSidebar))
+            ApplyDisplayAffinity(g_VEChatSidebar);
     }
 }
 

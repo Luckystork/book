@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility  (v4.1)
+//  ZeroPoint — Premium Windows Utility  (v4.2)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
 //             browser, screenshot + vision AI, sidebar with settings,
 //             browser thumbnail panel, multi-provider, custom themes
@@ -112,6 +112,9 @@ static void LoadThemeSettings() {
     }
 }
 
+// Forward declare for live theme propagation
+static void PropagateThemeToLiveWindows();
+
 static void SaveThemeSettings() {
     std::vector<std::string> lines;
     bool foundAccent = false, foundAlpha = false;
@@ -149,6 +152,43 @@ static void SaveThemeSettings() {
     CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
     std::ofstream out(THEME_CONFIG);
     for (auto& l : lines) out << l << "\n";
+
+    // Propagate theme changes to all live windows
+    PropagateThemeToLiveWindows();
+}
+
+// Apply accent color + alpha live to VE frame, lock overlay, browser, sidebar
+static void PropagateThemeToLiveWindows() {
+    HWND veFrame = GetVEFrameWindow();
+    if (veFrame && IsWindow(veFrame)) {
+        SetLayeredWindowAttributes(veFrame, 0, g_WindowAlpha, LWA_ALPHA);
+        InvalidateRect(veFrame, NULL, TRUE);
+    }
+
+    HWND lockOvl = GetVELockOverlay();
+    if (lockOvl && IsWindow(lockOvl)) {
+        SetLayeredWindowAttributes(lockOvl, RGB(255, 0, 255), g_WindowAlpha,
+                                   LWA_COLORKEY | LWA_ALPHA);
+        InvalidateRect(lockOvl, NULL, TRUE);
+    }
+
+    // Browser window
+    if (g_BrowserHwnd && IsWindow(g_BrowserHwnd)) {
+        SetLayeredWindowAttributes(g_BrowserHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+        InvalidateRect(g_BrowserHwnd, NULL, TRUE);
+    }
+
+    // Sidebar
+    if (g_MenuHwnd && IsWindow(g_MenuHwnd)) {
+        SetLayeredWindowAttributes(g_MenuHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+        InvalidateRect(g_MenuHwnd, NULL, TRUE);
+    }
+
+    // AI popup
+    if (g_PopupHwnd && IsWindow(g_PopupHwnd)) {
+        SetLayeredWindowAttributes(g_PopupHwnd, 0, g_WindowAlpha, LWA_ALPHA);
+        InvalidateRect(g_PopupHwnd, NULL, TRUE);
+    }
 }
 
 // ============================================================================
@@ -1408,6 +1448,63 @@ static LRESULT CALLBACK BrowserProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
     }
 
     // ------------------------------------------------------------------
+    //  WM_RBUTTONUP — right-click context menu on thumbnails
+    // ------------------------------------------------------------------
+    case WM_RBUTTONUP: {
+        int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
+        RECT rc;
+        GetClientRect(hwnd, &rc);
+        int panelX = rc.right - BROWSER_PANEL_W;
+
+        if (mx >= panelX + 8 && mx <= panelX + BROWSER_PANEL_W - 8 && my >= 36) {
+            int idx = HitTestThumbnail(my);
+            if (idx >= 0 && idx < (int)g_ScreenshotHistory.size()) {
+                // Show context menu at cursor position
+                HMENU hMenu = CreatePopupMenu();
+                AppendMenuA(hMenu, MF_STRING, 9001, "Copy to Clipboard");
+                AppendMenuA(hMenu, MF_STRING, 9002, "Save as PNG...");
+
+                POINT screenPt = { mx, my };
+                ClientToScreen(hwnd, &screenPt);
+                int cmd = TrackPopupMenu(hMenu, TPM_RETURNCMD | TPM_RIGHTBUTTON,
+                                         screenPt.x, screenPt.y, 0, hwnd, NULL);
+                DestroyMenu(hMenu);
+
+                if (cmd == 9001) {
+                    // Copy image to clipboard as CF_BITMAP
+                    std::wstring wPath(g_ScreenshotHistory[idx].begin(), g_ScreenshotHistory[idx].end());
+                    Gdiplus::Bitmap bmp(wPath.c_str());
+                    if (bmp.GetLastStatus() == Gdiplus::Ok) {
+                        HBITMAP hBmp = NULL;
+                        bmp.GetHBITMAP(Gdiplus::Color(255, 255, 255), &hBmp);
+                        if (hBmp && OpenClipboard(hwnd)) {
+                            EmptyClipboard();
+                            SetClipboardData(CF_BITMAP, hBmp);
+                            CloseClipboard();
+                        }
+                    }
+                } else if (cmd == 9002) {
+                    // Save as PNG — open file save dialog
+                    OPENFILENAMEA ofn = {};
+                    char savePath[MAX_PATH] = "screenshot.png";
+                    ofn.lStructSize = sizeof(ofn);
+                    ofn.hwndOwner   = hwnd;
+                    ofn.lpstrFilter = "PNG Image\0*.png\0All Files\0*.*\0";
+                    ofn.lpstrFile   = savePath;
+                    ofn.nMaxFile    = MAX_PATH;
+                    ofn.Flags       = OFN_OVERWRITEPROMPT;
+                    ofn.lpstrDefExt = "png";
+
+                    if (GetSaveFileNameA(&ofn)) {
+                        CopyFileA(g_ScreenshotHistory[idx].c_str(), savePath, FALSE);
+                    }
+                }
+            }
+        }
+        return 0;
+    }
+
+    // ------------------------------------------------------------------
     //  WM_MOUSELEAVE — reset thumbnail hover highlight
     // ------------------------------------------------------------------
     case WM_MOUSELEAVE: {
@@ -1737,9 +1834,31 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         DrawTextA(memDC, "Advanced Virtual Environment", -1, &subRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(subFont);
 
-        // Button
+        // Buttons
         g_BtnInject = { 40, 120, w - 80, 165 };
         DrawIcyButton(memDC, g_BtnInject, "START VIRTUAL ENVIRONMENT", g_HoveredBtn == ID_BTN_INJECT, true);
+
+        // Exam Mode one-click button
+        RECT examBtn = { 40, 170, w - 80, 185 };
+        {
+            bool examActive = IsExamModeActive();
+            COLORREF examBg = examActive ? g_AccentColor : g_BtnNormal;
+            COLORREF examTxt = examActive ? RGB(0xFF, 0xFF, 0xFF) : g_AccentColor;
+            HBRUSH examBr = CreateSolidBrush(examBg);
+            HPEN examPn = CreatePen(PS_SOLID, 1, g_AccentColor);
+            HGDIOBJ oB = SelectObject(memDC, examBr);
+            HGDIOBJ oP = SelectObject(memDC, examPn);
+            RoundRect(memDC, examBtn.left, examBtn.top, examBtn.right, examBtn.bottom, 8, 8);
+            SelectObject(memDC, oB); SelectObject(memDC, oP);
+            DeleteObject(examBr); DeleteObject(examPn);
+            HFONT examFont = CreateAppFont(10, FW_SEMIBOLD);
+            HGDIOBJ oF = SelectObject(memDC, examFont);
+            SetTextColor(memDC, examTxt);
+            RECT examTR = examBtn;
+            DrawTextA(memDC, examActive ? "EXAM MODE: ON" : "EXAM MODE", -1, &examTR,
+                      DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+            SelectObject(memDC, oF); DeleteObject(examFont);
+        }
 
         // Remote Access button (small icy-teal icon next to Start VE)
         g_BtnRemote = { w - 72, 120, w - 40, 165 };
@@ -1836,11 +1955,11 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         HFONT labelFont = CreateAppFont(11, FW_SEMIBOLD);
         SelectObject(memDC, labelFont);
         SetTextColor(memDC, g_AccentColor);
-        RECT covLbl = { 40, 190, w - 40, 210 };
+        RECT covLbl = { 40, 200, w - 40, 220 };
         DrawTextA(memDC, "PROCTOR COVERAGE", -1, &covLbl, DT_LEFT | DT_SINGLELINE);
         DeleteObject(labelFont);
 
-        DrawAccentLine(memDC, 40, 206, w - 80);
+        DrawAccentLine(memDC, 40, 216, w - 80);
 
         HFONT procFont = CreateAppFont(12, FW_NORMAL);
         SelectObject(memDC, procFont);
@@ -1854,7 +1973,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             { "ProProctor", false }
         };
 
-        int py = 220;
+        int py = 230;
         int px1 = 40, px2 = w/2 + 10;
         for (int i=0; i<6; i++) {
             int cx = (i % 2 == 0) ? px1 : px2;
@@ -1881,7 +2000,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
         char footerBuf[128];
-        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.1  |  Stealth Proxy Active");
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.2  |  Stealth Proxy Active");
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
@@ -1923,6 +2042,15 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
 
     case WM_LBUTTONUP: {
         POINT pt = { (short)LOWORD(lp), (short)HIWORD(lp) };
+
+        // Exam Mode toggle
+        RECT examBtn = { 40, 170, 360, 185 };
+        if (PtInRect(&examBtn, pt)) {
+            if (IsExamModeActive()) DeactivateExamMode();
+            else ActivateExamMode();
+            InvalidateRect(hwnd, NULL, TRUE);
+            return 0;
+        }
 
         if (PtInRect(&g_BtnInject, pt)) {
             g_LauncherResult = 1;
@@ -2269,7 +2397,7 @@ static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SelectObject(memDC, tagFont);
         SetTextColor(memDC, g_TextSecondary);
         RECT tagRc = { w - 120, 14, w - 16, 30 };
-        DrawTextA(memDC, "ZeroPoint v4.1", -1, &tagRc,
+        DrawTextA(memDC, "ZeroPoint v4.2", -1, &tagRc,
                   DT_RIGHT | DT_SINGLELINE);
         DeleteObject(tagFont);
 
@@ -2818,11 +2946,12 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 #define ID_BTN_TAB_RESOURCES    7003
 #define ID_BTN_VESET_DONE       7004
 #define ID_BTN_TAB_REMOTE       7005
+#define ID_BTN_TAB_AUTOTYPE     7006
 
 static HWND g_VESettingsHwnd = NULL;
-static int g_VECurrentTab = 0; // 0=Interception, 1=Display, 2=Resources, 3=Remote
+static int g_VECurrentTab = 0; // 0=Interception, 1=Display, 2=Resources, 3=Remote, 4=Auto-Type
 static int g_VHoveredBtn = 0;
-static RECT g_TabRects[4];
+static RECT g_TabRects[5];
 static RECT g_DoneBtnRect;
 
 static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
@@ -2859,12 +2988,13 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SetBkMode(memDC, TRANSPARENT);
         
         // Tabs
-        g_TabRects[0] = { 10, 15, 110, 45 };
-        g_TabRects[1] = { 115, 15, 215, 45 };
-        g_TabRects[2] = { 220, 15, 330, 45 };
-        g_TabRects[3] = { 335, 15, 430, 45 };
-        const char* tabNames[4] = { "Interception", "Display", "Resources", "Remote" };
-        for(int i=0; i<4; i++) {
+        g_TabRects[0] = { 10, 15, 95, 45 };
+        g_TabRects[1] = { 100, 15, 180, 45 };
+        g_TabRects[2] = { 185, 15, 275, 45 };
+        g_TabRects[3] = { 280, 15, 355, 45 };
+        g_TabRects[4] = { 360, 15, 430, 45 };
+        const char* tabNames[5] = { "Intercept", "Display", "Resources", "Remote", "Typer" };
+        for(int i=0; i<5; i++) {
             bool active = (g_VECurrentTab == i);
             DrawIcyButton(memDC, g_TabRects[i], tabNames[i], g_VHoveredBtn == 7001+i, active);
         }
@@ -3032,6 +3162,78 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
             RECT hk = {px, py, w, py+20}; DrawTextA(memDC, "Ctrl+Alt+R | Log: remote.log", -1, &hk, DT_LEFT);
         }
+        else if (g_VECurrentTab == 4) { // Auto-Type Settings
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr1 = {px, py, w, py+20}; DrawTextA(memDC, "Typing Speed", -1, &rr1, DT_LEFT);
+            py+=25;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+
+            const char* speeds[] = { "Slow (120-200ms)", "Medium (70-120ms)", "Fast (30-70ms)" };
+            for (int i = 0; i < 3; i++) {
+                RECT btn = {px + i*130, py, px + i*130 + 120, py + 28};
+                DrawIcyButton(memDC, btn, speeds[i], false, (int)g_AutoTyperConfig.speed == i);
+            }
+            py += 45;
+
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr2 = {px, py, w, py+20}; DrawTextA(memDC, "Humanization Level", -1, &rr2, DT_LEFT);
+            py+=25;
+            SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
+
+            const char* humans[] = { "Low (0.5%)", "Medium (2%)", "High (4%)" };
+            for (int i = 0; i < 3; i++) {
+                RECT btn = {px + i*130, py, px + i*130 + 120, py + 28};
+                DrawIcyButton(memDC, btn, humans[i], false, (int)g_AutoTyperConfig.humanization == i);
+            }
+            py += 50;
+
+            // Session Recording Blocker toggle
+            SelectObject(memDC, hdrF); SetTextColor(memDC, g_AccentColor);
+            RECT rr3 = {px, py, w, py+20}; DrawTextA(memDC, "Stealth Options", -1, &rr3, DT_LEFT);
+            py += 25;
+            SelectObject(memDC, nrmF);
+            {
+                COLORREF cbColor = g_SessionRecordingBlocker ? g_AccentColor : g_ShadowColor;
+                HBRUSH cbBr = CreateSolidBrush(cbColor);
+                RECT cb = {px, py+2, px+12, py+14};
+                FillRect(memDC, &cb, cbBr); DeleteObject(cbBr);
+                if (g_SessionRecordingBlocker) {
+                    SetTextColor(memDC, RGB(0xFF, 0xFF, 0xFF));
+                    HFONT ckF = CreateAppFont(10, FW_BOLD); SelectObject(memDC, ckF);
+                    RECT ckR = {px+1, py, px+13, py+16};
+                    DrawTextA(memDC, "v", -1, &ckR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DeleteObject(ckF); SelectObject(memDC, nrmF);
+                }
+                SetTextColor(memDC, g_TextPrimary);
+                RECT cbLbl = {px+18, py, w, py+18};
+                DrawTextA(memDC, "Session Recording Blocker (WDA_EXCLUDEFROMCAPTURE)", -1, &cbLbl, DT_LEFT);
+            }
+            py += 28;
+
+            // Exam Mode toggle
+            {
+                COLORREF cbColor = IsExamModeActive() ? g_AccentColor : g_ShadowColor;
+                HBRUSH cbBr = CreateSolidBrush(cbColor);
+                RECT cb = {px, py+2, px+12, py+14};
+                FillRect(memDC, &cb, cbBr); DeleteObject(cbBr);
+                if (IsExamModeActive()) {
+                    SetTextColor(memDC, RGB(0xFF, 0xFF, 0xFF));
+                    HFONT ckF = CreateAppFont(10, FW_BOLD); SelectObject(memDC, ckF);
+                    RECT ckR = {px+1, py, px+13, py+16};
+                    DrawTextA(memDC, "v", -1, &ckR, DT_CENTER | DT_VCENTER | DT_SINGLELINE);
+                    DeleteObject(ckF); SelectObject(memDC, nrmF);
+                }
+                SetTextColor(memDC, g_TextPrimary);
+                RECT cbLbl = {px+18, py, w, py+18};
+                DrawTextA(memDC, "Exam Mode (max stealth + rapid fire + blocker)", -1, &cbLbl, DT_LEFT);
+            }
+            py += 30;
+
+            // Hotkey reminder
+            SetTextColor(memDC, RGB(0xC0, 0xCC, 0xDD));
+            RECT hkR = {px, py, w, py+20};
+            DrawTextA(memDC, "Ctrl+Shift+T to auto-type last answer", -1, &hkR, DT_LEFT);
+        }
 
         DeleteObject(hdrF); DeleteObject(nrmF);
 
@@ -3046,7 +3248,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         int mx = (short)LOWORD(lp), my = (short)HIWORD(lp);
         int prev = g_VHoveredBtn; g_VHoveredBtn = 0;
         POINT pt = {mx, my};
-        for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) g_VHoveredBtn = 7001+i;
+        for(int i=0; i<5; i++) if (PtInRect(&g_TabRects[i], pt)) g_VHoveredBtn = 7001+i;
         if (PtInRect(&g_DoneBtnRect, pt)) g_VHoveredBtn = ID_BTN_VESET_DONE;
         if (prev != g_VHoveredBtn) { InvalidateRect(hwnd, NULL, FALSE); SetCursor(LoadCursor(NULL, g_VHoveredBtn?IDC_HAND:IDC_ARROW)); }
         TRACKMOUSEEVENT tme = {sizeof(tme), TME_LEAVE, hwnd, 0}; TrackMouseEvent(&tme);
@@ -3057,14 +3259,51 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         return 0;
     case WM_LBUTTONUP: {
         POINT pt = {(short)LOWORD(lp), (short)HIWORD(lp)};
-        for(int i=0; i<4; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
+        for(int i=0; i<5; i++) if (PtInRect(&g_TabRects[i], pt)) { g_VECurrentTab = i; InvalidateRect(hwnd, NULL, TRUE); }
         if (PtInRect(&g_DoneBtnRect, pt)) { DestroyWindow(hwnd); }
         // Auto-start checkbox in Remote tab
         if (g_VECurrentTab == 3) {
-            RECT cbHit = {25, 167, 400, 185};  // approximate checkbox area
+            RECT cbHit = {25, 167, 400, 185};
             if (PtInRect(&cbHit, pt)) {
                 g_RemoteAutoStartWithVE = !g_RemoteAutoStartWithVE;
                 SaveConfig();
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+        }
+        // Auto-Type tab click handling
+        if (g_VECurrentTab == 4) {
+            int px = 25;
+            // Speed buttons (y ~95, each 130px wide)
+            for (int i = 0; i < 3; i++) {
+                RECT btn = {px + i*130, 95, px + i*130 + 120, 123};
+                if (PtInRect(&btn, pt)) {
+                    g_AutoTyperConfig.speed = (TypingSpeed)i;
+                    SaveConfig();
+                    InvalidateRect(hwnd, NULL, TRUE);
+                }
+            }
+            // Humanization buttons (y ~165)
+            for (int i = 0; i < 3; i++) {
+                RECT btn = {px + i*130, 165, px + i*130 + 120, 193};
+                if (PtInRect(&btn, pt)) {
+                    g_AutoTyperConfig.humanization = (HumanizationLevel)i;
+                    SaveConfig();
+                    InvalidateRect(hwnd, NULL, TRUE);
+                }
+            }
+            // Session Recording Blocker checkbox (y ~240)
+            RECT recHit = {px, 238, 400, 260};
+            if (PtInRect(&recHit, pt)) {
+                g_SessionRecordingBlocker = !g_SessionRecordingBlocker;
+                RefreshRecordingBlocker();
+                SaveConfig();
+                InvalidateRect(hwnd, NULL, TRUE);
+            }
+            // Exam Mode checkbox (y ~268)
+            RECT examHit = {px, 266, 400, 288};
+            if (PtInRect(&examHit, pt)) {
+                if (IsExamModeActive()) DeactivateExamMode();
+                else ActivateExamMode();
                 InvalidateRect(hwnd, NULL, TRUE);
             }
         }
@@ -3160,7 +3399,7 @@ static void ToggleFullMenu() {
 //  Entry Point
 // ============================================================================
 
-static const char* ZEROPOINT_VERSION = "v4.1.0";
+static const char* ZEROPOINT_VERSION = "v4.2.0";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Initialize GDI+ for screenshot PNG encoding
@@ -3535,12 +3774,6 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Clean shutdown
     DisableRemoteAccess();
     StopVirtualEnvironment();
-    ShutdownCDPNetworking();
-    Gdiplus::GdiplusShutdown(g_GdiplusToken);
-    OleUninitialize();
-    return 0;
-}
-pVirtualEnvironment();
     ShutdownCDPNetworking();
     Gdiplus::GdiplusShutdown(g_GdiplusToken);
     OleUninitialize();

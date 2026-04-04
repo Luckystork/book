@@ -59,6 +59,40 @@
 - **Orphan Cleanup Logging**: `CleanupOrphanedRemoteUser()` now logs to remote.log when recovering from a previous crash.
 - **Version Headers**: Updated all source file version comments from v4.0 to v4.1.
 
+## v4.2 Feature Additions
+
+### Auto-Typer Configuration
+- **Typing Speed**: Slow (120ms base, 200ms variance), Medium (70ms/120ms), Fast (30ms/70ms). Configurable via Settings → Typer tab.
+- **Humanization Level**: Low (0.5% typo rate), Medium (2%), High (4%). Controls typo frequency, micro-pauses, long pauses, and punctuation delay multiplier.
+- **Config Persistence**: `typing_speed=` and `typing_human=` saved to config.ini.
+
+### Exam Mode
+- **One-Click Preset**: Activates max stealth — enables rapid fire, session recording blocker, refreshes affinity spoofing. Toggle from launcher button or Settings → Typer tab.
+- **Session Recording Blocker**: Applies `WDA_EXCLUDEFROMCAPTURE` to all ZeroPoint windows. Toggleable independently via Settings. Persisted as `rec_blocker=`.
+
+### Enhanced Hardware Spoofing
+- **UEFI Strings**: Randomized `SystemBiosVersion` and `ECFirmwareRelease` registry values.
+- **CPUID Randomization**: `VendorIdentifier` (GenuineIntel/AuthenticAMD) and `Identifier` with random family/model/stepping.
+- **Motherboard Serial**: `BaseBoardVersion` set to random serial format.
+- **Disk Model**: `FriendlyName` randomized from NVMe/SSD pool.
+- Spoofing threshold increased from 12 to 18 registry writes.
+
+### Image Context Menu
+- **Right-click thumbnails** in the browser panel → "Copy to Clipboard" (CF_BITMAP via GDI+ GetHBITMAP) or "Save as PNG..." (GetSaveFileNameA dialog).
+
+### Mouse Wheel Support
+- `WM_MOUSEWHEEL` and `WM_MOUSEHWHEEL` forwarded from VE frame to embedded mstsc child window for smooth scrolling.
+
+### Live Theme Propagation
+- Accent color and transparency changes in Settings → Display now instantly update the VE frame, lock overlay, sidebar, browser, and popup windows without restart.
+
+### Lock Overlay Updates
+- **Panic Hotkey Reminder**: "PANIC: Ctrl+Shift+X — wipes all traces" displayed in safety-red on the lock overlay.
+- **Expanded overlay dimensions**: 520x250 (was 520x220) to accommodate the new text line.
+
+### Settings Modal — 5th Tab
+- New **Typer** tab added: typing speed buttons, humanization level buttons, session recording blocker checkbox, exam mode checkbox, hotkey reminder display.
+
 ## Keybinds
 | Shortcut | Action |
 |---|---|

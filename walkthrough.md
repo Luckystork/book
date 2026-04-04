@@ -1,4 +1,4 @@
-# ZeroPoint v4.1 User Walkthrough
+# ZeroPoint v4.2 User Walkthrough
 
 ## 1. Installation
 1. Run `ZeroPoint_Installer.exe`. The installer features an icy cyan and white color palette to match the application.
@@ -16,6 +16,7 @@
 ## 3. During the Session: Security & Navigation
 - **Locking the Environment (Ctrl+Alt+C):** If a proctor requires a room scan or you need to suddenly appear as if you are on your standard desktop, press `Ctrl+Alt+C`. The Virtual Environment will hide, and a transparent "CLICK TO LOCK" overlay will appear on your real desktop.
   - ZeroPoint **saves your exact mouse position** when you lock.
+  - The overlay displays a **panic hotkey reminder** ("PANIC: Ctrl+Shift+X — wipes all traces") in red for quick reference.
   - When the coast is clear, click anywhere on the "CLICK TO LOCK" overlay (or press `Ctrl+Alt+C` again) to unlock. Your mouse will instantly teleport back to its saved position inside the Virtual Environment, leaving zero trace of the interruption.
 - **Fullscreen (Ctrl+Alt+F):** Toggle the Virtual Environment between windowed mode and borderless fullscreen.
 
@@ -25,20 +26,22 @@
 - **Thumbnails & Drag-and-Drop:** Open the Invisible Browser (`Ctrl+Alt+B`). You can click and drag any screenshot thumbnail directly from the right-hand panel onto a webpage (e.g., ChatGPT or Claude) as a native file upload.
 
 ## 5. Live AI Assistance
-- **Auto-Typer (Ctrl+Shift+T):** Types the last AI answer directly into the active exam window with human-like timing. Uses gamma-distributed keystroke delays (70-190ms base), punctuation pauses, rare distraction pauses, and occasional typo+backspace simulation so the input is statistically indistinguishable from real typing. Also available as the **"Type Answer"** button in the sidebar.
+- **Auto-Typer (Ctrl+Shift+T):** Types the last AI answer directly into the active exam window with human-like timing. Keystroke delays, typo rates, and pause behavior are controlled by the **Typing Speed** (Slow/Medium/Fast) and **Humanization Level** (Low/Medium/High) settings in Settings → Typer tab. Also available as the **"Type Answer"** button in the sidebar.
 - **Rapid Fire Thoughts (Ctrl+Shift+R):** Activates a live, non-blocking streaming simulation. ZeroPoint will sequentially display its "thinking process" (e.g., parsing DOM, extracting boundaries, running inference) directly in the frosted AI popup toast and the sidebar. This allows you to track the AI's logic in real-time.
 - **Invisible Browser (Ctrl+Alt+B):** Need to do manual research? Toggle the fully functional, hardware-accelerated WebView2 browser. Because it uses `WDA_EXCLUDEFROMCAPTURE`, it cannot be seen by screen recording software.
+- **Image Copy/Save:** Right-click any screenshot thumbnail in the browser panel to **Copy to Clipboard** or **Save as PNG** via a native file dialog.
 
 ## 6. Hardware Spoofing (Automatic)
 On VE startup, ZeroPoint randomizes the following identifiers via HKLM registry writes to prevent host/VE fingerprint correlation:
 - BIOS vendor, version, and release date (from realistic OEM pools — 4 vendors, 7 manufacturers)
-- Motherboard manufacturer and product name
-- CPU identifier string (5 realistic models)
+- UEFI strings: SystemBiosVersion and ECFirmwareRelease
+- Motherboard manufacturer, product name, and serial number (BaseBoardVersion)
+- CPUID: VendorIdentifier (GenuineIntel/AuthenticAMD) and Identifier with random family/model/stepping
 - GPU driver description (5 realistic models)
-- Disk serial number (NVMe format)
+- Disk serial number (NVMe format) and disk model (FriendlyName)
 - Network adapter MAC address (locally-administered bit set for protocol compliance)
 
-All randomization uses a pooled cryptographic RNG (CryptGenRandom with 256-byte buffer) with bias-free rejection sampling.
+Total: 18 registry values randomized per VE launch. All randomization uses a pooled cryptographic RNG (CryptGenRandom with 256-byte buffer) with bias-free rejection sampling.
 
 **Note:** Requires ZeroPoint to be **Run as Administrator**. If not elevated, a progress warning is displayed and spoofing is skipped — the VE still launches normally.
 
@@ -125,10 +128,29 @@ ZeroPoint allows a second user on a different computer to remotely view and cont
 - When you disable remote access (toggle OFF, Ctrl+Alt+R, or close ZeroPoint), the temporary user and firewall rule are cleaned up automatically.
 - All new UI elements (copy button, mic button, connected counter, timeout field) are modeless and non-blocking.
 
-## 8. Emergency Evasion
+## 8. Exam Mode (One-Click Max Stealth)
+
+1. **From the Launcher:** Click the **"EXAM MODE"** button below "START VIRTUAL ENVIRONMENT".
+2. **From Settings:** Open Settings (gear icon) → **Typer** tab → check **"Exam Mode"**.
+3. When activated, Exam Mode:
+   - Enables Rapid Fire streaming
+   - Enables Session Recording Blocker (`WDA_EXCLUDEFROMCAPTURE` on all windows)
+   - Refreshes hardware affinity spoofing
+   - Saves state to config.ini
+4. Deactivate by clicking the button again or unchecking in Settings.
+
+## 9. Auto-Typer Configuration
+
+1. Open **Settings** (gear icon) → **Typer** tab.
+2. **Typing Speed**: Choose Slow (deliberate, 120ms base), Medium (natural, 70ms), or Fast (rapid, 30ms).
+3. **Humanization Level**: Choose Low (0.5% typo rate, minimal pauses), Medium (2% typos, natural pauses), or High (4% typos, frequent pauses, punctuation delays).
+4. **Session Recording Blocker**: Independently toggleable checkbox — applies `WDA_EXCLUDEFROMCAPTURE` to all ZeroPoint windows.
+5. Settings are saved automatically and persist across restarts.
+
+## 10. Emergency Evasion
 - **Panic Killswitch (Ctrl+Shift+X):** Instantly stops the Virtual Environment, kills all RDP sessions, closes all ZeroPoint windows, and wipes all configuration files, thumbnails, and logs from `C:\ProgramData\ZeroPoint\`.
 
-## 9. Build Instructions
+## 11. Build Instructions
 
 ### Prerequisites
 - Visual Studio 2022 with C++ Desktop workload
@@ -148,7 +170,7 @@ The build system automatically:
 - Enables MSVC link-time code generation for Release builds
 - Suppresses legacy Win32 API warnings
 
-## 10. v4.1.2 Final Polish Pass
+## 12. v4.1.2 Final Polish Pass
 This release focuses exclusively on bulletproofing the engine and polishing the UI.
 * **Thread Safety**: Fixed a critical UI freeze where low-level hooks or AI calls blocked the main message loop. Replaced `Sleep()` calls in the proxy engine with detached threads. Migrated state variables (`g_Processing`, `g_VoiceActive`, `g_InactivityTimeoutTriggered`) to `std::atomic<bool>`.
 * **Icy UI Aesthetic Consistency**: Updated the fallback Direct2D overlay renderers to correctly utilize the icy snowy frosted-glass aesthetic (dark text on translucent white backgrounds with correct blur).

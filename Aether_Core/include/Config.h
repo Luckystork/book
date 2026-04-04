@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Config.h  (v4.1)
+//  ZeroPoint — Config.h  (v4.2)
 //  AI providers, per-provider API keys, screenshot modes, UI settings,
 //  Virtual Environment display/audio/interception/resource configuration.
 // ============================================================================
@@ -50,6 +50,41 @@ struct RapidFireConfig {
     bool showInSidebar = true;
     bool showInPopup = false;
 };
+
+// ---------------------------------------------------------------------------
+//  Auto-Typer Settings
+// ---------------------------------------------------------------------------
+
+enum TypingSpeed {
+    TYPING_SLOW   = 0,   // ~120-200ms per key
+    TYPING_MEDIUM = 1,   // ~70-120ms per key (default)
+    TYPING_FAST   = 2,   // ~30-70ms per key
+};
+
+enum HumanizationLevel {
+    HUMAN_LOW    = 0,   // ~0.5% typos, minimal pauses
+    HUMAN_MEDIUM = 1,   // ~2% typos, natural pauses (default)
+    HUMAN_HIGH   = 2,   // ~4% typos, frequent pauses, micro-hesitations
+};
+
+struct AutoTyperConfig {
+    TypingSpeed       speed        = TYPING_MEDIUM;
+    HumanizationLevel humanization = HUMAN_MEDIUM;
+};
+
+// ---------------------------------------------------------------------------
+//  Exam Mode — one-click max stealth preset
+// ---------------------------------------------------------------------------
+
+struct ExamModeConfig {
+    bool active = false;   // when true: lock overlay ready, auto-typer primed, rapid fire hot
+};
+
+// ---------------------------------------------------------------------------
+//  Session Recording Blocker
+// ---------------------------------------------------------------------------
+
+extern bool g_SessionRecordingBlocker;  // extra WDA_EXCLUDEFROMCAPTURE layer
 
 // ---------------------------------------------------------------------------
 //  Virtual Environment — Display Settings
@@ -127,6 +162,9 @@ extern bool            g_PopupEnabled;
 extern RapidFireConfig g_RapidFireConfig;
 
 extern VEConfig        g_VEConfig;
+
+extern AutoTyperConfig g_AutoTyperConfig;
+extern ExamModeConfig  g_ExamModeConfig;
 
 // Remote access persistent settings
 extern bool            g_RemoteAutoStartWithVE;

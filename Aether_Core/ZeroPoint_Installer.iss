@@ -1,10 +1,10 @@
 ; ==============================================================================
-; ZeroPoint v4.0 Application Installer
+; ZeroPoint v4.2 Application Installer
 ; ==============================================================================
 
 [Setup]
 AppName=ZeroPoint
-AppVersion=4.0.0
+AppVersion=4.2.0
 DefaultDirName={pf32}\ZeroPoint
 DefaultGroupName=ZeroPoint
 OutputDir=Output
