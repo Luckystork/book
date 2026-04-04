@@ -2,7 +2,7 @@
 //  ZeroPoint — VirtualEnv.h  (v4.1)
 //  Virtual Environment lifecycle, window management, lock/unlock,
 //  mouse position teleport, fullscreen toggle, frosted overlays,
-//  and global error popup system.
+//  global error popup system, and remote access.
 // ============================================================================
 
 #pragma once
@@ -142,7 +142,7 @@ RemoteAccessConfig GetRemoteAccessConfig();
 // Set remote access configuration (persisted to config.ini)
 void SetRemoteAccessConfig(const RemoteAccessConfig& cfg);
 
-// Show the frosted Remote Access panel (centered modal)
+// Show the frosted Remote Access panel (centered, modeless — does not block caller)
 void ShowRemoteAccessPanel(HWND owner);
 
 #endif // ZEROPOINT_VIRTUALENV_H

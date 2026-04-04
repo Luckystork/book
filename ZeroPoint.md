@@ -52,6 +52,8 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 * Firewall rule added/removed automatically
 * All existing stealth layers, mouse teleport, and layered window behavior remain active
 * Remote connections are torn down cleanly on Panic Killswitch or shutdown
+* Crash-safe: orphaned `ZP_Remote` user is automatically removed on next VE startup via sentinel file detection
+* `atexit` handler provides last-resort cleanup if the process exits unexpectedly
 * "Remote Access" tab in Settings modal and sidebar button for quick access
 
 ### Additional Tools

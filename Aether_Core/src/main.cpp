@@ -1782,6 +1782,18 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
             DrawTextA(memDC, "REM", -1, &rmtLbl, DT_CENTER | DT_SINGLELINE);
             SelectObject(memDC, oldF);
             DeleteObject(rmtFont);
+
+            // Green active indicator dot (top-right corner of button)
+            if (IsRemoteAccessEnabled()) {
+                HBRUSH activeDot = CreateSolidBrush(RGB(0x00, 0xC8, 0x64));
+                HPEN activePen = CreatePen(PS_SOLID, 1, RGB(0xFF, 0xFF, 0xFF));
+                SelectObject(memDC, activeDot);
+                SelectObject(memDC, activePen);
+                Ellipse(memDC, g_BtnRemote.right - 10, g_BtnRemote.top + 2,
+                               g_BtnRemote.right - 2,  g_BtnRemote.top + 10);
+                DeleteObject(activeDot);
+                DeleteObject(activePen);
+            }
         }
 
         // Settings Gear Icon (top right)

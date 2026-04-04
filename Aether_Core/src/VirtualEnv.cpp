@@ -3,7 +3,7 @@
 //  Virtual Environment lifecycle: RDP session creation, frosted frame window,
 //  lock/unlock with mouse teleport, fullscreen toggle, "CLICK TO LOCK" overlay,
 //  AI chat sidebar panel, snip-region capture, human-like auto-typer,
-//  and robust error popup handling for all failure paths.
+//  remote access (secondary RDP listener), and robust error popup handling.
 //
 //  Architecture:
 //    g_VEFrame       — our frosted WS_EX_LAYERED frame (outer shell)
@@ -286,6 +286,9 @@ DWORD GetVESessionPid() { return g_VESessionPid; }
 
 bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     if (g_VEState == VE_RUNNING || g_VEState == VE_LOCKED) return true;
+
+    // Clean up orphaned remote user from a previous crash
+    CleanupOrphanedRemoteUser();
 
     if (!ApplyHardwareSpoofing()) {
         if (progressCallback)
@@ -1209,6 +1212,52 @@ static RemoteAccessConfig g_RemoteConfig = { false, 3390, "000000" };
 static bool g_RemoteAccessActive = false;
 
 static const char* REMOTE_USER = "ZP_Remote";
+static const char* REMOTE_SENTINEL = "C:\\ProgramData\\ZeroPoint\\remote_active.lock";
+
+// Write/remove a sentinel file so we can detect unclean shutdowns.
+// On startup, if the sentinel exists, the previous session crashed
+// with remote access active — we must clean up the orphaned user.
+static void WriteSentinel() {
+    CreateDirectoryA("C:\\ProgramData\\ZeroPoint", NULL);
+    HANDLE h = CreateFileA(REMOTE_SENTINEL, GENERIC_WRITE, 0, NULL,
+                           CREATE_ALWAYS, FILE_ATTRIBUTE_HIDDEN, NULL);
+    if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
+}
+
+static void RemoveSentinel() {
+    DeleteFileA(REMOTE_SENTINEL);
+}
+
+static bool SentinelExists() {
+    DWORD attr = GetFileAttributesA(REMOTE_SENTINEL);
+    return (attr != INVALID_FILE_ATTRIBUTES);
+}
+
+// Called once at startup to clean up after a crash
+static void CleanupOrphanedRemoteUser() {
+    if (!SentinelExists()) return;
+    // Previous session crashed with remote active — remove leftovers
+    char cmd[256];
+    snprintf(cmd, sizeof(cmd), "net user %s /delete >nul 2>&1", REMOTE_USER);
+    system(cmd);
+    system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
+    RegDeleteKeyA(HKEY_LOCAL_MACHINE,
+        "SYSTEM\\CurrentControlSet\\Control\\Terminal Server\\WinStations\\ZeroPoint-RDP");
+    RemoveSentinel();
+}
+
+// atexit handler — last-resort cleanup if process exits without DisableRemoteAccess
+static void AtExitRemoteCleanup() {
+    if (g_RemoteAccessActive) {
+        char cmd[256];
+        snprintf(cmd, sizeof(cmd), "net user %s /delete >nul 2>&1", REMOTE_USER);
+        system(cmd);
+        system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
+        RemoveSentinel();
+    }
+}
+
+static bool g_AtExitRegistered = false;
 
 // Registry path for secondary RDP listener
 static const char* RDP_LISTENER_PATH =
@@ -1278,6 +1327,22 @@ static void CloseFirewallPort() {
     system("netsh advfirewall firewall delete rule name=\"ZeroPoint Remote Access\" >nul 2>&1");
 }
 
+// Check if a Windows service is running by querying the Service Control Manager
+static bool IsServiceRunning(const char* serviceName) {
+    SC_HANDLE scm = OpenSCManagerA(NULL, NULL, SC_MANAGER_CONNECT);
+    if (!scm) return false;
+
+    SC_HANDLE svc = OpenServiceA(scm, serviceName, SERVICE_QUERY_STATUS);
+    if (!svc) { CloseServiceHandle(scm); return false; }
+
+    SERVICE_STATUS status = {};
+    BOOL ok = QueryServiceStatus(svc, &status);
+    CloseServiceHandle(svc);
+    CloseServiceHandle(scm);
+
+    return ok && (status.dwCurrentState == SERVICE_RUNNING);
+}
+
 bool EnableRemoteAccess(const RemoteAccessConfig& cfg) {
     if (g_RemoteAccessActive) return true;
     if (GetVEState() != VE_RUNNING && GetVEState() != VE_LOCKED) {
@@ -1286,6 +1351,20 @@ bool EnableRemoteAccess(const RemoteAccessConfig& cfg) {
             "The Virtual Environment must be running before\n"
             "you can enable Remote Access.\n\n"
             "Start the VE first, then enable Remote Access.");
+        return false;
+    }
+
+    // Verify TermService is running before proceeding
+    if (!IsServiceRunning("TermService")) {
+        ShowErrorPopup(
+            "Remote Access: TermService Not Running",
+            "The Remote Desktop Services (TermService) is not running.\n\n"
+            "Remote Access requires this service to accept connections.\n\n"
+            "Fix:\n"
+            "  1. Open Services (Win+R → services.msc)\n"
+            "  2. Find \"Remote Desktop Services\"\n"
+            "  3. Set Startup Type to \"Manual\" and click Start\n"
+            "  4. Try enabling Remote Access again");
         return false;
     }
 
@@ -1321,6 +1400,16 @@ bool EnableRemoteAccess(const RemoteAccessConfig& cfg) {
     Sleep(1000);
 
     g_RemoteAccessActive = true;
+
+    // Write sentinel so crash recovery can clean up the user
+    WriteSentinel();
+
+    // Register atexit handler (once) as last-resort cleanup
+    if (!g_AtExitRegistered) {
+        atexit(AtExitRemoteCleanup);
+        g_AtExitRegistered = true;
+    }
+
     return true;
 }
 
@@ -1330,6 +1419,7 @@ void DisableRemoteAccess() {
     RemoveRDPListener();
     CloseFirewallPort();
     RemoveRemoteUser();
+    RemoveSentinel();
 
     // Restart TermService to drop remote connections
     system("net stop TermService /y >nul 2>&1 && net start TermService >nul 2>&1");
@@ -1720,10 +1810,5 @@ void ShowRemoteAccessPanel(HWND owner) {
     ApplyDisplayAffinity(g_RemotePanelHwnd);
     ShowWindow(g_RemotePanelHwnd, SW_SHOW);
     SetForegroundWindow(g_RemotePanelHwnd);
-
-    MSG msg;
-    while (g_RemotePanelHwnd && IsWindow(g_RemotePanelHwnd) && GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
-    }
+    // Modeless — messages are dispatched by the caller's main loop
 }
