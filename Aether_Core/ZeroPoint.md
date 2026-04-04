@@ -93,7 +93,7 @@
 ### Settings Modal — 5th Tab
 - New **Typer** tab added: typing speed buttons, humanization level buttons, session recording blocker checkbox, exam mode checkbox, hotkey reminder display.
 
-### Auto Router (v4.2.1)
+### Auto Router (v4.2.1 → v4.3.0)
 - **OpenRouter Smart Routing**: New "Auto Router" provider option in both the sidebar dropdown and launcher settings. Uses model ID `openrouter/auto`, which lets OpenRouter automatically select the best model for each prompt based on cost, speed, reasoning, and vision capability.
 - **Shared API Key**: Auto Router shares the existing OpenRouter API key (`key_openrouter` in config.ini). No separate key entry needed.
 - **Full Feature Parity**: Works with all AI paths — text chat, vision/snip, Rapid Fire Thoughts, and auto-typer feed. Vision-capable (OpenRouter routes to a vision model when image content is detected).
@@ -112,6 +112,20 @@
 | `Ctrl+Alt+B` | Toggle invisible WebView2 browser |
 | `Ctrl+Alt+R` | Toggle Remote Access |
 | `Ctrl+Shift+X` | Panic killswitch (wipe all traces) |
+
+## v4.3.0 Release
+
+### Rapid Fire — Real AI Streaming
+- **Replaced simulation**: The Rapid Fire workflow (Ctrl+Shift+R) now performs a real 4-step pipeline: capture foreground screenshot → encode to Base64 PNG → send to the active AI provider (with vision or CDP fallback) → display progressive results in the sidebar and popup.
+- All hardcoded placeholder messages removed.
+
+### Sidebar Exam Mode Button
+- **One-click toggle**: New "Exam Mode" button in the AI sidebar (Ctrl+Alt+H) provides instant access to Exam Mode without opening Settings or the launcher.
+- Button label updates live to "Exam Mode: ON" when active.
+
+### Code Cleanup
+- Removed all remaining mock/simulation/placeholder comments across the codebase.
+- All version strings updated to v4.3.0 (headers, launcher footer, error popups, installer, documentation).
 
 ## Build
 

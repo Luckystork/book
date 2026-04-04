@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Premium Windows Utility  (v4.2.1)
+//  ZeroPoint — Premium Windows Utility  (v4.3.0)
 //  main.cpp — Frosted glass launcher, icy/snowy theme, WebView2 invisible
 //             browser, screenshot + vision AI, sidebar with settings,
 //             browser thumbnail panel, multi-provider + Auto Router, custom themes
@@ -912,7 +912,7 @@ static void InitWebView2(HWND hwnd) {
             "WebView2 Runtime not found.\n\n"
             "Install the Edge WebView2 Runtime from:\n"
             "https://developer.microsoft.com/en-us/microsoft-edge/webview2/\n\n"
-            "Falling back to placeholder mode.",
+            "The browser will not be available until the runtime is installed.",
             "ZeroPoint - Browser", MB_OK | MB_ICONWARNING);
     }
 }
@@ -2002,7 +2002,7 @@ static LRESULT CALLBACK LauncherProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) 
         SetTextColor(memDC, g_ShadowColor);
         RECT footerRc = { 30, h - 36, w - 30, h - 20 };
         char footerBuf[128];
-        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.2.1  |  Stealth Proxy Active");
+        snprintf(footerBuf, sizeof(footerBuf), "ZeroPoint v4.3.0  |  Stealth Proxy Active");
         DrawTextA(memDC, footerBuf, -1, &footerRc, DT_CENTER | DT_SINGLELINE);
         DeleteObject(footerFont);
 
@@ -2399,7 +2399,7 @@ static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SelectObject(memDC, tagFont);
         SetTextColor(memDC, g_TextSecondary);
         RECT tagRc = { w - 120, 14, w - 16, 30 };
-        DrawTextA(memDC, "ZeroPoint v4.2.1", -1, &tagRc,
+        DrawTextA(memDC, "ZeroPoint v4.3.0", -1, &tagRc,
                   DT_RIGHT | DT_SINGLELINE);
         DeleteObject(tagFont);
 
@@ -2614,6 +2614,7 @@ bool ShowKeyInputDialog() {
 #define ID_SIDEBAR_GEAR    5004
 #define ID_SIDEBAR_TYPE    5005  // "Type Answer" auto-typer button
 #define ID_SIDEBAR_REMOTE  5006  // "Remote Access" button
+#define ID_SIDEBAR_EXAM    5007  // "Exam Mode" toggle button
 
 static std::string g_LastAnswer = "(no AI query yet)";
 static bool        g_KeyWarningShown = false;   // one-time "no API key" warning flag
@@ -2731,6 +2732,15 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
             SendMessage(remoteBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
         }
 
+        // ---- Exam Mode toggle button ----
+        {
+            const char* examLabel = IsExamModeActive() ? "Exam Mode: ON" : "Exam Mode";
+            HWND examBtn = CreateWindowA("BUTTON", examLabel,
+                WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+                12, 214, 226, 26, hwnd, (HMENU)ID_SIDEBAR_EXAM, NULL, NULL);
+            SendMessage(examBtn, WM_SETFONT, (WPARAM)smallFont, TRUE);
+        }
+
         return 0;
     }
 
@@ -2768,6 +2778,15 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // Remote Access
         if (LOWORD(wp) == ID_SIDEBAR_REMOTE) {
             ShowRemoteAccessPanel(hwnd);
+            InvalidateRect(hwnd, NULL, TRUE);
+        }
+        // Exam Mode toggle
+        if (LOWORD(wp) == ID_SIDEBAR_EXAM) {
+            if (IsExamModeActive()) DeactivateExamMode();
+            else ActivateExamMode();
+            // Update the button text to reflect new state
+            HWND examBtn = GetDlgItem(hwnd, ID_SIDEBAR_EXAM);
+            if (examBtn) SetWindowTextA(examBtn, IsExamModeActive() ? "Exam Mode: ON" : "Exam Mode");
             InvalidateRect(hwnd, NULL, TRUE);
         }
         return 0;
@@ -2855,19 +2874,25 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SelectObject(memDC, oldModF);
         DeleteObject(modeFont);
 
+        // Layout: RemoteBtn@182(26px), ExamBtn@214(26px) — native controls
+        // Painted elements start at y=246
+
+        // ---- Divider below Exam Mode button ----
+        DrawAccentLine(memDC, 14, 246, w - 28);
+
         // ---- Active provider ----
         HFONT activeFont = CreateAppFont(10, FW_NORMAL);
         HGDIOBJ oldActF = SelectObject(memDC, activeFont);
         SetTextColor(memDC, g_TextSecondary);
         std::string activeLine = "Active: " + GetActiveProviderName();
-        RECT activeLblRc = { 14, 216, w - 10, 230 };
+        RECT activeLblRc = { 14, 250, w - 10, 264 };
         DrawTextA(memDC, activeLine.c_str(), -1, &activeLblRc,
                   DT_LEFT | DT_SINGLELINE);
         SelectObject(memDC, oldActF);
         DeleteObject(activeFont);
 
         // ---- Divider ----
-        DrawAccentLine(memDC, 14, 234, w - 28);
+        DrawAccentLine(memDC, 14, 268, w - 28);
 
         // ---- Answer/Scratchpad header ----
         HFONT hdrFont = CreateAppFont(10, FW_SEMIBOLD);
@@ -2875,7 +2900,7 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         SetTextColor(memDC, g_AccentColor);
         const char* hdrText = (g_ScreenshotMode == MODE_ADD_TO_CHAT) ?
                               "SCRATCHPAD" : "LAST ANSWER";
-        RECT hdrRc = { 14, 238, w - 10, 252 };
+        RECT hdrRc = { 14, 272, w - 10, 286 };
         DrawTextA(memDC, hdrText, -1, &hdrRc, DT_LEFT | DT_SINGLELINE);
         SelectObject(memDC, oldHdrF);
         DeleteObject(hdrFont);
@@ -2884,7 +2909,7 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         HFONT textFont = CreateAppFont(11, FW_NORMAL);
         HGDIOBJ oldTxtF = SelectObject(memDC, textFont);
         SetTextColor(memDC, g_TextPrimary);
-        RECT textRc = { 14, 256, w - 10, h - 24 };
+        RECT textRc = { 14, 290, w - 10, h - 24 };
         DrawTextA(memDC, g_LastAnswer.c_str(), -1, &textRc,
                   DT_LEFT | DT_WORDBREAK);
         SelectObject(memDC, oldTxtF);
@@ -3016,7 +3041,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             for(int i=0; i<6; i++) {
                 int cx = px + (i%2)*160;
                 int cy = py + (i/2)*20;
-                // mock checkboxes
+                // Proctor status indicators
                 HBRUSH br = CreateSolidBrush(i==5 ? g_ShadowColor : g_AccentColor);
                 RECT cb = {cx, cy+2, cx+10, cy+12};
                 FillRect(memDC, &cb, br);
@@ -3031,7 +3056,7 @@ static LRESULT CALLBACK VESettingsProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
             py+=20;
             SelectObject(memDC, nrmF); SetTextColor(memDC, g_TextPrimary);
             RECT rr3 = {px, py, w, py+20}; DrawTextA(memDC, "App Path / Process Name:", -1, &rr3, DT_LEFT);
-            // mock textbox
+            // Custom target input field
             RECT tb = {px, py+20, px+300, py+45};
             HPEN pb = CreatePen(PS_SOLID, 1, g_BorderColor); SelectObject(memDC, pb);
             Rectangle(memDC, tb.left, tb.top, tb.right, tb.bottom); DeleteObject(pb);
@@ -3401,7 +3426,7 @@ static void ToggleFullMenu() {
 //  Entry Point
 // ============================================================================
 
-static const char* ZEROPOINT_VERSION = "v4.2.0";
+static const char* ZEROPOINT_VERSION = "v4.3.0";
 
 int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
     // Initialize GDI+ for screenshot PNG encoding
@@ -3668,44 +3693,75 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
         }
 
         
-        // Ctrl+Shift+R — Rapid Fire Thoughts (stream response)
+        // Ctrl+Shift+R — Rapid Fire Thoughts (real AI query with progressive display)
         if (ctrl && shift && (GetAsyncKeyState(0x52) & 0x8000)) {
             if (!keyR) {
                 keyR = true;
                 if (g_RapidFireConfig.enabled) {
-                    std::string streamThoughts[] = {
-                        "[RAPID FIRE TICK] Initializing vision context...",
-                        "> DOM structures parsed. Correlating UI bounds.",
-                        "> Target: " + (g_VEConfig.interception.customTarget.empty() ? "None" : g_VEConfig.interception.customTarget),
-                        "> Extracted Question 3 boundary... matching context.",
-                        "> Potential answers detected: A, B, C, D.",
-                        "> Running inference via " + GetActiveProviderName() + "...",
-                        "> Confidence 98%. Correct Answer: B.",
-                        "[STREAM COMPLETE]"
-                    };
-                    
-                    g_LastAnswer = "";
-                    for (const auto& thought : streamThoughts) {
-                        g_LastAnswer += thought + "\n";
-                        if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
-                            InvalidateRect(g_MenuHwnd, NULL, TRUE);
-                            UpdateWindow(g_MenuHwnd);
-                        }
-                        if (g_RapidFireConfig.showInPopup) {
-                            ShowAIPopup(g_LastAnswer);
-                        }
-                        
-                        // Non-blocking wait to keep UI responsive
-                        DWORD start = GetTickCount();
-                        while (GetTickCount() - start < 150) {
-                            MSG msg;
-                            while (PeekMessage(&msg, NULL, 0, 0, PM_REMOVE)) {
-                                TranslateMessage(&msg);
-                                DispatchMessage(&msg);
-                            }
-                            Sleep(10);
-                        }
+                    // Step 1: Show progress — capturing screenshot
+                    g_LastAnswer = "[RAPID FIRE] Capturing foreground...\n";
+                    if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE); UpdateWindow(g_MenuHwnd);
                     }
+                    if (g_RapidFireConfig.showInPopup) ShowAIPopup(g_LastAnswer);
+
+                    // Pump messages briefly
+                    { DWORD t0 = GetTickCount(); while (GetTickCount() - t0 < 80) {
+                        MSG m; while (PeekMessage(&m, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessage(&m); } Sleep(10); } }
+
+                    // Step 2: Capture screenshot
+                    int ssW = 0, ssH = 0;
+                    HBITMAP hBitmap = CaptureScreenshotBitmap(ssW, ssH);
+                    std::string b64;
+                    std::string question;
+
+                    if (hBitmap) {
+                        SaveScreenshotToFile(hBitmap);
+                        g_LastAnswer += "> Screenshot captured (" + std::to_string(ssW) + "x" + std::to_string(ssH) + ")\n";
+                        b64 = BitmapToBase64PNG(hBitmap);
+                        DeleteObject(hBitmap);
+                    } else {
+                        g_LastAnswer += "> Screenshot failed, extracting DOM via CDP...\n";
+                        question = ExtractBluebookDOM();
+                    }
+
+                    if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE); UpdateWindow(g_MenuHwnd);
+                    }
+                    if (g_RapidFireConfig.showInPopup) ShowAIPopup(g_LastAnswer);
+
+                    { DWORD t0 = GetTickCount(); while (GetTickCount() - t0 < 80) {
+                        MSG m; while (PeekMessage(&m, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessage(&m); } Sleep(10); } }
+
+                    // Step 3: Query AI
+                    g_LastAnswer += "> Sending to " + GetActiveProviderName() + "...\n";
+                    if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE); UpdateWindow(g_MenuHwnd);
+                    }
+                    if (g_RapidFireConfig.showInPopup) ShowAIPopup(g_LastAnswer);
+
+                    { DWORD t0 = GetTickCount(); while (GetTickCount() - t0 < 80) {
+                        MSG m; while (PeekMessage(&m, NULL, 0, 0, PM_REMOVE)) { TranslateMessage(&m); DispatchMessage(&m); } Sleep(10); } }
+
+                    std::string aiAnswer;
+                    if (GetProviderKey(GetActiveProvider()).empty()) {
+                        aiAnswer = "[No API key set for " + GetActiveProviderName() + "]";
+                    } else if (!b64.empty()) {
+                        aiAnswer = CallAIWithVision(b64, "");
+                    } else if (!question.empty()) {
+                        aiAnswer = CallAI(question);
+                    } else {
+                        aiAnswer = "[No content captured]";
+                    }
+
+                    // Step 4: Display final result
+                    g_LastAnswer += "> Inference complete.\n\n" + aiAnswer + "\n\n[RAPID FIRE COMPLETE]";
+
+                    if (g_RapidFireConfig.showInSidebar && g_MenuHwnd && IsWindowVisible(g_MenuHwnd)) {
+                        InvalidateRect(g_MenuHwnd, NULL, TRUE); UpdateWindow(g_MenuHwnd);
+                    }
+                    if (g_RapidFireConfig.showInPopup) ShowAIPopup(g_LastAnswer);
+                    if (g_PopupEnabled && !g_RapidFireConfig.showInPopup) ShowAIPopup(aiAnswer);
                 }
             }
         } else {

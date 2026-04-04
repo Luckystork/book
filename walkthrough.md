@@ -1,4 +1,4 @@
-# ZeroPoint v4.2.1 User Walkthrough
+# ZeroPoint v4.3.0 User Walkthrough
 
 ## 1. Installation
 1. Run `ZeroPoint_Installer.exe`. The installer features an icy cyan and white color palette to match the application.
@@ -38,7 +38,7 @@ Enter your API key via the **"Set API Key..."** button in the sidebar. Auto Rout
 
 ## 6. Live AI Assistance
 - **Auto-Typer (Ctrl+Shift+T):** Types the last AI answer directly into the active exam window with human-like timing. Keystroke delays, typo rates, and pause behavior are controlled by the **Typing Speed** (Slow/Medium/Fast) and **Humanization Level** (Low/Medium/High) settings in Settings → Typer tab. Also available as the **"Type Answer"** button in the sidebar.
-- **Rapid Fire Thoughts (Ctrl+Shift+R):** Activates a live, non-blocking streaming simulation. ZeroPoint will sequentially display its "thinking process" (e.g., parsing DOM, extracting boundaries, running inference) directly in the frosted AI popup toast and the sidebar. This allows you to track the AI's logic in real-time.
+- **Rapid Fire Thoughts (Ctrl+Shift+R):** Captures the foreground window, encodes it as a Base64 PNG, and sends it to the active AI provider with vision support (or falls back to CDP DOM extraction for text-only providers). Progressive status updates stream directly into the frosted AI popup toast and sidebar as the request processes. This allows you to get a full AI answer in one hotkey press.
 - **Invisible Browser (Ctrl+Alt+B):** Need to do manual research? Toggle the fully functional, hardware-accelerated WebView2 browser. Because it uses `WDA_EXCLUDEFROMCAPTURE`, it cannot be seen by screen recording software.
 - **Image Copy/Save:** Right-click any screenshot thumbnail in the browser panel to **Copy to Clipboard** or **Save as PNG** via a native file dialog.
 
@@ -142,7 +142,8 @@ ZeroPoint allows a second user on a different computer to remotely view and cont
 ## 9. Exam Mode (One-Click Max Stealth)
 
 1. **From the Launcher:** Click the **"EXAM MODE"** button below "START VIRTUAL ENVIRONMENT".
-2. **From Settings:** Open Settings (gear icon) → **Typer** tab → check **"Exam Mode"**.
+2. **From the Sidebar:** Open the AI sidebar (Ctrl+Alt+H) and click the **"Exam Mode"** button.
+3. **From Settings:** Open Settings (gear icon) → **Typer** tab → check **"Exam Mode"**.
 3. When activated, Exam Mode:
    - Enables Rapid Fire streaming
    - Enables Session Recording Blocker (`WDA_EXCLUDEFROMCAPTURE` on all windows)

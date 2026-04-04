@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — Config.cpp  (v4.2.1)
+//  ZeroPoint — Config.cpp  (v4.3.0)
 //  AI providers (incl. Auto Router), per-provider API keys, screenshot mode,
 //  UI settings, and full Virtual Environment configuration persistence.
 //

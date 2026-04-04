@@ -1,4 +1,4 @@
-# ZeroPoint v4.2.1
+# ZeroPoint v4.3.0
 
 ## Architecture
 **ZeroPoint** is a premium, stealth-oriented Windows utility that provides AI assistance over proctoring environments. v4.1 extends the core stealth engine with a fully isolated **Virtual Environment** running on loopback RDP, integrated directly into a DWM-frosted Windows host overlay.
@@ -71,9 +71,14 @@ ZeroPoint can expose the Virtual Environment for remote control from another mac
 
 ### Additional Tools
 * **Snip Region** (Ctrl+Shift+S) — rubber-band crosshair with frosted selection
-* **Rapid Fire Thoughts** (Ctrl+Shift+R) — live streaming AI thoughts in sidebar + popup
+* **Rapid Fire Thoughts** (Ctrl+Shift+R) — real-time AI capture, inference, and streaming results in sidebar + popup
 * **Invisible Browser** (Ctrl+Alt+B) — WebView2 with drag-and-drop thumbnails
 * **Panic Killswitch** (Ctrl+Shift+X) — instantly stops VE, kills RDP sessions, and wipes all traces
+
+### v4.3.0 — Production Hardening
+* **Real Rapid Fire Pipeline**: Ctrl+Shift+R now executes a full capture → encode → AI inference → display workflow using the active provider with vision support or CDP fallback. All simulated placeholder messages removed.
+* **Sidebar Exam Mode**: One-click "Exam Mode" / "Exam Mode: ON" toggle button added to the AI sidebar for instant stealth activation without opening Settings or the launcher.
+* **Codebase Cleanup**: Removed all remaining mock, simulation, and placeholder comments. All version strings unified to v4.3.0 across source headers, UI labels, installer, and documentation.
 
 ### Final Polish Pass (v4.1.2)
 This release focuses exclusively on bulletproofing the engine and polishing the UI.

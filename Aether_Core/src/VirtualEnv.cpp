@@ -1,5 +1,5 @@
 // ============================================================================
-//  ZeroPoint — VirtualEnv.cpp  (v4.2.1)
+//  ZeroPoint — VirtualEnv.cpp  (v4.3.0)
 //  Virtual Environment lifecycle: RDP session creation, frosted frame window,
 //  lock/unlock with mouse teleport, fullscreen toggle, "CLICK TO LOCK" overlay,
 //  AI chat sidebar panel, snip-region capture, human-like auto-typer,
@@ -1232,7 +1232,7 @@ void PerformAutoType(const std::string& text) {
     for (size_t i = 0; i < wText.size(); i++) {
         wchar_t c = wText[i];
 
-        // 1. Natural error simulation — frequency controlled by humanization
+        // 1. Natural typo injection — frequency controlled by humanization level
         bool atWordBoundary = (i == 0 || wText[i - 1] == L' ' || wText[i - 1] == L'\n');
         int typoChance = atWordBoundary ? typoWordBoundary : typoBase;
         if (CryptoRandUniform(typoChance) == 0 && c != L'\n' && c != L'\r' && c != L' ') {
