@@ -2119,12 +2119,16 @@ static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         FillFrosted(memDC, rc, g_BgPanel, 235);
         DrawInnerGlow(memDC, rc);
 
-        // Soft shadow at the bottom edge
-        RECT shadowRc = { 4, h - 6, w - 4, h };
-        FillFrosted(memDC, shadowRc, g_ShadowColor, 50);
+        // ---- Premium multi-edge shadow for floating depth ----
+        RECT shadowBot = { 4, h - 6, w - 4, h };
+        FillFrosted(memDC, shadowBot, g_ShadowColor, 55);
+        RECT shadowRight = { w - 5, 6, w, h - 4 };
+        FillFrosted(memDC, shadowRight, g_ShadowColor, 35);
+        RECT shadowLeft = { 0, 6, 5, h - 4 };
+        FillFrosted(memDC, shadowLeft, g_ShadowColor, 20);
 
-        // ---- Red accent header bar (error = warm red instead of icy cyan) ----
-        COLORREF errorAccent = RGB(0xFF, 0x44, 0x44);
+        // ---- Softer icy-red accent (harmonizes with snowy theme) ----
+        COLORREF errorAccent = RGB(0xDC, 0x3C, 0x50);
         RECT accentBar = { 0, 0, w, 5 };
         HBRUSH accentBrush = CreateSolidBrush(errorAccent);
         FillRect(memDC, &accentBar, accentBrush);
@@ -2142,6 +2146,10 @@ static LRESULT CALLBACK ErrorPopupProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp
         SelectObject(memDC, innerPen);
         RoundRect(memDC, 1, 1, w - 1, h - 1, 14, 14);
         DeleteObject(innerPen);
+
+        // ---- Secondary inner glow beneath accent bar — adds premium depth ----
+        RECT accentGlow = { 2, 6, w - 2, 14 };
+        FillFrosted(memDC, accentGlow, errorAccent, 18);
 
         SetBkMode(memDC, TRANSPARENT);
 
@@ -2456,13 +2464,14 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
         // ---- "Snip Region" button ----
         g_SidebarSSBtn = CreateWindowA("BUTTON", "Snip Region",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, 42, 216, 32, hwnd, (HMENU)ID_SIDEBAR_SSBTN, NULL, NULL);
+            12, 42, 226, 30, hwnd, (HMENU)ID_SIDEBAR_SSBTN, NULL, NULL);
         SendMessage(g_SidebarSSBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         // ---- "Type Answer" auto-typer button (Ctrl+Shift+T equivalent) ----
-        HWND typeBtn = CreateWindowA("BUTTON", "Type Answer (Ctrl+Shift+T)",
+        // Same font, width, height, and X as Snip Region for visual consistency
+        HWND typeBtn = CreateWindowA("BUTTON", "Type Answer",
             WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
-            12, 80, 216, 32, hwnd, (HMENU)ID_SIDEBAR_TYPE, NULL, NULL);
+            12, 78, 226, 30, hwnd, (HMENU)ID_SIDEBAR_TYPE, NULL, NULL);
         SendMessage(typeBtn, WM_SETFONT, (WPARAM)btnFont, TRUE);
 
         // ---- Provider dropdown ----
@@ -2568,11 +2577,11 @@ static LRESULT CALLBACK SidebarProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) {
 
         DrawAccentLine(memDC, 14, 34, w - 28);
 
-        // Layout: Snip@42, TypeAnswer@80, Dropdown@120, KeyBtn+Gear@150
+        // Layout: Snip@42(30px), TypeAnswer@78(30px), Dropdown@120, KeyBtn+Gear@150
         // (native controls above — paint only the chrome around them)
 
         // ---- Divider below Type Answer button ----
-        DrawAccentLine(memDC, 14, 114, w - 28);
+        DrawAccentLine(memDC, 14, 112, w - 28);
 
         // ---- "PROVIDER" label ----
         HFONT labelFont = CreateAppFont(10, FW_SEMIBOLD);

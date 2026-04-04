@@ -289,15 +289,14 @@ bool StartVirtualEnvironment(void (*progressCallback)(const char* msg)) {
     if (!ApplyHardwareSpoofing()) {
         if (progressCallback)
             progressCallback("WARNING: Hardware spoofing failed (ACCESS_DENIED).");
-        // ---- Frosted warning popup for HWID spoofing failure ----
+        // ---- Calmer, more helpful warning popup for HWID spoofing failure ----
         ShowErrorPopup(
-            "Hardware Spoofing Failed",
-            "Registry writes were denied (ACCESS_DENIED).\n\n"
-            "HWID spoofing requires Administrator privileges.\n"
-            "The Virtual Environment will still launch, but your\n"
-            "hardware fingerprint will NOT be randomized.\n\n"
-            "Fix: Right-click ZeroPoint and select\n"
-            "\"Run as Administrator\" to enable full spoofing.");
+            "Hardware Identity: Standard Mode",
+            "ZeroPoint was unable to randomize your hardware fingerprint because \n"
+            "it is not running with Administrator privileges.\n\n"
+            "You can continue safely, but for maximum stealth, we recommend \n"
+            "restarting with \"Run as Administrator\" whenever possible.\n\n"
+            "Status: System-default hardware profile active.");
     } else {
         if (progressCallback) progressCallback("Hardware identity randomized.");
     }
@@ -1080,12 +1079,15 @@ static void SendUnicodeChar(wchar_t c) {
     SendInput(2, ip, sizeof(INPUT));
 }
 
-static void SendVKey(WORD vk, bool down) {
-    INPUT ip = {};
-    ip.type = INPUT_KEYBOARD;
-    ip.ki.wVk = vk;
-    ip.ki.dwFlags = down ? 0 : KEYEVENTF_KEYUP;
-    SendInput(1, &ip, sizeof(INPUT));
+static void SendFullVKey(WORD vk) {
+    INPUT ip[2] = {};
+    ip[0].type = INPUT_KEYBOARD;
+    ip[0].ki.wVk = vk;
+    ip[0].ki.dwFlags = 0;
+    ip[1].type = INPUT_KEYBOARD;
+    ip[1].ki.wVk = vk;
+    ip[1].ki.dwFlags = KEYEVENTF_KEYUP;
+    SendInput(2, ip, sizeof(INPUT));
 }
 
 void PerformAutoType(const std::string& text) {
@@ -1131,8 +1133,7 @@ void PerformAutoType(const std::string& text) {
             Sleep(HumanDelay(80, 120));
 
             // Recognize and backspace the mistake
-            SendVKey(VK_BACK, true);
-            SendVKey(VK_BACK, false);
+            SendFullVKey(VK_BACK);
             Sleep(HumanDelay(120, 150));
         }
 
@@ -1153,14 +1154,15 @@ void PerformAutoType(const std::string& text) {
             }
         }
 
-        // 3. Human-like delay with gamma distribution
+        // 3. Human-like delay with variable rhythm
         int delay = HumanDelay(70, 120);
 
-        // Punctuation pauses — simulate thinking
-        if (c == L'.' || c == L'?' || c == L'!') delay += HumanDelay(180, 350);
-        else if (c == L'\n')                      delay += HumanDelay(200, 400);
-        else if (c == L' ' || c == L',')          delay += HumanDelay(30, 80);
-        else if (c == L':' || c == L';')          delay += HumanDelay(60, 120);
+        // Punctuation pauses — simulate thinking with natural variation
+        int jitter = CryptoRandUniform(30); // Random drift for non-linear rhythm
+        if (c == L'.' || c == L'?' || c == L'!') delay += HumanDelay(180 + jitter, 350);
+        else if (c == L'\n')                      delay += HumanDelay(200 + jitter, 400);
+        else if (c == L' ' || c == L',')          delay += HumanDelay(30 + jitter, 80);
+        else if (c == L':' || c == L';')          delay += HumanDelay(60 + jitter, 120);
 
         // Occasional micro-pause mid-word (~5% chance)
         if (CryptoRandUniform(20) == 0) delay += HumanDelay(100, 200);

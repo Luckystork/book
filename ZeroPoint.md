@@ -9,7 +9,7 @@
 ZeroPoint performs Process Hollowing into `svchost.exe` via `PerformHollowing()`. The payload is written with `WriteProcessMemory`, validated with `FlushInstructionCache`, and execution is redirected. The UI process runs on the host with `WDA_EXCLUDEFROMCAPTURE` applied to every window, hiding it completely from recording APIs.
 
 ### Premium Launcher & Settings
-Using raw GDI+ and DWM Blur Behind (`DwmEnableBlurBehindWindow`), ZeroPoint presents a pristine icy cyan and white frosted-glass design. The standalone launcher (440×400) gives one-click access to Start Virtual Environment and the Settings gear.
+Using raw GDI+ and DWM Blur Behind (`DwmEnableBlurBehindWindow`), ZeroPoint presents a pristine icy cyan and white frosted-glass design. The standalone launcher (440×400) gives one-click access to Start Virtual Environment and the Settings gear. v4.1 introduces a **Global Error Popup System** with themed frosted-glass alerts, replacing standard MessageBoxes for a cohesive premium experience.
 
 ### Complete Proctor Evasion
 ZeroPoint works with **all major proctoring platforms**, including Bluebook (SAT). The host application uses standard Windows Defender exclusions configured during the Inno Setup installer. The "Proctor Coverage" interface natively targets:
@@ -25,7 +25,7 @@ ZeroPoint works with **all major proctoring platforms**, including Bluebook (SAT
 By dynamically pulling and mutating an `rdpwrap.ini` for concurrent headless Terminal Services, ZeroPoint provides a standalone, fully hardware-accelerated Windows desktop. The VE captures system input safely and protects the screen contents via the `CLICK TO LOCK` system.
 
 ### Hardware Spoofing (Admin Required)
-On VE startup, `ApplyHardwareSpoofing()` randomizes BIOS/SMBIOS vendor, CPU ID, GPU driver description, disk serial, and MAC address via HKLM registry writes. Uses a pooled cryptographic RNG (`CryptGenRandom` with 256-byte buffer) for high-quality randomness. MAC addresses use the locally-administered bit (02:xx) for protocol compliance. Requires elevated (Run as Administrator) privileges; gracefully warns if writes fail.
+On VE startup, `ApplyHardwareSpoofing()` randomizes BIOS/SMBIOS vendor, CPU ID, GPU driver description, disk serial, and MAC address via HKLM registry writes. Uses a pooled cryptographic RNG (`CryptGenRandom` with 256-byte buffer) for high-quality randomness. MAC addresses use the locally-administered bit (02:xx) for protocol compliance. Requires elevated (Run as Administrator) privileges; gracefully warns with a calm, helpful themed popup if writes fail.
 
 ### AI Engine Modes & Providers
 ZeroPoint queries multi-provider Chat Completions and Vision models via OpenRouter.  
@@ -40,7 +40,7 @@ ZeroPoint queries multi-provider Chat Completions and Vision models via OpenRout
 2. **Add-to-Chat Mode**: Stores the thumbnail into the side-panel scratchpad for native drag-and-drop upload.
 
 ### Auto-Typer
-Human-like text injection via `PerformAutoType()`. Uses gamma-distributed keystroke timing, punctuation pauses, micro-hesitations, rare distraction pauses, and occasional typo+backspace simulation. Bias-free random selection via rejection sampling. Statistically indistinguishable from real typing. Trigger with **Ctrl+Shift+T** or the “Type Answer” button in the sidebar.
+Human-like text injection via `PerformAutoType()`. v4.1 features an advanced rhythmic engine using jittered punctuation pauses, micro-hesitations, and variable keystroke weights. Uses rejection sampling for bias-free random selection. Statistically indistinguishable from real typing. Trigger with **Ctrl+Shift+T** or the “Type Answer” button in the sidebar.
 
 ### Additional Tools
 * **Snip Region** (Ctrl+Shift+S) — rubber-band crosshair with frosted selection
