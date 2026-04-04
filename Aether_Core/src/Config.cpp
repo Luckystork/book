@@ -124,6 +124,8 @@ void LoadConfig() {
             g_AutoTyperConfig.humanization = (HumanizationLevel)SafeAtoi(line.c_str() + 13, 0, 2, 1);
         else if (line.rfind("rec_blocker=", 0) == 0)
             g_SessionRecordingBlocker = (atoi(line.c_str() + 12) != 0);
+        else if (line.rfind("exam_mode=", 0) == 0)
+            g_ExamModeConfig.active = (atoi(line.c_str() + 10) != 0);
         // Legacy bare key
         else if (line.rfind("key=", 0) == 0)
             g_ProviderKeys[PROV_OPENROUTER] = line.substr(4);
@@ -141,8 +143,8 @@ void SaveConfig() {
 
     std::vector<std::string> lines;
     // Indices: 0=provider, 1-5=keys (claude..openrouter), 6=or_model,
-    //          7=mode, 8=popup, 9-11=rf_*, 12-13=remote_*, 14-16=typer+rec
-    bool found[17] = {};
+    //          7=mode, 8=popup, 9-11=rf_*, 12-13=remote_*, 14-16=typer+rec, 17=exam_mode
+    bool found[18] = {};
     {
         std::ifstream file(CONFIG_PATH);
         std::string line;
@@ -164,6 +166,7 @@ void SaveConfig() {
             else if (line.rfind("typing_speed=", 0) == 0)   { lines.push_back("typing_speed=" + std::to_string((int)g_AutoTyperConfig.speed)); found[14] = true; }
             else if (line.rfind("typing_human=", 0) == 0)   { lines.push_back("typing_human=" + std::to_string((int)g_AutoTyperConfig.humanization)); found[15] = true; }
             else if (line.rfind("rec_blocker=", 0) == 0)    { lines.push_back("rec_blocker=" + std::to_string(g_SessionRecordingBlocker ? 1 : 0)); found[16] = true; }
+            else if (line.rfind("exam_mode=", 0) == 0)      { lines.push_back("exam_mode=" + std::to_string(g_ExamModeConfig.active ? 1 : 0)); found[17] = true; }
             else if (line.rfind("key=", 0) == 0)            { /* skip legacy */ }
             else                                             { lines.push_back(line); }
         }
@@ -187,6 +190,7 @@ void SaveConfig() {
     if (!found[14]) lines.push_back("typing_speed=" + std::to_string((int)g_AutoTyperConfig.speed));
     if (!found[15]) lines.push_back("typing_human=" + std::to_string((int)g_AutoTyperConfig.humanization));
     if (!found[16]) lines.push_back("rec_blocker=" + std::to_string(g_SessionRecordingBlocker ? 1 : 0));
+    if (!found[17]) lines.push_back("exam_mode=" + std::to_string(g_ExamModeConfig.active ? 1 : 0));
 
     // Write to temp, then atomic replace
     {
